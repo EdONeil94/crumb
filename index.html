@@ -118,6 +118,8 @@ nav {
 }
 .nav-logo span { color: var(--parchment); font-style: normal; font-size: 0.62rem; display: block; letter-spacing: 3px; text-transform: uppercase; font-family: 'Inter', sans-serif; font-weight: 500; margin-top: -4px; }
 .nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-links-desktop { display: flex; align-items: center; gap: 4px; }
+@media (max-width: 700px) { .nav-links-desktop { display: none !important; } }
 .nav-btn {
   padding: 7px 14px;
   border-radius: var(--radius-sm);
@@ -1039,6 +1041,13 @@ nav {
     Crumb
     <span>Rate every bite</span>
   </div>
+  <div class="nav-links-desktop" id="navLinksDesktop">
+    <button class="nav-btn" onclick="showPage('home')">Discover</button>
+    <button class="nav-btn" onclick="showPage('leaderboard')">Top Picks</button>
+    <button class="nav-btn" onclick="showPage('bakeries')">Bakeries</button>
+    <button class="nav-btn" id="desktopPeopleBtn" onclick="showPage('people')" style="display:none">People</button>
+    <button class="nav-btn" id="desktopFeedBtn" onclick="showPage('feed')" style="display:none">Feed</button>
+  </div>
   <div class="nav-right">
     <button class="nav-btn-primary nav-btn" onclick="openAddModal()" id="addBtn">+ Add</button>
     <div class="nav-avatar" id="navAvatar" onclick="toggleUserMenu()" style="display:none">?</div>
@@ -1665,6 +1674,10 @@ function updateNav() {
     if (signIn) signIn.style.display = 'none';
     if (feedBtn) feedBtn.style.display = 'block';
     if (peopleBtn) peopleBtn.style.display = 'block';
+    const dPeople = document.getElementById('desktopPeopleBtn');
+    const dFeed = document.getElementById('desktopFeedBtn');
+    if (dPeople) dPeople.style.display = 'block';
+    if (dFeed) dFeed.style.display = 'block';
     const profile = allProfiles[currentUser.uid];
     const photo = profile?.photoURL || currentUser.photoURL;
     const initials = (currentUser.displayName || currentUser.email || '?').charAt(0).toUpperCase();
@@ -1687,6 +1700,10 @@ function updateNav() {
     if (signIn) signIn.style.display = 'block';
     if (feedBtn) feedBtn.style.display = 'none';
     if (peopleBtn) peopleBtn.style.display = 'none';
+    const dPeople2 = document.getElementById('desktopPeopleBtn');
+    const dFeed2 = document.getElementById('desktopFeedBtn');
+    if (dPeople2) dPeople2.style.display = 'none';
+    if (dFeed2) dFeed2.style.display = 'none';
     if (mobileProfileBtn) mobileProfileBtn.style.display = 'none';
     if (mobileEditProfileBtn) mobileEditProfileBtn.style.display = 'none';
     if (mobileSignOutBtn) mobileSignOutBtn.style.display = 'none';
