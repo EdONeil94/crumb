@@ -1899,6 +1899,16 @@ async function loadUserRole() {
   } catch(e) { console.log('Role load error:', e.message); }
 }
 
+async function loadProfiles() {
+  if (!fb) return;
+  const { db, collection, getDocs } = fb;
+  try {
+    const snap = await getDocs(collection(db, 'profiles'));
+    snap.docs.forEach(d => { allProfiles[d.id] = d.data(); });
+    if (currentUser) updateNav(); // refresh avatar once profile photo available
+  } catch(e) { console.log('Profiles load error:', e.message); }
+}
+
 async function loadBakeryProfiles() {
   if (!fb) return;
   const { db, collection, getDocs } = fb;
