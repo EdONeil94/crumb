@@ -355,11 +355,16 @@ nav {
 .card {
   background: var(--cream-white);
   border-radius: var(--radius);
-  overflow: hidden;
+  overflow: visible;
   box-shadow: var(--shadow);
   transition: transform 0.2s, box-shadow 0.2s;
   cursor: pointer;
   border: 1px solid var(--border);
+  position: relative;
+}
+.card .card-image {
+  border-radius: var(--radius) var(--radius) 0 0;
+  overflow: hidden;
 }
 .card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
 .card-image {
@@ -1409,18 +1414,15 @@ nav {
 }
 .reaction-add:hover { border-color: var(--honey); color: var(--caramel); }
 .reaction-picker {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
+  position: fixed;
   background: var(--cream-white);
   border: 1.5px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
-  padding: 8px;
+  padding: 10px 12px;
   display: flex;
-  gap: 4px;
-  z-index: 50;
+  gap: 8px;
+  z-index: 500;
   white-space: nowrap;
 }
 .reaction-picker-btn {
@@ -5196,7 +5198,16 @@ function toggleReactionPicker(btn, itemId) {
   picker.innerHTML = REACTION_EMOJIS.map(emoji =>
     `<button class="reaction-picker-btn" onclick="event.stopPropagation(); toggleReaction('${itemId}','${emoji}'); this.closest('.reaction-picker').remove();">${emoji}</button>`
   ).join('');
-  btn.parentElement.appendChild(picker);
+
+  // Append to body and position using fixed coords above the button
+  document.body.appendChild(picker);
+  const rect = btn.getBoundingClientRect();
+  const pickerW = REACTION_EMOJIS.length * 48 + 24;
+  let left = rect.left + rect.width / 2 - pickerW / 2;
+  // Keep within viewport
+  left = Math.max(8, Math.min(left, window.innerWidth - pickerW - 8));
+  picker.style.left = left + 'px';
+  picker.style.top = (rect.top - 60) + 'px';
 
   // Close picker on outside click
   setTimeout(() => {
