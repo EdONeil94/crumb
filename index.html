@@ -693,6 +693,53 @@ nav {
 .empty-state-title { font-family: 'Playfair Display', serif; font-size: 1.2rem; color: var(--espresso); margin-bottom: 8px; }
 .empty-state-text { font-size: 0.88rem; line-height: 1.6; }
 
+/* ─── BAKERY CARDS ───────────────────────────────────────────────────────────── */
+.bakery-card {
+  background: var(--cream-white);
+  border-radius: var(--radius);
+  padding: 20px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.bakery-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
+.bakery-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.bakery-card-icon { font-size: 2rem; flex-shrink: 0; }
+.bakery-card-name { font-family: 'Playfair Display', serif; font-size: 1.1rem; font-weight: 600; color: var(--espresso); }
+.bakery-card-address { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; }
+.bakery-card-score { font-family: 'Playfair Display', serif; font-size: 1.4rem; font-weight: 700; color: var(--honey); background: var(--espresso); width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 1rem; }
+.bakery-card-stats { display: flex; gap: 16px; }
+.bakery-card-stat { font-size: 0.78rem; color: var(--text-muted); }
+.bakery-card-stat strong { color: var(--caramel); font-weight: 600; }
+.bakery-card-blurb { font-size: 0.83rem; color: var(--text-body); line-height: 1.55; font-style: italic; border-top: 1px solid var(--border); padding-top: 10px; }
+
+/* ─── BAKERY PROFILE ──────────────────────────────────────────────────────────── */
+.bakery-profile-header { background: var(--espresso); padding: 28px 24px 24px; color: var(--parchment); }
+.bakery-profile-name { font-family: 'Playfair Display', serif; font-size: 1.6rem; font-weight: 700; color: var(--cream-white); margin-bottom: 4px; }
+.bakery-profile-address { font-size: 0.85rem; color: var(--honey-light); margin-bottom: 16px; }
+.bakery-profile-scores { display: flex; gap: 20px; flex-wrap: wrap; }
+.bakery-profile-score { text-align: center; }
+.bakery-profile-score-num { font-family: 'Playfair Display', serif; font-size: 1.8rem; font-weight: 700; color: var(--honey); }
+.bakery-profile-score-label { font-size: 0.7rem; letter-spacing: 1.5px; text-transform: uppercase; color: var(--honey-light); margin-top: 2px; }
+.bakery-profile-body { padding: 20px 24px 32px; }
+.bakery-blurb-section { margin-bottom: 24px; }
+.bakery-blurb-text { font-size: 0.9rem; color: var(--text-body); line-height: 1.65; font-style: italic; }
+.bakery-blurb-edit { font-size: 0.78rem; color: var(--caramel); cursor: pointer; margin-top: 6px; display: inline-block; }
+.bakery-blurb-edit:hover { text-decoration: underline; }
+.bakery-items-title { font-family: 'Playfair Display', serif; font-size: 1.1rem; color: var(--espresso); margin-bottom: 14px; }
+.bakery-item-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.15s; }
+.bakery-item-row:hover { background: var(--parchment); margin: 0 -8px; padding: 10px 8px; border-radius: var(--radius-sm); }
+.bakery-item-thumb { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; background: var(--parchment-dark); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; overflow: hidden; }
+.bakery-item-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.bakery-item-info { flex: 1; }
+.bakery-item-name { font-size: 0.9rem; font-weight: 600; color: var(--espresso); }
+.bakery-item-meta { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+.bakery-item-score { font-family: 'Playfair Display', serif; font-size: 1.1rem; font-weight: 700; color: var(--caramel); flex-shrink: 0; }
+
 /* ─── SPINNER ────────────────────────────────────────────────────────────────── */
 @keyframes spin { to { transform: rotate(360deg); } }
 .spinner { width: 20px; height: 20px; border: 2.5px solid rgba(139,94,60,0.2); border-top-color: var(--caramel); border-radius: 50%; animation: spin 0.8s linear infinite; }
@@ -736,6 +783,7 @@ nav {
   <div class="nav-links" id="navLinks">
     <button class="nav-btn active" onclick="showPage('home')">Discover</button>
     <button class="nav-btn" onclick="showPage('leaderboard')">Top Picks</button>
+    <button class="nav-btn" onclick="showPage('bakeries')">Bakeries</button>
     <button class="nav-btn" id="feedNavBtn" onclick="showPage('feed')" style="display:none">Feed</button>
     <button class="nav-btn-primary nav-btn" onclick="openAddModal()" id="addBtn">+ Add</button>
     <div class="nav-avatar" id="navAvatar" onclick="toggleUserMenu()" style="display:none">?</div>
@@ -830,6 +878,34 @@ nav {
         <div class="empty-state-text">No reviews yet — be the first!</div>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- ─── BAKERIES PAGE ────────────────────────────────────────────────────────────── -->
+<div class="page" id="page-bakeries">
+  <div class="section">
+    <div class="section-header">
+      <div class="section-eyebrow">Explore</div>
+      <h2 class="section-title">Bakeries</h2>
+    </div>
+    <div id="bakeriesGrid" class="feed-grid">
+      <div class="empty-state" style="grid-column:1/-1">
+        <div class="empty-state-icon">🏪</div>
+        <div class="empty-state-title">No bakeries yet</div>
+        <div class="empty-state-text">Start logging pastries to build the bakery directory.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── BAKERY PROFILE MODAL ──────────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="bakeryModal">
+  <div class="modal" style="max-width:640px;" role="dialog" aria-label="Bakery profile">
+    <div class="modal-header">
+      <div class="modal-title" id="bakeryModalTitle">Bakery</div>
+      <button class="modal-close" onclick="closeBakeryModal()">✕</button>
+    </div>
+    <div id="bakeryModalContent"></div>
   </div>
 </div>
 
@@ -1076,6 +1152,7 @@ function showPage(name) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   if (name === 'leaderboard') renderLeaderboard(lbCurrentTab);
   if (name === 'feed') renderFeed();
+  if (name === 'bakeries') renderBakeries();
 }
 
 function updateNav() {
@@ -1169,7 +1246,7 @@ function cardHTML(item) {
           ${item.createdAt ? `<span>·</span><span>${timeAgo(item.createdAt.toDate ? item.createdAt.toDate() : new Date(item.createdAt))}</span>` : ''}
         </div>
         <div class="card-name">${item.name || 'Unknown bake'}</div>
-        <div class="card-bakery">📍 ${item.bakeryName || 'Unknown bakery'}</div>
+        <div class="card-bakery" onclick="event.stopPropagation(); openBakeryProfile('${escJS(item.bakeryName || 'Unknown bakery')}')">📍 ${item.bakeryName || 'Unknown bakery'}</div>
         <div class="card-footer">
           <div class="rating-display">
             <div class="rating-circle">${score}</div>
@@ -1179,6 +1256,160 @@ function cardHTML(item) {
         </div>
       </div>
     </div>`;
+}
+
+
+// ─── BAKERIES ─────────────────────────────────────────────────────────────────
+let allBakeries = {}; // keyed by bakeryName
+
+function buildBakeryIndex() {
+  allBakeries = {};
+  allItems.forEach(item => {
+    const key = item.bakeryName || 'Unknown bakery';
+    if (!allBakeries[key]) {
+      allBakeries[key] = {
+        name: key,
+        address: item.bakeryAddress || '',
+        placeId: item.bakeryPlaceId || null,
+        items: [],
+        totalScore: 0,
+        blurb: ''
+      };
+    }
+    allBakeries[key].items.push(item);
+    allBakeries[key].totalScore += (item.communityAvg || item.overallRating || 0);
+  });
+}
+
+function renderBakeries() {
+  buildBakeryIndex();
+  const grid = document.getElementById('bakeriesGrid');
+  const bakeries = Object.values(allBakeries).sort((a, b) => {
+    const aAvg = a.totalScore / a.items.length;
+    const bAvg = b.totalScore / b.items.length;
+    return bAvg - aAvg;
+  });
+  if (!bakeries.length) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon">🏪</div><div class="empty-state-title">No bakeries yet</div><div class="empty-state-text">Start logging pastries to build the bakery directory.</div></div>`;
+    return;
+  }
+  grid.innerHTML = bakeries.map(b => {
+    const avg = (b.totalScore / b.items.length).toFixed(1);
+    const topItem = [...b.items].sort((x,y) => (y.communityAvg||y.overallRating||0) - (x.communityAvg||x.overallRating||0))[0];
+    const emoji = topItem ? (CATEGORIES[topItem.category] || '🥐') : '🏪';
+    return `
+      <div class="bakery-card" onclick="openBakeryProfile('${escJS(b.name)}')">
+        <div class="bakery-card-header">
+          <div>
+            <div class="bakery-card-name">${b.name}</div>
+            ${b.address ? `<div class="bakery-card-address">📍 ${b.address}</div>` : ''}
+          </div>
+          <div class="bakery-card-score">${avg}</div>
+        </div>
+        <div class="bakery-card-stats">
+          <div class="bakery-card-stat"><strong>${b.items.length}</strong> review${b.items.length !== 1 ? 's' : ''}</div>
+          <div class="bakery-card-stat"><strong>${avg}</strong> avg rating</div>
+          <div class="bakery-card-stat"><strong>${new Set(b.items.map(i=>i.category)).size}</strong> item type${new Set(b.items.map(i=>i.category)).size !== 1 ? 's' : ''}</div>
+        </div>
+        ${b.blurb ? `<div class="bakery-card-blurb">"${b.blurb}"</div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+async function openBakeryProfile(bakeryName) {
+  buildBakeryIndex();
+  const b = allBakeries[bakeryName];
+  if (!b) return;
+  document.getElementById('bakeryModalTitle').textContent = bakeryName;
+  document.getElementById('bakeryModal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+
+  // Fetch blurb from Firestore
+  let blurb = b.blurb || '';
+  try {
+    const { db, doc, getDoc } = fb;
+    const snap = await getDoc(doc(db, 'bakeries', encodeURIComponent(bakeryName)));
+    if (snap.exists()) blurb = snap.data().blurb || '';
+  } catch(e) {}
+
+  const avg = (b.totalScore / b.items.length).toFixed(1);
+  const sortedItems = [...b.items].sort((x,y) => (y.communityAvg||y.overallRating||0) - (x.communityAvg||x.overallRating||0));
+  const canEdit = !!currentUser;
+
+  const itemsHTML = sortedItems.map(item => {
+    const emoji = CATEGORIES[item.category] || '✦';
+    const score = item.communityAvg ? item.communityAvg.toFixed(1) : (item.overallRating ? item.overallRating.toFixed(1) : '–');
+    const thumb = item.photoURL
+      ? `<div class="bakery-item-thumb"><img src="${item.photoURL}" alt="${item.name}"></div>`
+      : `<div class="bakery-item-thumb">${emoji}</div>`;
+    return `
+      <div class="bakery-item-row" onclick="closeBakeryModal(); openDetail('${item.id}')">
+        ${thumb}
+        <div class="bakery-item-info">
+          <div class="bakery-item-name">${item.name || 'Unknown bake'}</div>
+          <div class="bakery-item-meta">${item.userName || 'Anonymous'} · ${item.createdAt ? timeAgo(item.createdAt.toDate ? item.createdAt.toDate() : new Date(item.createdAt)) : ''}</div>
+        </div>
+        <div class="bakery-item-score">${score}</div>
+      </div>`;
+  }).join('');
+
+  document.getElementById('bakeryModalContent').innerHTML = `
+    <div class="bakery-profile-header">
+      <div class="bakery-profile-name">${bakeryName}</div>
+      ${b.address ? `<div class="bakery-profile-address">📍 ${b.address}</div>` : ''}
+      <div class="bakery-profile-scores">
+        <div class="bakery-profile-score">
+          <div class="bakery-profile-score-num">${avg}</div>
+          <div class="bakery-profile-score-label">Avg rating</div>
+        </div>
+        <div class="bakery-profile-score">
+          <div class="bakery-profile-score-num">${b.items.length}</div>
+          <div class="bakery-profile-score-label">Reviews</div>
+        </div>
+        <div class="bakery-profile-score">
+          <div class="bakery-profile-score-num">${new Set(b.items.map(i=>i.category)).size}</div>
+          <div class="bakery-profile-score-label">Item types</div>
+        </div>
+      </div>
+    </div>
+    <div class="bakery-profile-body">
+      <div class="bakery-blurb-section" id="bakeryBlurbSection">
+        ${blurb
+          ? `<div class="bakery-blurb-text" id="bakeryBlurbText">"${blurb}"</div>`
+          : `<div class="bakery-blurb-text" id="bakeryBlurbText" style="color:var(--text-muted); font-style:normal;">No description yet.</div>`
+        }
+        ${canEdit ? `<span class="bakery-blurb-edit" onclick="editBakeryBlurb('${escJS(bakeryName)}', '${escJS(blurb)}')">${blurb ? '✏️ Edit description' : '+ Add a description'}</span>` : ''}
+      </div>
+      <div class="bakery-items-title">All reviews (${b.items.length})</div>
+      <div>${itemsHTML}</div>
+    </div>`;
+}
+
+function closeBakeryModal() {
+  document.getElementById('bakeryModal').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function editBakeryBlurb(bakeryName, currentBlurb) {
+  const section = document.getElementById('bakeryBlurbSection');
+  section.innerHTML = `
+    <textarea class="form-textarea" id="blurbInput" style="min-height:80px; margin-bottom:8px;" placeholder="A short description of the bakery — what makes it special, what to order, when to visit…">${currentBlurb}</textarea>
+    <div style="display:flex; gap:8px;">
+      <button class="btn-espresso" style="font-size:0.85rem; padding:8px 16px;" onclick="saveBakeryBlurb('${escJS(bakeryName)}')">Save</button>
+      <button class="btn-ghost" style="font-size:0.85rem;" onclick="openBakeryProfile('${escJS(bakeryName)}')">Cancel</button>
+    </div>`;
+}
+
+async function saveBakeryBlurb(bakeryName) {
+  const blurb = document.getElementById('blurbInput')?.value?.trim() || '';
+  try {
+    const { db, doc, setDoc } = fb;
+    await setDoc(doc(db, 'bakeries', encodeURIComponent(bakeryName)), { blurb, updatedBy: currentUser?.uid, name: bakeryName }, { merge: true });
+    showToast('Description saved ✓');
+    openBakeryProfile(bakeryName);
+  } catch(e) {
+    showToast('Could not save — check your connection');
+  }
 }
 
 // ─── LEADERBOARD ──────────────────────────────────────────────────────────────
@@ -1265,7 +1496,7 @@ async function openDetail(id) {
     </div>
     <div class="detail-body">
       <div class="detail-name">${item.name || 'Unknown bake'}</div>
-      <div class="detail-bakery">${item.bakeryName || 'Unknown bakery'}</div>
+      <div class="detail-bakery" style="cursor:pointer;" onclick="closeDetailModal(); openBakeryProfile('${escJS(item.bakeryName || 'Unknown bakery')}')">${item.bakeryName || 'Unknown bakery'} →</div>
       ${item.bakeryAddress ? `<div class="detail-address">📍 ${item.bakeryAddress}</div>` : ''}
       ${item.price ? `<div style="font-size:0.85rem; color:var(--sage); font-weight:600; margin-bottom:16px;">£${parseFloat(item.price).toFixed(2)}</div>` : ''}
       <div class="detail-scores">
@@ -1712,9 +1943,10 @@ function escJS(str) {
 document.getElementById('addModal').addEventListener('click', e => { if (e.target === document.getElementById('addModal')) closeAddModal(); });
 document.getElementById('authModal').addEventListener('click', e => { if (e.target === document.getElementById('authModal')) closeAuthModal(); });
 document.getElementById('detailModal').addEventListener('click', e => { if (e.target === document.getElementById('detailModal')) closeDetailModal(); });
+document.getElementById('bakeryModal').addEventListener('click', e => { if (e.target === document.getElementById('bakeryModal')) closeBakeryModal(); });
 
 // Keyboard close
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeAddModal(); closeAuthModal(); closeDetailModal(); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeAddModal(); closeAuthModal(); closeDetailModal(); closeBakeryModal(); } });
 
 // Init tasting dims
 buildTastingDims();
