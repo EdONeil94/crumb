@@ -593,20 +593,7 @@ nav {
   font-size: 0.85rem;
 }
 
-/* AI identify */
-.ai-result {
-  background: linear-gradient(135deg, var(--parchment) 0%, var(--parchment-dark) 100%);
-  border: 1.5px solid var(--honey);
-  border-radius: var(--radius);
-  padding: 14px;
-  margin-top: 12px;
-  display: none;
-}
-.ai-result.visible { display: block; }
-.ai-result-label { font-size: 0.7rem; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; color: var(--caramel); margin-bottom: 4px; }
-.ai-result-text { font-family: 'Playfair Display', serif; font-size: 1rem; color: var(--espresso); }
-.ai-loading { display: none; align-items: center; gap: 10px; padding: 12px; color: var(--caramel); font-size: 0.85rem; margin-top: 8px; }
-.ai-loading.visible { display: flex; }
+
 
 /* Slider rating */
 .rating-slider-wrap { position: relative; margin: 8px 0 4px; }
@@ -1159,14 +1146,22 @@ nav {
   <div class="leaderboard-bg">
     <div class="leaderboard-inner">
       <div class="leaderboard-title">🏆 The Hall of Crumbs</div>
-      <div class="leaderboard-sub">Community's highest-rated bakes, ranked by average score</div>
-      <div class="lb-tabs">
+      <div class="leaderboard-sub" id="lbSubtitle">Community's highest-rated bakes, ranked by average score</div>
+      <!-- Top-level mode switcher -->
+      <div style="display:flex; gap:8px; margin-bottom:16px;">
+        <button class="lb-tab active" id="lbModeItems" onclick="switchLbMode('items')">🥐 Top Items</button>
+        <button class="lb-tab" id="lbModeBakeries" onclick="switchLbMode('bakeries')">🏪 Top Bakeries</button>
+      </div>
+
+      <!-- Item filters (hidden when bakery mode active) -->
+      <div class="lb-tabs" id="lbItemTabs">
         <button class="lb-tab active" onclick="switchLbTab(this,'all')">All</button>
-        <button class="lb-tab" onclick="switchLbTab(this,'croissant')">Croissants</button>
-        <button class="lb-tab" onclick="switchLbTab(this,'sourdough')">Sourdough</button>
+        <button class="lb-tab" onclick="switchLbTab(this,'bread')">Bread</button>
+        <button class="lb-tab" onclick="switchLbTab(this,'pastry')">Pastry</button>
+        <button class="lb-tab" onclick="switchLbTab(this,'cake')">Cake</button>
         <button class="lb-tab" onclick="switchLbTab(this,'tart')">Tarts</button>
-        <button class="lb-tab" onclick="switchLbTab(this,'cake')">Cakes</button>
-        <button class="lb-tab" onclick="switchLbTab(this,'pastry')">Pastries</button>
+        <button class="lb-tab" onclick="switchLbTab(this,'bun')">Buns</button>
+        <button class="lb-tab" onclick="switchLbTab(this,'cookie')">Biscuits</button>
         <button class="lb-tab" onclick="switchLbTab(this,'value')">Best value</button>
       </div>
       <div class="lb-list" id="lbList">
@@ -1247,7 +1242,7 @@ nav {
       <div class="modal-step active" id="step1">
         <div class="form-group">
           <label class="form-label">Bakery</label>
-          <input type="text" class="form-input" id="bakerySearch" placeholder="Search for a bakery…" oninput="searchBakery(this.value)">
+          <input type="text" class="form-input" id="bakerySearch" placeholder="Search for a bakery…" oninput="searchBakery(this.value)" onfocus="if(!this.value) showKnownBakeries()">
           <div id="bakeryResults" style="margin-top:8px; display:flex; flex-direction:column; gap:6px;"></div>
           <div class="location-selected" id="locationSelected">
             <div class="location-selected-icon">📍</div>
@@ -1265,13 +1260,6 @@ nav {
           <div style="font-size:0.75rem; margin-top:4px;">Requires Google Maps API key</div>
         </div>
 
-        <div class="form-group" style="margin-top:16px;">
-          <label class="form-label">Price paid</label>
-          <div style="position:relative;">
-            <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-weight:600;">£</span>
-            <input type="number" class="form-input" id="itemPrice" placeholder="0.00" step="0.01" min="0" style="padding-left:30px;">
-          </div>
-        </div>
       </div>
 
       <!-- Step 2: Photo, item name & category -->
@@ -1285,14 +1273,7 @@ nav {
               <div class="photo-upload-text">Tap to take a photo or <strong>upload from your camera roll</strong></div>
             </div>
           </div>
-          <div class="ai-loading" id="aiLoading">
-            <div class="spinner"></div>
-            <span>Identifying your bake…</span>
-          </div>
-          <div class="ai-result" id="aiResult">
-            <div class="ai-result-label">✦ Crumb thinks this is…</div>
-            <div class="ai-result-text" id="aiResultText"></div>
-          </div>
+
         </div>
 
         <div class="form-group">
@@ -1318,6 +1299,14 @@ nav {
           <div id="categoryChips">
             <div id="categoryParentChips" class="category-chips" style="margin-bottom:10px;"></div>
             <div id="categorySubChips" class="category-chips" style="display:none;"></div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Price paid <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">(optional)</span></label>
+          <div style="position:relative;">
+            <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-weight:600;">£</span>
+            <input type="number" class="form-input" id="itemPrice" placeholder="0.00" step="0.01" min="0" style="padding-left:30px;">
           </div>
         </div>
       </div>
@@ -1671,12 +1660,37 @@ function getCategoryDisplay(item) {
   return { main: 'Other', sub: null, emoji: '✦' };
 }
 
-const TASTING_DIMS = ['Texture', 'Flavour', 'Sweetness', 'Appearance', 'Value'];
+const TASTING_DIMS_UNIVERSAL = ['Appearance', 'Texture', 'Flavour', 'Value'];
+
+const TASTING_DIM_5TH = {
+  bread:      { key: 'dim_crust',       label: 'Crust',             tip: 'Quality and character of the crust' },
+  pastry:     { key: 'dim_lamination',  label: 'Lamination',        tip: 'The layers and flakiness' },
+  cake:       { key: 'dim_moistness',   label: 'Moistness',         tip: 'The crumb and moisture level' },
+  tart:       { key: 'dim_pastrybase',  label: 'Pastry Base',       tip: 'The shortcrust or puff underneath' },
+  bun:        { key: 'dim_sweetness',   label: 'Sweetness',         tip: 'The balance of sugar' },
+  cookie:     { key: 'dim_sweetness',   label: 'Sweetness',         tip: 'The balance of sugar' },
+  sandwich:   { key: 'dim_freshness',   label: 'Freshness',         tip: 'Ingredients and assembly quality' },
+  scone:      { key: 'dim_lightness',   label: 'Lightness',         tip: 'The rise and airiness' },
+  sweet_treat:{ key: 'dim_sweetness',   label: 'Sweetness',         tip: 'The balance of sugar' },
+  other:      { key: 'dim_impression',  label: 'Overall Impression',tip: 'General impression' },
+};
+
+// Default 5th dim for unknown categories
+const DEFAULT_DIM_5TH = { key: 'dim_impression', label: 'Overall Impression', tip: 'General impression' };
+
+function getTastingDims(category) {
+  const fifth = TASTING_DIM_5TH[category] || DEFAULT_DIM_5TH;
+  return [
+    ...TASTING_DIMS_UNIVERSAL.map(l => ({ key: 'dim_' + l.toLowerCase(), label: l, tip: '' })),
+    fifth
+  ];
+}
+
+// Legacy flat list for any code that still references TASTING_DIMS
+const TASTING_DIMS = ['Appearance', 'Texture', 'Flavour', 'Value', 'dim5'];
 // Google Maps API key - replace with yours
 const GOOGLE_MAPS_KEY = 'AIzaSyCQa9SwvrPmdnk5S2-q8Mem2ZP22GVB1Yo';
-// Anthropic API key - replace with yours (for AI identification)
-// Note: in production move this to a backend/Firebase function
-const ANTHROPIC_KEY = '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';
+
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 window.addEventListener('crumb-firebase-ready', () => {
@@ -1697,7 +1711,7 @@ function showPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  if (name === 'leaderboard') renderLeaderboard(lbCurrentTab);
+  if (name === 'leaderboard') { if (lbCurrentMode === 'bakeries') renderBakeryLeaderboard(); else renderLeaderboard(lbCurrentTab); }
   if (name === 'feed') renderFeed();
   if (name === 'bakeries') renderBakeries();
   if (name === 'people') renderPeople();
@@ -2128,55 +2142,150 @@ async function saveBakeryBlurb(bakeryName) {
 }
 
 // ─── LEADERBOARD ──────────────────────────────────────────────────────────────
+let lbCurrentMode = 'items';
+
+function switchLbMode(mode) {
+  lbCurrentMode = mode;
+  document.getElementById('lbModeItems').classList.toggle('active', mode === 'items');
+  document.getElementById('lbModeBakeries').classList.toggle('active', mode === 'bakeries');
+  document.getElementById('lbItemTabs').style.display = mode === 'items' ? 'flex' : 'none';
+  const subtitle = document.getElementById('lbSubtitle');
+  if (mode === 'bakeries') {
+    if (subtitle) subtitle.textContent = "York's top bakeries, ranked by community average";
+    renderBakeryLeaderboard();
+  } else {
+    if (subtitle) subtitle.textContent = "Community's highest-rated bakes, ranked by average score";
+    renderLeaderboard(lbCurrentTab);
+  }
+}
+
 function switchLbTab(btn, tab) {
-  document.querySelectorAll('.lb-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('#lbItemTabs .lb-tab').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
   lbCurrentTab = tab;
   renderLeaderboard(tab);
 }
 
+function renderBakeryLeaderboard() {
+  buildBakeryIndex();
+  const list = document.getElementById('lbList');
+
+  const bakeries = Object.values(allBakeries)
+    .filter(b => b.items.length > 0)
+    .map(b => ({
+      ...b,
+      avg: b.totalScore / b.items.length,
+      reviewCount: b.items.length,
+      topItem: [...b.items].sort((x,y) => (y.communityAvg||y.overallRating||0)-(x.communityAvg||x.overallRating||0))[0]
+    }))
+    .sort((a, b) => b.avg - a.avg)
+    .slice(0, 20);
+
+  if (!bakeries.length) {
+    list.innerHTML = `<div class="empty-state" style="color:var(--honey-light)"><div class="empty-state-icon">🏪</div><div class="empty-state-title" style="color:var(--honey)">No bakeries yet</div><div class="empty-state-text">Start logging reviews to build the bakery rankings.</div></div>`;
+    return;
+  }
+
+  list.innerHTML = bakeries.map((b, i) => {
+    const rank = i + 1;
+    const rankClass = rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : '';
+    const emoji = b.topItem ? (CATEGORY_TREE[b.topItem.category]?.emoji || '🥐') : '🏪';
+    const thumb = b.topItem?.photoURL
+      ? `<img src="${b.topItem.photoURL}" style="width:52px;height:52px;border-radius:8px;object-fit:cover;" alt="">`
+      : `<div class="lb-image">${emoji}</div>`;
+
+    return `
+      <div class="lb-item" onclick="closeLbAndOpenBakery('${escJS(b.name)}')">
+        <div class="lb-rank ${rankClass}">${rank}</div>
+        ${thumb}
+        <div class="lb-info">
+          <div class="lb-name">${b.name}</div>
+          <div class="lb-bakery">📍 ${b.address || 'York'} · ${b.reviewCount} review${b.reviewCount !== 1 ? 's' : ''}</div>
+        </div>
+        <div class="lb-right">
+          <div class="lb-score">${b.avg.toFixed(1)}</div>
+          <div class="lb-reviews">${b.reviewCount} item${b.reviewCount !== 1 ? 's' : ''}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function closeLbAndOpenBakery(name) {
+  openBakeryProfile(name);
+}
+
 function renderLeaderboard(tab) {
-  let items = [...allItems];
+  // If in bakery mode, delegate
+  if (lbCurrentMode === 'bakeries') { renderBakeryLeaderboard(); return; }
+
+  // Always aggregate — prefer itemRecords (deduped), fall back to deduping allItems by name+bakery
+  let records;
+  if (allItemRecords.length > 0) {
+    records = allItemRecords;
+  } else {
+    // Dedupe allItems manually by name+bakery, averaging scores
+    const byKey = {};
+    allItems.forEach(item => {
+      const key = (item.name || '').toLowerCase() + '||' + (item.bakeryName || '').toLowerCase();
+      if (!byKey[key]) {
+        byKey[key] = { ...item, _scores: [item.overallRating || 0], _count: 1 };
+      } else {
+        byKey[key]._scores.push(item.overallRating || 0);
+        byKey[key]._count++;
+        if (!byKey[key].photoURL && item.photoURL) byKey[key].photoURL = item.photoURL;
+      }
+    });
+    records = Object.values(byKey).map(r => ({
+      ...r,
+      communityAvg: r._scores.reduce((a,b) => a+b, 0) / r._scores.length,
+      reviewCount: r._count
+    }));
+  }
+
+  // Apply tab filter
+  let filtered = [...records];
   if (tab === 'value') {
-    items = items.filter(i => i.price && i.communityAvg).sort((a, b) => {
-      const aVal = (a.communityAvg || 0) / parseFloat(a.price);
-      const bVal = (b.communityAvg || 0) / parseFloat(b.price);
-      return bVal - aVal;
+    filtered = filtered.filter(r => r.avgPrice && r.communityAvg).sort((a, b) => {
+      return (b.communityAvg / b.avgPrice) - (a.communityAvg / a.avgPrice);
     });
   } else if (tab !== 'all') {
-    items = items.filter(i => i.category === tab);
-    items.sort((a, b) => (b.communityAvg || b.overallRating || 0) - (a.communityAvg || a.overallRating || 0));
+    filtered = filtered.filter(r => r.category === tab);
+    filtered.sort((a, b) => (b.communityAvg || 0) - (a.communityAvg || 0));
   } else {
-    items.sort((a, b) => (b.communityAvg || b.overallRating || 0) - (a.communityAvg || a.overallRating || 0));
+    filtered.sort((a, b) => (b.communityAvg || 0) - (a.communityAvg || 0));
   }
-  items = items.slice(0, 20);
+  filtered = filtered.slice(0, 20);
 
   const list = document.getElementById('lbList');
-  if (!items.length) {
+  if (!filtered.length) {
     list.innerHTML = `<div class="empty-state" style="color:var(--honey-light)"><div class="empty-state-icon">🥐</div><div class="empty-state-title" style="color:var(--honey)">No rankings yet</div><div class="empty-state-text">Start logging pastries to build the leaderboard.</div></div>`;
     return;
   }
 
-  list.innerHTML = items.map((item, i) => {
+  list.innerHTML = filtered.map((record, i) => {
     const rank = i + 1;
     const rankClass = rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : '';
-    const emoji = CATEGORIES[item.category] || '✦';
-    const score = item.communityAvg ? item.communityAvg.toFixed(1) : (item.overallRating ? item.overallRating.toFixed(1) : '–');
-    const ratingCount = item.ratingCount || 1;
-    const imageContent = item.photoURL
-      ? `<img src="${item.photoURL}" style="width:52px;height:52px;border-radius:8px;object-fit:cover;" alt="">`
-      : `<div class="lb-image">${emoji}</div>`;
+    const catDisp = getCategoryDisplay(record);
+    const score = record.communityAvg ? record.communityAvg.toFixed(1) : '–';
+    const reviewCount = record.reviewCount || record.ratingCount || 1;
+    const avgPStr = record.avgPrice ? ' · £' + parseFloat(record.avgPrice).toFixed(2) + ' avg' : '';
+    const imageContent = record.photoURL
+      ? `<img src="${record.photoURL}" style="width:52px;height:52px;border-radius:8px;object-fit:cover;" alt="">`
+      : `<div class="lb-image">${catDisp.emoji}</div>`;
+    // Click opens the first matching review for this record
+    const matchingItem = allItems.find(it => it.itemRecordId === record.id) || allItems.find(it => (it.name||'').toLowerCase() === (record.name||'').toLowerCase() && (it.bakeryName||'').toLowerCase() === (record.bakeryName||'').toLowerCase());
+    const onclick = matchingItem ? `openDetail('${matchingItem.id}')` : `openBakeryProfile('${escJS(record.bakeryName || '')}')`;
     return `
-      <div class="lb-item" onclick="openDetail('${item.id}')">
+      <div class="lb-item" onclick="${onclick}">
         <div class="lb-rank ${rankClass}">${rank}</div>
         ${imageContent}
         <div class="lb-info">
-          <div class="lb-name">${item.name || 'Unknown bake'}</div>
-          <div class="lb-bakery">📍 ${item.bakeryName || 'Unknown'}</div>
+          <div class="lb-name">${record.name || 'Unknown bake'}</div>
+          <div class="lb-bakery">📍 ${record.bakeryName || 'Unknown'}${avgPStr}</div>
         </div>
         <div class="lb-right">
           <div class="lb-score">${score}</div>
-          <div class="lb-reviews">${ratingCount} review${ratingCount !== 1 ? 's' : ''}</div>
+          <div class="lb-reviews">${reviewCount} review${reviewCount !== 1 ? 's' : ''}</div>
         </div>
       </div>`;
   }).join('');
@@ -2196,12 +2305,12 @@ async function openDetail(id) {
   const communityScore = record ? record.communityAvg.toFixed(1) : (item.communityAvg ? item.communityAvg.toFixed(1) : (item.overallRating ? item.overallRating.toFixed(1) : '–'));
   const communityCount = record ? (record.reviewCount || 1) : (item.ratingCount || 1);
   const userScore = item.overallRating ? item.overallRating.toFixed(1) : '–';
-  const dimsHTML = TASTING_DIMS.map(dim => {
-    const key = 'dim_' + dim.toLowerCase();
-    const val = item[key] || 0;
+  const detailDims = getTastingDims(item.category || 'other');
+  const dimsHTML = detailDims.map(d => {
+    const val = item[d.key] || 0;
     const pct = (val / 5) * 100;
     return `<div class="detail-dim">
-      <div class="detail-dim-name">${dim}</div>
+      <div class="detail-dim-name">${d.label}</div>
       <div class="detail-dim-bar-wrap"><div class="detail-dim-bar" style="width:${pct}%"></div></div>
       <div class="detail-dim-val">${val ? val.toFixed(1) : '–'}</div>
     </div>`;
@@ -2278,9 +2387,19 @@ function closeDetailModal() {
 }
 
 // ─── ADD ITEM MODAL ───────────────────────────────────────────────────────────
+let userLatLng = null; // cached geolocation
+
 function openAddModal() {
   if (!currentUser) { openAuthModal(); return; }
   resetAddModal();
+  // Request location silently in background
+  if (navigator.geolocation && !userLatLng) {
+    navigator.geolocation.getCurrentPosition(
+      pos => { userLatLng = { lat: pos.coords.latitude, lng: pos.coords.longitude }; },
+      () => {}, // silent fail
+      { timeout: 5000, maximumAge: 300000 }
+    );
+  }
   document.getElementById('addModal').classList.add('open');
   lockScroll();
 }
@@ -2303,7 +2422,6 @@ function resetAddModal() {
   document.getElementById('itemNotes').value = '';
   document.getElementById('overallRating').value = 0;
   document.getElementById('overallRatingDisplay').textContent = '–';
-  document.getElementById('aiResult').classList.remove('visible');
   document.getElementById('locationSelected').classList.remove('visible');
   document.getElementById('bakeryResults').innerHTML = '';
   document.getElementById('photoInput').value = '';
@@ -2326,16 +2444,18 @@ function resetAddModal() {
   goToStep(1);
 }
 
-function buildTastingDims() {
+function buildTastingDims(category) {
+  const dims = getTastingDims(category || selectedCategory || 'other');
   const wrap = document.getElementById('tastingDims');
-  wrap.innerHTML = TASTING_DIMS.map(dim => `
+  if (!wrap) return;
+  wrap.innerHTML = dims.map(d => `
     <div>
       <div class="tasting-dim-label">
-        <span class="tasting-dim-name">${dim}</span>
-        <span class="tasting-dim-val" id="dim_display_${dim.toLowerCase()}">–</span>
+        <span class="tasting-dim-name">${d.label}${d.tip ? `<span style="font-size:0.68rem;font-weight:400;color:var(--text-muted);margin-left:6px;">${d.tip}</span>` : ''}</span>
+        <span class="tasting-dim-val" id="display_${d.key}">–</span>
       </div>
-      <input type="range" class="rating-slider" id="dim_${dim.toLowerCase()}" min="0" max="5" step="0.1" value="0"
-        oninput="document.getElementById('dim_display_${dim.toLowerCase()}').textContent=parseFloat(this.value).toFixed(1)">
+      <input type="range" class="rating-slider" id="${d.key}" min="0" max="5" step="0.1" value="0"
+        oninput="document.getElementById('display_${d.key}').textContent=parseFloat(this.value).toFixed(1)">
     </div>`).join('');
 }
 
@@ -2387,7 +2507,7 @@ async function handlePhotoChange(input) {
       <img src="${photoDataURL}" alt="Preview">
       <button class="photo-preview-remove" onclick="removePhoto()">✕</button>
     </div>`;
-  identifyWithAI(photoDataURL);
+
 }
 
 function removePhoto() {
@@ -2398,61 +2518,9 @@ function removePhoto() {
       <div class="photo-upload-icon">📷</div>
       <div class="photo-upload-text">Tap to take a photo or <strong>upload from your camera roll</strong></div>
     </div>`;
-  document.getElementById('aiResult').classList.remove('visible');
 }
 
-async function identifyWithAI(dataURL) {
-  if (!ANTHROPIC_KEY) {
-    document.getElementById('aiResult').classList.add('visible');
-    document.getElementById('aiResultText').textContent = 'AI identification requires an Anthropic API key.';
-    return;
-  }
-  document.getElementById('aiLoading').classList.add('visible');
-  document.getElementById('aiResult').classList.remove('visible');
-  try {
-    const base64 = dataURL.split(',')[1];
-    const mediaType = dataURL.split(';')[0].split(':')[1];
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 150,
-        messages: [{
-          role: 'user',
-          content: [{
-            type: 'image',
-            source: { type: 'base64', media_type: mediaType, data: base64 }
-          }, {
-            type: 'text',
-            text: 'You are a knowledgeable baker. Look at this image and identify the baked good. Reply with ONLY a short phrase, like "almond croissant", "pain au chocolat", "lemon tart", "sourdough loaf", "cinnamon bun". No preamble, no punctuation at the end, just the name of the bake. If you cannot identify it, say "a delicious bake".'
-          }]
-        }]
-      })
-    });
-    const data = await res.json();
-    const identified = data.content?.[0]?.text?.trim() || 'a delicious bake';
-    document.getElementById('aiResultText').textContent = identified.charAt(0).toUpperCase() + identified.slice(1);
-    document.getElementById('aiResult').classList.add('visible');
-    if (!document.getElementById('itemName').value) {
-      document.getElementById('itemName').value = identified.charAt(0).toUpperCase() + identified.slice(1);
-    }
-    // Auto-select category from AI result
-    const lower = identified.toLowerCase();
-    for (const cat of Object.keys(CATEGORIES)) {
-      if (lower.includes(cat)) {
-        const chip = document.querySelector(`.category-chip[onclick*="'${cat}'"]`);
-        if (chip) selectCategory(chip, cat);
-        break;
-      }
-    }
-  } catch (err) {
-    document.getElementById('aiResultText').textContent = 'Could not identify — fill in manually.';
-    document.getElementById('aiResult').classList.add('visible');
-  } finally {
-    document.getElementById('aiLoading').classList.remove('visible');
-  }
-}
+
 
 let selectedSubCategory = '';
 
@@ -2500,6 +2568,9 @@ function selectParentCategory(parentKey) {
   subWrap.style.display = 'flex';
   subWrap.style.flexWrap = 'wrap';
   subWrap.style.gap = '8px';
+
+  // Rebuild tasting dims for this category
+  buildTastingDims(parentKey);
 }
 
 function clearParentCategory() {
@@ -2509,6 +2580,7 @@ function clearParentCategory() {
   const subWrap = document.getElementById('categorySubChips');
   if (parentWrap) renderParentChips(parentWrap);
   if (subWrap) { subWrap.innerHTML = ''; subWrap.style.display = 'none'; }
+  buildTastingDims('other'); // reset to default
 }
 
 function selectSubCategory(el, subKey) {
@@ -2525,8 +2597,58 @@ function selectCategory(el, cat) {
 
 // ─── BAKERY SEARCH ────────────────────────────────────────────────────────────
 let searchTimeout;
+
+function showKnownBakeries() {
+  if (selectedBakery) return; // already selected
+  const resultsEl = document.getElementById('bakeryResults');
+
+  // Build sorted list of previously reviewed bakeries
+  const bakeryMap = {};
+  allItems.forEach(item => {
+    if (!item.bakeryName) return;
+    const key = item.bakeryName;
+    if (!bakeryMap[key]) bakeryMap[key] = { name: item.bakeryName, address: item.bakeryAddress || '', placeId: item.bakeryPlaceId || null, count: 0 };
+    bakeryMap[key].count++;
+  });
+
+  let known = Object.values(bakeryMap).sort((a, b) => b.count - a.count);
+  if (!known.length) return;
+
+  // If we have location, sort by distance
+  if (userLatLng && known.some(b => b.lat)) {
+    known = known.sort((a, b) => {
+      const da = a.lat ? distKm(userLatLng.lat, userLatLng.lng, a.lat, a.lng) : 999;
+      const db = b.lat ? distKm(userLatLng.lat, userLatLng.lng, b.lat, b.lng) : 999;
+      return da - db;
+    });
+  }
+
+  resultsEl.innerHTML = `<div style="font-size:0.72rem; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Previously reviewed</div>` +
+    known.slice(0, 5).map(b => `
+      <div onclick="selectBakery('${b.placeId || ''}','${escJS(b.name)}','${escJS(b.address)}')"
+        style="padding:10px 12px; background:var(--parchment); border-radius:var(--radius-sm); cursor:pointer; border:1.5px solid var(--sage); transition:border-color 0.2s;"
+        onmouseover="this.style.borderColor='var(--honey)'" onmouseout="this.style.borderColor='var(--sage)'">
+        <div style="font-size:0.88rem; font-weight:600; color:var(--espresso); display:flex; align-items:center; gap:6px;">
+          <span style="font-size:0.8rem;">📍</span> ${b.name}
+          <span style="font-size:0.7rem; color:var(--sage); font-weight:500; margin-left:auto;">${b.count} review${b.count !== 1 ? 's' : ''}</span>
+        </div>
+        ${b.address ? `<div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">${b.address}</div>` : ''}
+      </div>`).join('');
+}
+
+function distKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng/2) * Math.sin(dLng/2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
 function searchBakery(val) {
   clearTimeout(searchTimeout);
+  if (!val) { showKnownBakeries(); return; }
   if (val.length < 2) { document.getElementById('bakeryResults').innerHTML = ''; return; }
   searchTimeout = setTimeout(() => fetchBakeryPlaces(val), 400);
 }
@@ -2540,14 +2662,24 @@ async function fetchBakeryPlaces(query) {
     return;
   }
   try {
+    // Build request body — include location bias if we have the user's position
+    const reqBody = { textQuery: query };
+    if (userLatLng) {
+      reqBody.locationBias = {
+        circle: {
+          center: { latitude: userLatLng.lat, longitude: userLatLng.lng },
+          radius: 5000 // 5km radius bias
+        }
+      };
+    }
     const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': GOOGLE_MAPS_KEY,
-        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress'
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location'
       },
-      body: JSON.stringify({ textQuery: query })
+      body: JSON.stringify(reqBody)
     });
     const data = await res.json();
     const el = document.getElementById('bakeryResults');
@@ -2555,20 +2687,24 @@ async function fetchBakeryPlaces(query) {
       el.innerHTML = `<div style="font-size:0.82rem; color:var(--text-muted); padding:8px;">No bakeries found — <span style="color:var(--caramel); cursor:pointer;" onclick="selectManualBakery('${query}')">use this name anyway</span></div>`;
       return;
     }
-    el.innerHTML = data.places.slice(0, 5).map(p => `
-      <div onclick="selectBakery('${p.id}','${escJS(p.displayName?.text || '')}','${escJS(p.formattedAddress || '')}')"
+    el.innerHTML = data.places.slice(0, 5).map(p => {
+      const lat = p.location?.latitude || '';
+      const lng = p.location?.longitude || '';
+      return `
+      <div onclick="selectBakery('${p.id}','${escJS(p.displayName?.text || '')}','${escJS(p.formattedAddress || '')}','${lat}','${lng}')"
         style="padding:10px 12px; background:var(--parchment); border-radius:var(--radius-sm); cursor:pointer; border:1.5px solid var(--border); transition:border-color 0.2s;"
         onmouseover="this.style.borderColor='var(--honey)'" onmouseout="this.style.borderColor='var(--border)'">
         <div style="font-size:0.88rem; font-weight:600; color:var(--espresso);">${p.displayName?.text || ''}</div>
         <div style="font-size:0.75rem; color:var(--text-muted);">${p.formattedAddress || ''}</div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   } catch(e) {
     document.getElementById('bakeryResults').innerHTML = `<div style="font-size:0.82rem; color:var(--text-muted); padding:8px;">Search unavailable — <span style="color:var(--caramel); cursor:pointer;" onclick="selectManualBakery('${query}')">use this name anyway</span></div>`;
   }
 }
 
-function selectBakery(placeId, name, address) {
-  selectedBakery = { placeId, name, address };
+function selectBakery(placeId, name, address, lat, lng) {
+  selectedBakery = { placeId, name, address, lat: lat ? parseFloat(lat) : null, lng: lng ? parseFloat(lng) : null };
   document.getElementById('bakerySearch').value = name;
   document.getElementById('bakeryResults').innerHTML = '';
   document.getElementById('selectedBakeryName').textContent = name;
@@ -2825,9 +2961,11 @@ async function saveReview() {
       photoURL = await getDownloadURL(snap.ref);
     }
 
+    const dims = getTastingDims(category);
     const dimData = {};
-    TASTING_DIMS.forEach(dim => {
-      dimData['dim_' + dim.toLowerCase()] = parseFloat(document.getElementById('dim_' + dim.toLowerCase()).value);
+    dims.forEach(d => {
+      const el = document.getElementById(d.key);
+      dimData[d.key] = el ? parseFloat(el.value) : 0;
     });
 
     const overallRating = parseFloat(document.getElementById('overallRating').value);
@@ -2858,10 +2996,9 @@ async function saveReview() {
       }
       // Recalculate dim averages
       const newDims = {};
-      TASTING_DIMS.forEach(dim => {
-        const key = 'dim_' + dim.toLowerCase();
-        const prev = rec[key] || 0;
-        newDims[key] = ((prev * (newCount - 1)) + dimData[key]) / newCount;
+      getTastingDims(category).forEach(d => {
+        const prev = rec[d.key] || 0;
+        newDims[d.key] = ((prev * (newCount - 1)) + (dimData[d.key] || 0)) / newCount;
       });
       await updateDoc(doc(db, 'itemRecords', itemRecordId), {
         communityAvg: Math.round(newAvg * 10) / 10,
@@ -2886,7 +3023,7 @@ async function saveReview() {
         priceCount: newPrice !== null ? 1 : 0,
         photoURL: photoURL || null,
         createdAt: serverTimestamp(),
-        ...dimData
+        ...dimData  // already keyed by d.key from getTastingDims
       };
       const recRef = await addDoc(collection(db, 'itemRecords'), newRecord);
       itemRecordId = recRef.id;
@@ -2902,6 +3039,8 @@ async function saveReview() {
       bakeryName,
       bakeryAddress: selectedBakery?.address || '',
       bakeryPlaceId: selectedBakery?.placeId || null,
+      bakeryLat: selectedBakery?.lat || null,
+      bakeryLng: selectedBakery?.lng || null,
       price: document.getElementById('itemPrice').value ? parseFloat(document.getElementById('itemPrice').value) : null,
       overallRating,
       communityAvg: overallRating, // will be updated below
@@ -3223,18 +3362,18 @@ function openEditModal(id) {
   editPhotoDataURL = item.photoURL || null;
 
   const catDisp = getCategoryDisplay(item);
-  const dimsHTML = TASTING_DIMS.map(dim => {
-    const key = 'dim_' + dim.toLowerCase();
-    const val = item[key] || 0;
+  const editDims = getTastingDims(item.category || 'other');
+  const dimsHTML = editDims.map(d => {
+    const val = item[d.key] || 0;
     return `
       <div>
         <div class="tasting-dim-label">
-          <span class="tasting-dim-name">${dim}</span>
-          <span class="tasting-dim-val" id="edit_dim_display_${dim.toLowerCase()}">${parseFloat(val).toFixed(1)}</span>
+          <span class="tasting-dim-name">${d.label}${d.tip ? `<span style="font-size:0.68rem;font-weight:400;color:var(--text-muted);margin-left:6px;">${d.tip}</span>` : ''}</span>
+          <span class="tasting-dim-val" id="edit_display_${d.key}">${parseFloat(val).toFixed(1)}</span>
         </div>
-        <input type="range" class="rating-slider" id="edit_dim_${dim.toLowerCase()}"
+        <input type="range" class="rating-slider" id="edit_${d.key}"
           min="0" max="5" step="0.1" value="${val}"
-          oninput="document.getElementById('edit_dim_display_${dim.toLowerCase()}').textContent=parseFloat(this.value).toFixed(1)">
+          oninput="document.getElementById('edit_display_${d.key}').textContent=parseFloat(this.value).toFixed(1)">
       </div>`;
   }).join('');
 
@@ -3401,9 +3540,11 @@ async function saveEdit() {
     const subCategory = modal._editSubCategory || '';
     const overallRating = parseFloat(document.getElementById('editOverallRating').value);
 
+    const editSaveDims = getTastingDims(category);
     const dimData = {};
-    TASTING_DIMS.forEach(dim => {
-      dimData['dim_' + dim.toLowerCase()] = parseFloat(document.getElementById('edit_dim_' + dim.toLowerCase()).value);
+    editSaveDims.forEach(d => {
+      const el = document.getElementById('edit_' + d.key);
+      dimData[d.key] = el ? parseFloat(el.value) : 0;
     });
 
     const updates = {
