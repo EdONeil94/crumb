@@ -3771,12 +3771,9 @@ async function showAdminTab(tab) {
   await loadAllUserRoles();
 
   if (tab === 'users') {
-    // Use new renderAdminUsers which renders into #adminUsersPanel — redirect output to adminTabContent
-    tabContent.innerHTML = '<div id="adminUsersPanel"></div>';
-    renderAdminUsers();
+    tabContent.innerHTML = renderAdminUsersHTML();
   } else if (tab === 'bakeries') {
-    tabContent.innerHTML = '<div id="adminUsersPanel"></div>';
-    renderAdminBakeries(tabContent);
+    tabContent.innerHTML = renderAdminBakeriesHTML();
   } else if (tab === 'flags') {
     tabContent.innerHTML = '<div id="adminFlagsPanel"></div>';
     await renderAdminFlags();
@@ -3922,6 +3919,74 @@ async function flagReview(itemId, bakeryName) {
   } catch(e) { showToast('Could not flag review'); }
 }
 
+// ─── ADMIN PANEL RENDERERS ────────────────────────────────────────────────────
+function renderAdminUsersHTML() {
+  const members = {};
+  allItems.forEach(item => {
+    if (!item.userId) return;
+    if (!members[item.userId]) members[item.userId] = {
+      uid: item.userId, name: item.userName || 'Anonymous',
+      photo: item.userPhoto || null, reviews: 0
+    };
+    members[item.userId].reviews++;
+  });
+  Object.entries(allProfiles).forEach(([uid, p]) => {
+    if (!members[uid]) members[uid] = { uid, name: p.displayName || 'Anonymous', photo: p.photoURL || null, reviews: 0 };
+    else { members[uid].name = p.displayName || members[uid].name; members[uid].photo = p.photoURL || members[uid].photo; }
+  });
+
+  const users = Object.values(members).filter(u => u.uid !== SUPER_ADMIN_UID);
+  if (!users.length) return '<div class="empty-state" style="padding:24px 0;"><div class="empty-state-title">No other users yet</div></div>';
+
+  return users.map(u => {
+    const role = allUserRoles[u.uid];
+    const roleBadge = role?.role === 'admin' ? '<span class="role-badge admin">Admin</span>'
+      : role?.role === 'business' ? `<span class="role-badge business">Business · ${role.bakeryName || ''}</span>`
+      : '<span style="font-size:0.75rem;color:var(--text-muted);">Member</span>';
+    const avatarInner = u.photo ? `<img src="${u.photo}" alt="" style="width:100%;height:100%;object-fit:cover;">` : (u.name || '?').charAt(0).toUpperCase();
+    return `
+      <div class="admin-user-row">
+        <div class="admin-user-avatar">${avatarInner}</div>
+        <div class="admin-user-info">
+          <div class="admin-user-name">${u.name} ${roleBadge}</div>
+          <div class="admin-user-email">${u.reviews} review${u.reviews !== 1 ? 's' : ''}</div>
+        </div>
+        <div class="admin-user-actions">
+          ${role?.role !== 'admin' ? `<button class="admin-btn" onclick="promoteUser('${u.uid}','admin','')">Make admin</button>` : ''}
+          <button class="admin-btn" onclick="promptAssignBakery('${u.uid}','${escJS(u.name)}')">${role?.role === 'business' ? 'Change bakery' : 'Assign bakery'}</button>
+          ${role ? `<button class="admin-btn danger" onclick="removeUserRole('${u.uid}')">Remove role</button>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function renderAdminBakeriesHTML() {
+  buildBakeryIndex();
+  const names = Object.keys(allBakeries);
+  if (!names.length) return '<div class="empty-state" style="padding:24px 0;"><div class="empty-state-title">No bakeries yet</div></div>';
+
+  return `<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:16px;">
+    Assign a bakery to a business user via the Users tab. The table below shows current ownership.</div>` +
+  names.map(name => {
+    const b = allBakeries[name];
+    const owner = Object.entries(allUserRoles).find(([, r]) => r.bakeryName === name);
+    const ownerName = owner ? (allProfiles[owner[0]]?.displayName || 'User ' + owner[0].slice(0,6)) : '—';
+    const bp = bakeryProfiles[encodeURIComponent(name)] || {};
+    const claimed = bp.ownerId ? '<span class="claimed-badge">✓ Claimed</span>' : '';
+    return `
+      <div class="admin-user-row">
+        <div class="admin-user-info">
+          <div class="admin-user-name">${name} ${claimed}</div>
+          <div class="admin-user-email">${b.items.length} review${b.items.length !== 1 ? 's' : ''} · Owner: ${ownerName}</div>
+        </div>
+        <div class="admin-user-actions">
+          <button class="admin-btn" onclick="openBakeryProfile('${escJS(name)}')">View page</button>
+          ${isAdmin() ? `<button class="admin-btn primary" onclick="closeAdminModal(); openManageBakeryModal('${escJS(name)}')">Edit page</button>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+}
+
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
 function openAuthModal() {
   document.getElementById('authModal').classList.add('open');
@@ -4027,4 +4092,9 @@ buildTastingDims();
 buildCategoryChips();
 </script>
 </body>
-</html>
+</html>function renderAdminUsers() {
+  const panel = document.getElementById('adminUsersPanel');
+  if (panel) panel.innerHTML = renderAdminUsersHTML();
+}
+
+
