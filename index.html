@@ -1362,8 +1362,12 @@ nav {
   gap: 8px;
   padding: 12px 16px;
   border-top: 1px solid var(--border);
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
+.reaction-bar::-webkit-scrollbar { display: none; }
 .reaction-btn {
   display: inline-flex;
   align-items: center;
@@ -2353,7 +2357,7 @@ const CATEGORY_TREE = {
     }
   },
   bun: {
-    label: 'Buns & Rolls', emoji: '🫓',
+    label: 'Buns & Rolls', emoji: '🥐',
     subs: {
       cinnamon_bun: 'Cinnamon Bun', chelsea_bun: 'Chelsea Bun',
       hot_cross_bun: 'Hot Cross Bun', sticky_bun: 'Sticky Bun',
@@ -2383,7 +2387,7 @@ const CATEGORY_TREE = {
     }
   },
   scone: {
-    label: 'Scones & Tea Cakes', emoji: '🫖',
+    label: 'Scones & Tea Cakes', emoji: '☕',
     subs: {
       plain_scone: 'Plain Scone', fruit_scone: 'Fruit Scone',
       cream_scone: 'Cream Scone', welsh_cake: 'Welsh Cake',
