@@ -957,6 +957,174 @@ nav {
 .filter-chip.location-chip { border-color: var(--sage); color: var(--sage); }
 .filter-chip.location-chip.active { background: var(--sage); border-color: var(--sage); color: white; }
 
+/* ─── SETTINGS ───────────────────────────────────────────────────────────────── */
+.settings-card {
+  background: var(--cream-white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 20px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.settings-card-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--parchment);
+}
+.settings-card-title { font-family: 'Playfair Display', serif; font-size: 1.05rem; font-weight: 600; color: var(--espresso); }
+.settings-card-sub { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; }
+.settings-card-body { padding: 20px; }
+
+/* Role badges */
+.role-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 100px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.role-badge.admin { background: var(--espresso); color: var(--honey); }
+.role-badge.business { background: var(--sage); color: white; }
+.role-badge.user { background: var(--border); color: var(--text-muted); }
+
+/* Claimed badge on bakery profile */
+.claimed-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--sage);
+  color: white;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 100px;
+  margin-left: 8px;
+}
+
+/* Bakery cover photo */
+.bakery-cover {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  display: block;
+}
+.bakery-cover-placeholder {
+  width: 100%;
+  height: 120px;
+  background: linear-gradient(135deg, var(--espresso-mid) 0%, var(--espresso) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3rem;
+}
+
+/* Admin table */
+.admin-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.admin-table th { text-align: left; padding: 8px 10px; font-size: 0.72rem; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--text-muted); border-bottom: 1.5px solid var(--border); }
+.admin-table td { padding: 10px; border-bottom: 1px solid var(--border); color: var(--text-body); vertical-align: middle; }
+.admin-table tr:last-child td { border-bottom: none; }
+
+/* Bakery social links */
+.bakery-social-links { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+.bakery-social-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border-radius: 100px;
+  border: 1.5px solid var(--border);
+  font-size: 0.8rem; font-weight: 500; color: var(--caramel);
+  text-decoration: none; transition: border-color 0.15s;
+}
+.bakery-social-link:hover { border-color: var(--honey); }
+
+/* Flag button */
+.flag-btn {
+  font-size: 0.72rem; color: var(--text-muted); padding: 3px 8px;
+  border: 1px solid var(--border); border-radius: 100px;
+  cursor: pointer; transition: all 0.15s; background: transparent;
+}
+.flag-btn:hover { border-color: #e07070; color: #c0392b; }
+
+/* ─── ROLE BADGES & BUSINESS UI ──────────────────────────────────────────────── */
+.role-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 9px; border-radius: 100px;
+  font-size: 0.68rem; font-weight: 600; letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.role-badge.admin { background: var(--espresso); color: var(--honey); }
+.role-badge.business { background: var(--sage); color: white; }
+.claimed-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 0.72rem; font-weight: 600; color: var(--sage);
+}
+.bakery-hero-photo {
+  width: 100%; height: 200px; object-fit: cover;
+  display: block;
+}
+.bakery-links { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+.bakery-link-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 14px; border-radius: 100px;
+  font-size: 0.8rem; font-weight: 500;
+  border: 1.5px solid var(--border);
+  color: var(--text-body); background: var(--parchment);
+  cursor: pointer; transition: all 0.15s; text-decoration: none;
+}
+.bakery-link-btn:hover { border-color: var(--honey); color: var(--caramel); }
+
+/* Admin panel */
+.admin-user-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 0; border-bottom: 1px solid var(--border);
+}
+.admin-user-avatar {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: var(--caramel); color: white;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.9rem; font-weight: 600; flex-shrink: 0;
+  overflow: hidden;
+}
+.admin-user-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.admin-user-info { flex: 1; min-width: 0; }
+.admin-user-name { font-size: 0.88rem; font-weight: 600; color: var(--espresso); }
+.admin-user-email { font-size: 0.75rem; color: var(--text-muted); }
+.admin-user-actions { display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+.admin-btn {
+  padding: 5px 10px; border-radius: var(--radius-sm);
+  font-size: 0.75rem; font-weight: 600; cursor: pointer;
+  border: 1.5px solid var(--border); background: var(--parchment);
+  color: var(--text-body); transition: all 0.15s;
+}
+.admin-btn:hover { border-color: var(--honey); color: var(--caramel); }
+.admin-btn.danger { border-color: #e74c3c; color: #e74c3c; }
+.admin-btn.danger:hover { background: #e74c3c; color: white; }
+.admin-btn.primary { background: var(--espresso); color: var(--honey); border-color: var(--espresso); }
+
+.flag-item {
+  background: var(--parchment);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 10px;
+  border: 1.5px solid var(--border);
+}
+.flag-item-name { font-weight: 600; color: var(--espresso); font-size: 0.9rem; }
+.flag-item-meta { font-size: 0.75rem; color: var(--text-muted); margin: 4px 0 10px; }
+.flag-item-actions { display: flex; gap: 8px; }
+
+/* Settings sections */
+.settings-section { padding: 16px 0; border-bottom: 1px solid var(--border); }
+.settings-section:last-child { border-bottom: none; }
+.settings-section-title { font-size: 0.72rem; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 12px; }
+.settings-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 0;
+}
+.settings-row-label { font-size: 0.9rem; color: var(--text-body); }
+.settings-row-sub { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+
 /* ─── SPINNER ────────────────────────────────────────────────────────────────── */
 @keyframes spin { to { transform: rotate(360deg); } }
 .spinner { width: 20px; height: 20px; border: 2.5px solid rgba(139,94,60,0.2); border-top-color: var(--caramel); border-radius: 50%; animation: spin 0.8s linear infinite; }
@@ -1089,7 +1257,7 @@ nav {
   <div class="mobile-menu-divider" id="mobileMenuDivider" style="display:none;"></div>
   <div class="mobile-menu-section-label" id="mobileAccountLabel" style="display:none;">Account</div>
   <button class="mobile-menu-item" id="mobileProfileBtn" onclick="if(currentUser){openProfileModal(currentUser.uid);} closeMobileMenu();" style="display:none">👤 My profile</button>
-  <button class="mobile-menu-item" id="mobileEditProfileBtn" onclick="openMyProfileModal(); closeMobileMenu();" style="display:none">✏️ Edit profile</button>
+  <button class="mobile-menu-item" id="mobileEditProfileBtn" onclick="openSettingsModal(); closeMobileMenu();" style="display:none">⚙️ Settings</button>
   <button class="mobile-menu-item" id="mobileSignOutBtn" onclick="fb.signOut(fb.auth); showToast('Signed out'); closeMobileMenu();" style="display:none; color:#e07070;">→ Sign out</button>
   <div class="mobile-menu-divider" id="mobileSignInDivider"></div>
   <button class="mobile-menu-item" id="mobileSignInBtn" onclick="openAuthModal(); closeMobileMenu();">→ Sign in</button>
@@ -1492,6 +1660,111 @@ nav {
   </div>
 </div>
 
+<!-- ─── SETTINGS PAGE ───────────────────────────────────────────────────────── -->
+<div class="page" id="page-settings">
+  <div class="section" style="max-width:720px;">
+    <div class="section-header">
+      <div class="section-eyebrow">Account</div>
+      <h2 class="section-title">Settings</h2>
+    </div>
+
+    <!-- Profile section -->
+    <div class="settings-card">
+      <div class="settings-card-header">
+        <div class="settings-card-title">👤 Profile</div>
+        <div class="settings-card-sub">Your public identity on Crumb</div>
+      </div>
+      <div class="settings-card-body" id="settingsProfileBody">
+        <div class="form-group">
+          <label class="form-label">Display name</label>
+          <input type="text" class="form-input" id="settingsName" placeholder="Your name">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Location <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">(optional)</span></label>
+          <input type="text" class="form-input" id="settingsLocation" placeholder="e.g. York, UK">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Bio <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">(optional)</span></label>
+          <textarea class="form-textarea" id="settingsBio" placeholder="A few words about you and your love of baked goods…" style="min-height:80px;"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Favourite category</label>
+          <select class="form-select" id="settingsFavCategory">
+            <option value="">Auto — based on my reviews</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Avatar</label>
+          <div style="display:flex; align-items:center; gap:14px;">
+            <div id="settingsAvatarPreview" style="width:56px;height:56px;border-radius:50%;background:var(--caramel);display:flex;align-items:center;justify-content:center;font-size:1.4rem;font-weight:700;color:white;overflow:hidden;flex-shrink:0;"></div>
+            <label style="cursor:pointer;display:inline-block;padding:8px 14px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:0.82rem;color:var(--caramel);font-weight:500;background:var(--parchment);">
+              📷 Upload photo
+              <input type="file" accept="image/*" style="display:none;" id="settingsPhotoInput" onchange="handleSettingsPhoto(this)">
+            </label>
+          </div>
+        </div>
+        <button class="btn-espresso" onclick="saveSettingsProfile()" style="padding:11px 24px;">Save profile</button>
+      </div>
+    </div>
+
+    <!-- Business section — only shown to business/admin users -->
+    <div class="settings-card" id="settingsBusinessCard" style="display:none;">
+      <div class="settings-card-header">
+        <div class="settings-card-title">🏪 My Bakery Pages</div>
+        <div class="settings-card-sub">Manage your bakery listings on Crumb</div>
+      </div>
+      <div class="settings-card-body" id="settingsBusinessBody">
+        <div class="empty-state" style="padding:24px 0;">
+          <div class="empty-state-icon">🏪</div>
+          <div class="empty-state-title">No bakeries assigned yet</div>
+          <div class="empty-state-text">Ask an admin to assign your bakery to your account.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Admin section — only shown to admins -->
+    <div class="settings-card" id="settingsAdminCard" style="display:none;">
+      <div class="settings-card-header">
+        <div class="settings-card-title">⚙️ Admin Panel</div>
+        <div class="settings-card-sub">Manage users, bakeries, and flagged reviews</div>
+      </div>
+      <div class="settings-card-body">
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px;">
+          <button class="btn-espresso" onclick="showAdminTab('users')" id="adminTabUsers" style="font-size:0.85rem; padding:9px 18px;">👥 Users</button>
+          <button class="btn-ghost" onclick="showAdminTab('bakeries')" id="adminTabBakeries" style="font-size:0.85rem; padding:9px 18px; border:1.5px solid var(--border);">🏪 Bakery assignments</button>
+          <button class="btn-ghost" onclick="showAdminTab('flags')" id="adminTabFlags" style="font-size:0.85rem; padding:9px 18px; border:1.5px solid var(--border);">🚩 Flagged reviews</button>
+        </div>
+        <div id="adminTabContent"></div>
+      </div>
+    </div>
+
+    <!-- Danger zone -->
+    <div class="settings-card" style="border-color:#e8c4c4;">
+      <div class="settings-card-header">
+        <div class="settings-card-title" style="color:#c0392b;">Danger zone</div>
+      </div>
+      <div class="settings-card-body">
+        <button class="btn-ghost" style="color:#c0392b; border:1.5px solid #e8c4c4; padding:10px 18px; border-radius:var(--radius-sm); font-size:0.85rem;" onclick="signOutFromSettings()">→ Sign out</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── BAKERY EDIT MODAL ──────────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="bakeryEditModal">
+  <div class="modal" style="max-width:560px;" role="dialog" aria-label="Edit bakery page">
+    <div class="modal-header">
+      <div class="modal-title" id="bakeryEditModalTitle">Edit bakery page</div>
+      <button class="modal-close" onclick="closeBakeryEditModal()">✕</button>
+    </div>
+    <div class="modal-body" id="bakeryEditModalBody"></div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeBakeryEditModal()">Cancel</button>
+      <button class="btn-espresso" onclick="saveBakeryPage()">Save changes</button>
+    </div>
+  </div>
+</div>
+
 <!-- ─── EDIT REVIEW MODAL ────────────────────────────────────────────────────── -->
 <div class="modal-overlay" id="editModal">
   <div class="modal" style="max-width:560px;" role="dialog" aria-label="Edit review">
@@ -1506,6 +1779,74 @@ nav {
         <button class="btn-ghost" onclick="closeEditModal()">Cancel</button>
         <button class="btn-caramel" id="editSaveBtn" onclick="saveEdit()">Save changes</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── SETTINGS MODAL ──────────────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal" style="max-width:540px;" role="dialog" aria-label="Settings">
+    <div class="modal-header">
+      <div class="modal-title">Settings</div>
+      <button class="modal-close" onclick="closeSettingsModal()">✕</button>
+    </div>
+    <div class="modal-body" id="settingsBody"></div>
+  </div>
+</div>
+
+<!-- ─── ADMIN PANEL MODAL ─────────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="adminModal">
+  <div class="modal" style="max-width:640px;" role="dialog" aria-label="Admin panel">
+    <div class="modal-header">
+      <div class="modal-title">⚙️ Admin Panel</div>
+      <button class="modal-close" onclick="closeAdminModal()">✕</button>
+    </div>
+    <div class="modal-body" id="adminBody">
+      <div class="auth-tabs" id="adminTabs">
+        <div class="auth-tab active" onclick="switchAdminTab('users')">Users</div>
+        <div class="auth-tab" onclick="switchAdminTab('flags')">Flagged reviews</div>
+      </div>
+      <div id="adminUsersPanel"></div>
+      <div id="adminFlagsPanel" style="display:none;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── MANAGE BAKERY MODAL ───────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="manageBakeryModal">
+  <div class="modal" style="max-width:540px;" role="dialog" aria-label="Manage bakery">
+    <div class="modal-header">
+      <div class="modal-title" id="manageBakeryTitle">Manage bakery page</div>
+      <button class="modal-close" onclick="closeManageBakeryModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Bakery photo</label>
+        <div id="bakeryPhotoWrap" style="border-radius:var(--radius); overflow:hidden; margin-bottom:8px; max-height:160px; background:var(--parchment-dark); display:flex; align-items:center; justify-content:center; font-size:2rem; min-height:80px;"></div>
+        <label style="cursor:pointer; display:inline-block; padding:8px 14px; border:1.5px solid var(--border); border-radius:var(--radius-sm); font-size:0.82rem; color:var(--caramel); font-weight:500; background:var(--parchment);">
+          📷 Upload photo
+          <input type="file" accept="image/*" style="display:none;" id="bakeryPhotoInput" onchange="handleBakeryPhoto(this)">
+        </label>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description</label>
+        <textarea class="form-textarea" id="manageBakeryBlurb" placeholder="What makes this bakery special…" style="min-height:90px;"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Website <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">(optional)</span></label>
+        <input type="url" class="form-input" id="manageBakeryWebsite" placeholder="https://yourbakery.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Instagram <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">(optional)</span></label>
+        <div style="position:relative;">
+          <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-weight:500;">@</span>
+          <input type="text" class="form-input" id="manageBakeryInstagram" placeholder="yourbakery" style="padding-left:30px;">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeManageBakeryModal()">Cancel</button>
+      <button class="btn-espresso" onclick="saveBakeryProfile()">Save</button>
     </div>
   </div>
 </div>
@@ -1527,9 +1868,64 @@ function unlockScroll() {
   window.scrollTo(0, scrollY);
 }
 
+// ─── ROLES ────────────────────────────────────────────────────────────────────
+const SUPER_ADMIN_UID = 'KTpBS4yJx2h8LpcryCTfJDFCHlr2';
+let currentUserRole = null; // null | 'business' | 'admin'
+let currentUserBakery = null; // bakery name if business user
+let allUserRoles = {}; // uid -> role record
+let bakeryProfiles = {}; // bakeryName -> profile { blurb, photoURL, instagram, website, ownerId }
+
+function isAdmin() { return currentUser?.uid === SUPER_ADMIN_UID || currentUserRole === 'admin'; }
+function isBusiness() { return currentUserRole === 'business' || isAdmin(); }
+function ownsBakery(name) { return isAdmin() || (isBusiness() && currentUserBakery === name); }
+
+async function loadUserRole() {
+  if (!currentUser || !fb) return;
+  if (currentUser.uid === SUPER_ADMIN_UID) { currentUserRole = 'admin'; currentUserBakery = null; return; }
+  try {
+    const { db, doc, getDoc } = fb;
+    const snap = await getDoc(doc(db, 'userRoles', currentUser.uid));
+    if (snap.exists()) {
+      const data = snap.data();
+      currentUserRole = data.role || null;
+      currentUserBakery = data.bakeryName || null;
+    } else {
+      currentUserRole = null;
+      currentUserBakery = null;
+    }
+  } catch(e) { console.log('Role load error:', e.message); }
+}
+
+async function loadBakeryProfiles() {
+  if (!fb) return;
+  const { db, collection, getDocs } = fb;
+  try {
+    const snap = await getDocs(collection(db, 'bakeryProfiles'));
+    bakeryProfiles = {};
+    snap.docs.forEach(d => { bakeryProfiles[d.id] = d.data(); });
+  } catch(e) { console.log('BakeryProfiles load:', e.message); }
+}
+
+async function loadAllUserRoles() {
+  if (!isAdmin() || !fb) return;
+  const { db, collection, getDocs } = fb;
+  try {
+    const snap = await getDocs(collection(db, 'userRoles'));
+    allUserRoles = {};
+    snap.docs.forEach(d => { allUserRoles[d.id] = d.data(); });
+  } catch(e) {}
+}
+
 // ─── STATE ────────────────────────────────────────────────────────────────────
 let currentUser = null;
 let fb = null;
+let currentRole = 'user'; // 'user' | 'business' | 'admin'
+let currentUserBakeries = []; // bakeries owned by this user
+let allUsers = []; // admin only
+let flaggedReviews = []; // admin only
+
+// Hardcoded admin user IDs — add yours here after first sign-in
+const ADMIN_USER_IDS = ['REPLACE_WITH_YOUR_USER_ID'];
 let currentStep = 1;
 let totalSteps = 4;
 let selectedCategory = '';
@@ -1696,12 +2092,18 @@ const GOOGLE_MAPS_KEY = 'AIzaSyCQa9SwvrPmdnk5S2-q8Mem2ZP22GVB1Yo';
 window.addEventListener('crumb-firebase-ready', () => {
   fb = window._crumb;
   const { onAuthStateChanged, auth } = fb;
-  onAuthStateChanged(auth, (user) => {
+  onAuthStateChanged(auth, async (user) => {
     currentUser = user;
+    currentUserRole = null;
+    currentUserBakery = null;
+    if (user) {
+      await loadUserRole();
+    }
     updateNav();
     loadData();
     loadProfiles();
     loadItemRecords();
+    loadBakeryProfiles();
   });
 
 });
@@ -1715,6 +2117,7 @@ function showPage(name) {
   if (name === 'feed') renderFeed();
   if (name === 'bakeries') renderBakeries();
   if (name === 'people') renderPeople();
+  if (name === 'settings') openSettingsPage();
 }
 
 function updateNav() {
@@ -1809,9 +2212,10 @@ function toggleUserMenu() {
     min-width:180px; overflow:hidden;`;
   const profile = allProfiles[currentUser.uid];
   const name = profile?.displayName || currentUser.displayName || currentUser.email?.split('@')[0] || 'My profile';
+  const roleBadgeHtml = currentRole === 'admin' ? '<span class="role-badge admin">Admin</span>' : currentRole === 'business' ? '<span class="role-badge business">Business</span>' : '';
   dropdown.innerHTML = `
     <div style="padding:12px 16px; border-bottom:1px solid var(--border);">
-      <div style="font-size:0.82rem; font-weight:600; color:var(--espresso);">${name}</div>
+      <div style="font-size:0.82rem; font-weight:600; color:var(--espresso); display:flex; align-items:center; gap:8px;">${name} ${roleBadgeHtml}</div>
       <div style="font-size:0.72rem; color:var(--text-muted);">${currentUser.email || ''}</div>
     </div>
     <div onclick="closeAvatarDropdown(); openProfileModal(currentUser.uid);"
@@ -1819,10 +2223,10 @@ function toggleUserMenu() {
       onmouseover="this.style.background='var(--parchment)'" onmouseout="this.style.background=''">
       👤 View my profile
     </div>
-    <div onclick="closeAvatarDropdown(); openMyProfileModal();"
+    <div onclick="closeAvatarDropdown(); showPage('settings');"
       style="padding:11px 16px; font-size:0.85rem; color:var(--text-body); cursor:pointer; display:flex; align-items:center; gap:8px;"
       onmouseover="this.style.background='var(--parchment)'" onmouseout="this.style.background=''">
-      ✏️ Edit profile
+      ⚙️ Settings
     </div>
     <div style="border-top:1px solid var(--border);">
       <div onclick="closeAvatarDropdown(); fb.signOut(fb.auth); showToast('Signed out');"
@@ -2070,6 +2474,7 @@ async function openBakeryProfile(bakeryName, catFilter) {
     const rec2 = item.itemRecordId ? allItemRecords.find(r => r.id === item.itemRecordId) : null;
     const avgP2 = rec2?.avgPrice ?? item.price ?? null;
     const avgPStr = avgP2 !== null ? ('£' + parseFloat(avgP2).toFixed(2) + (rec2 && rec2.priceCount > 1 ? ' avg' : '')) : '';
+    const canFlag = isOwner && currentUser && item.userId !== currentUser.uid;
     return `
       <div class="bakery-item-row" onclick="closeBakeryModal(); openDetail('${item.id}')">
         ${thumb}
@@ -2077,15 +2482,46 @@ async function openBakeryProfile(bakeryName, catFilter) {
           <div class="bakery-item-name">${item.name || 'Unknown bake'}</div>
           <div class="bakery-item-meta">${catDisp.sub || catDisp.main} · ${item.userName || 'Anonymous'}${avgPStr ? ` · <span style="color:var(--sage);font-weight:600;">${avgPStr}</span>` : ''}</div>
         </div>
-        <div class="bakery-item-score">${score}</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+          <div class="bakery-item-score">${score}</div>
+          ${canFlag ? `<button class="flag-btn" onclick="event.stopPropagation(); flagReview('${item.id}','${escJS(item.userName||'Anonymous')}')">🚩</button>` : ''}
+        </div>
       </div>`;
   }).join('');
 
+  // Load full bakery data including cover photo, social links
+  let fullBakeryData = {};
+  try {
+    const { db, doc, getDoc } = fb;
+    const bSnap = await getDoc(doc(db, 'bakeries', encodeURIComponent(bakeryName)));
+    if (bSnap.exists()) fullBakeryData = bSnap.data();
+  } catch(e) {}
+
+  const coverPhoto = fullBakeryData.coverPhotoURL
+    ? `<img src="${fullBakeryData.coverPhotoURL}" class="bakery-cover" alt="${bakeryName}">`
+    : `<div class="bakery-cover-placeholder">🏪</div>`;
+
+  const socialLinks = [];
+  if (fullBakeryData.website) socialLinks.push(`<a href="${fullBakeryData.website}" target="_blank" class="bakery-social-link">🌐 Website</a>`);
+  if (fullBakeryData.instagram) socialLinks.push(`<a href="https://instagram.com/${fullBakeryData.instagram}" target="_blank" class="bakery-social-link">📸 @${fullBakeryData.instagram}</a>`);
+  const socialHTML = socialLinks.length ? `<div class="bakery-social-links">${socialLinks.join('')}</div>` : '';
+
+  const isClaimed = !!fullBakeryData.ownedBy;
+  const claimedBadge = isClaimed ? `<span class="claimed-badge">✓ Claimed</span>` : '';
+  const isOwner = ownsBakery(bakeryName);
+
   document.getElementById('bakeryModalContent').innerHTML = `
+    ${coverPhoto}
     <div class="bakery-profile-header">
-      <div class="bakery-profile-name">${bakeryName}</div>
-      ${b.address ? `<div class="bakery-profile-address">📍 ${b.address}</div>` : ''}
-      <div class="bakery-profile-scores">
+      <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
+        <div>
+          <div class="bakery-profile-name">${bakeryName}${claimedBadge}</div>
+          ${b.address ? `<div class="bakery-profile-address">📍 ${b.address}</div>` : ''}
+        </div>
+        ${isOwner ? `<button class="btn-caramel" style="font-size:0.78rem;padding:7px 12px;white-space:nowrap;flex-shrink:0;" onclick="closeBakeryModal(); openBakeryEditModal('${escJS(bakeryName)}')">✏️ Edit page</button>` : ''}
+      </div>
+      ${socialHTML}
+      <div class="bakery-profile-scores" style="margin-top:16px;">
         <div class="bakery-profile-score">
           <div class="bakery-profile-score-num">${avg}</div>
           <div class="bakery-profile-score-label">Avg rating</div>
@@ -2101,13 +2537,7 @@ async function openBakeryProfile(bakeryName, catFilter) {
       </div>
     </div>
     <div class="bakery-profile-body">
-      <div class="bakery-blurb-section" id="bakeryBlurbSection">
-        ${blurb
-          ? `<div class="bakery-blurb-text" id="bakeryBlurbText">"${blurb}"</div>`
-          : `<div class="bakery-blurb-text" id="bakeryBlurbText" style="color:var(--text-muted); font-style:normal;">No description yet.</div>`
-        }
-        ${canEdit ? `<span class="bakery-blurb-edit" onclick="editBakeryBlurb('${escJS(bakeryName)}', '${escJS(blurb)}')">${blurb ? '✏️ Edit description' : '+ Add a description'}</span>` : ''}
-      </div>
+      ${blurb ? `<div class="bakery-blurb-section"><div class="bakery-blurb-text">"${blurb}"</div></div>` : (!isOwner ? '' : `<div class="bakery-blurb-section"><div class="bakery-blurb-text" style="color:var(--text-muted);font-style:normal;">No description yet.</div></div>`)}
       ${catFilterBar}
       <div class="bakery-items-title">${bakeryActiveCatFilter ? CATEGORY_TREE[bakeryActiveCatFilter]?.label + ' reviews' : 'All reviews'} (${filtered.length})</div>
       <div>${itemsHTML || '<div class="empty-state" style="padding:24px 0;"><div class="empty-state-icon">🥐</div><div class="empty-state-title">No reviews in this category</div></div>'}</div>
@@ -3070,6 +3500,418 @@ async function saveReview() {
 
 
 
+
+// ─── ROLES & PERMISSIONS ───────────────────────────────────────────────────────
+async function loadUserRole(uid) {
+  if (!fb || !uid) return;
+  // Check hardcoded admin list first
+  if (ADMIN_USER_IDS.includes(uid)) {
+    currentRole = 'admin';
+    currentUserBakeries = Object.keys(allBakeries || {});
+    return;
+  }
+  try {
+    const { db, doc, getDoc } = fb;
+    const snap = await getDoc(doc(db, 'roles', uid));
+    if (snap.exists()) {
+      const data = snap.data();
+      currentRole = data.role || 'user';
+      currentUserBakeries = data.bakeries || [];
+    } else {
+      currentRole = 'user';
+      currentUserBakeries = [];
+    }
+  } catch(e) {
+    currentRole = 'user';
+    currentUserBakeries = [];
+  }
+}
+
+function isAdmin() { return currentRole === 'admin' || (currentUser && ADMIN_USER_IDS.includes(currentUser.uid)); }
+function isBusiness() { return currentRole === 'business' || isAdmin(); }
+function ownsBakery(bakeryName) {
+  if (isAdmin()) return true;
+  return currentUserBakeries.some(b => b.toLowerCase() === (bakeryName || '').toLowerCase());
+}
+
+// ─── SETTINGS PAGE ────────────────────────────────────────────────────────────
+let settingsPhotoFile = null;
+
+async function openSettingsPage() {
+  if (!currentUser) { openAuthModal(); return; }
+
+  // Profile fields
+  const profile = allProfiles[currentUser.uid] || {};
+  document.getElementById('settingsName').value = profile.displayName || currentUser.displayName || '';
+  document.getElementById('settingsLocation').value = profile.location || '';
+  document.getElementById('settingsBio').value = profile.bio || '';
+  settingsPhotoFile = null;
+
+  // Avatar preview
+  const prev = document.getElementById('settingsAvatarPreview');
+  const photo = profile.photoURL || currentUser.photoURL;
+  if (photo) prev.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+  else prev.textContent = (profile.displayName || currentUser.displayName || '?').charAt(0).toUpperCase();
+
+  // Fave category dropdown
+  const favSelect = document.getElementById('settingsFavCategory');
+  favSelect.innerHTML = '<option value="">Auto — based on my reviews</option>';
+  Object.entries(CATEGORY_TREE).forEach(([key, cat]) => {
+    const opt = document.createElement('option');
+    opt.value = key; opt.textContent = cat.emoji + ' ' + cat.label;
+    if (profile.favCategory === key) opt.selected = true;
+    favSelect.appendChild(opt);
+  });
+
+  // Show/hide business section
+  const bizCard = document.getElementById('settingsBusinessCard');
+  if (isBusiness()) {
+    bizCard.style.display = 'block';
+    renderBusinessSection();
+  } else {
+    bizCard.style.display = 'none';
+  }
+
+  // Show/hide admin section
+  const adminCard = document.getElementById('settingsAdminCard');
+  if (isAdmin()) {
+    adminCard.style.display = 'block';
+    showAdminTab('users');
+  } else {
+    adminCard.style.display = 'none';
+  }
+}
+
+function handleSettingsPhoto(input) {
+  if (!input.files[0]) return;
+  const file = input.files[0];
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('settingsAvatarPreview').innerHTML =
+      `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+  };
+  reader.readAsDataURL(file);
+  compressImage(file, 400, 0.85).then(blob => { settingsPhotoFile = blob; });
+}
+
+async function saveSettingsProfile() {
+  if (!currentUser) return;
+  const btn = document.querySelector('#settingsProfileBody .btn-espresso');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  try {
+    const { db, storage, doc, setDoc, updateProfile, ref, uploadBytes, getDownloadURL } = fb;
+    let photoURL = allProfiles[currentUser.uid]?.photoURL || currentUser.photoURL || null;
+    if (settingsPhotoFile) {
+      const storageRef = ref(storage, `avatars/${currentUser.uid}.jpg`);
+      const snap = await uploadBytes(storageRef, settingsPhotoFile, { contentType: 'image/jpeg' });
+      photoURL = await getDownloadURL(snap.ref);
+    }
+    const displayName = document.getElementById('settingsName').value.trim() || currentUser.displayName || 'Anonymous';
+    await updateProfile(currentUser, { displayName, ...(photoURL ? { photoURL } : {}) });
+    const profileData = {
+      displayName,
+      location: document.getElementById('settingsLocation').value.trim(),
+      bio: document.getElementById('settingsBio').value.trim(),
+      favCategory: document.getElementById('settingsFavCategory').value || '',
+      photoURL, uid: currentUser.uid, updatedAt: new Date().toISOString()
+    };
+    await setDoc(doc(db, 'profiles', currentUser.uid), profileData, { merge: true });
+    allProfiles[currentUser.uid] = profileData;
+    updateNav();
+    showToast('Profile saved ✓');
+  } catch(e) { showToast('Could not save — try again'); console.error(e); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = 'Save profile'; } }
+}
+
+function signOutFromSettings() {
+  if (confirm('Sign out of Crumb?')) {
+    fb.signOut(fb.auth);
+    showPage('home');
+    showToast('Signed out');
+  }
+}
+
+// ─── BUSINESS — BAKERY PAGE MANAGEMENT ───────────────────────────────────────
+function renderBusinessSection() {
+  const body = document.getElementById('settingsBusinessBody');
+  const myBakeries = isAdmin()
+    ? Object.keys(allBakeries || {})
+    : currentUserBakeries;
+
+  if (!myBakeries.length) {
+    body.innerHTML = `<div class="empty-state" style="padding:20px 0;"><div class="empty-state-icon">🏪</div><div class="empty-state-title">No bakeries assigned yet</div><div class="empty-state-text">Ask an admin to assign your bakery to your account.</div></div>`;
+    return;
+  }
+  body.innerHTML = myBakeries.map(name => {
+    const b = allBakeries[name];
+    const avg = b ? (b.totalScore / b.items.length).toFixed(1) : '–';
+    return `
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--border);">
+        <div>
+          <div style="font-weight:600; color:var(--espresso);">${name}</div>
+          <div style="font-size:0.78rem; color:var(--text-muted);">${b ? b.items.length : 0} reviews · avg ${avg}</div>
+        </div>
+        <button class="btn-caramel" style="font-size:0.82rem; padding:8px 14px;" onclick="openBakeryEditModal('${escJS(name)}')">✏️ Edit page</button>
+      </div>`;
+  }).join('');
+}
+
+let editingBakeryName = null;
+let bakeryEditPhotoFile = null;
+
+async function openBakeryEditModal(bakeryName) {
+  editingBakeryName = bakeryName;
+  bakeryEditPhotoFile = null;
+  document.getElementById('bakeryEditModalTitle').textContent = bakeryName;
+  document.getElementById('bakeryEditModal').classList.add('open');
+  lockScroll();
+
+  // Load current bakery data
+  let bData = {};
+  try {
+    const { db, doc, getDoc } = fb;
+    const snap = await getDoc(doc(db, 'bakeries', encodeURIComponent(bakeryName)));
+    if (snap.exists()) bData = snap.data();
+  } catch(e) {}
+
+  const photoPreview = bData.coverPhotoURL
+    ? `<div class="photo-preview"><img src="${bData.coverPhotoURL}" style="max-height:180px;width:100%;object-fit:cover;border-radius:var(--radius);"></div>`
+    : `<div class="photo-upload" style="height:120px;">
+        <input type="file" accept="image/*" id="bakeryEditPhotoInput" onchange="handleBakeryEditPhoto(this)">
+        <div class="photo-upload-icon">🏪</div>
+        <div class="photo-upload-text">Add a cover photo</div>
+       </div>`;
+
+  document.getElementById('bakeryEditModalBody').innerHTML = `
+    <div style="padding:0 0 20px; display:flex; flex-direction:column; gap:16px;">
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Cover photo</label>
+        <div id="bakeryEditPhotoWrap">${photoPreview}</div>
+        ${bData.coverPhotoURL ? `<label style="cursor:pointer;font-size:0.78rem;color:var(--caramel);margin-top:6px;display:inline-block;">🔄 Change photo<input type="file" accept="image/*" style="display:none;" onchange="handleBakeryEditPhoto(this)"></label>` : ''}
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">About this bakery</label>
+        <textarea class="form-textarea" id="bakeryEditBlurb" style="min-height:100px;" placeholder="Tell your story — what makes your bakery special, what to order, when to visit…">${bData.blurb || ''}</textarea>
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Website</label>
+        <input type="url" class="form-input" id="bakeryEditWebsite" placeholder="https://yourbakery.com" value="${bData.website || ''}">
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Instagram</label>
+        <div style="position:relative;">
+          <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-muted);">@</span>
+          <input type="text" class="form-input" id="bakeryEditInstagram" placeholder="yourbakery" value="${bData.instagram || ''}" style="padding-left:30px;">
+        </div>
+      </div>
+    </div>`;
+}
+
+function handleBakeryEditPhoto(input) {
+  if (!input.files[0]) return;
+  const file = input.files[0];
+  compressImage(file, 1200, 0.85).then(blob => { bakeryEditPhotoFile = blob; });
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('bakeryEditPhotoWrap').innerHTML =
+      `<img src="${e.target.result}" style="max-height:180px;width:100%;object-fit:cover;border-radius:var(--radius);">`;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function saveBakeryPage() {
+  if (!editingBakeryName) return;
+  const btn = document.querySelector('#bakeryEditModal .btn-espresso');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  try {
+    const { db, storage, doc, setDoc, ref, uploadBytes, getDownloadURL } = fb;
+    let coverPhotoURL = null;
+    // Get existing first
+    const snap = await fb.getDoc(doc(db, 'bakeries', encodeURIComponent(editingBakeryName)));
+    if (snap.exists()) coverPhotoURL = snap.data().coverPhotoURL || null;
+
+    if (bakeryEditPhotoFile) {
+      const storageRef = ref(storage, `bakeries/${encodeURIComponent(editingBakeryName)}/cover.jpg`);
+      const s = await uploadBytes(storageRef, bakeryEditPhotoFile, { contentType: 'image/jpeg' });
+      coverPhotoURL = await getDownloadURL(s.ref);
+    }
+    const data = {
+      name: editingBakeryName,
+      blurb: document.getElementById('bakeryEditBlurb').value.trim(),
+      website: document.getElementById('bakeryEditWebsite').value.trim(),
+      instagram: document.getElementById('bakeryEditInstagram').value.trim().replace('@',''),
+      coverPhotoURL,
+      ownedBy: currentUser.uid,
+      updatedAt: new Date().toISOString()
+    };
+    await setDoc(doc(db, 'bakeries', encodeURIComponent(editingBakeryName)), data, { merge: true });
+    closeBakeryEditModal();
+    showToast('Bakery page updated ✓');
+  } catch(e) { showToast('Could not save'); console.error(e); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = 'Save changes'; } }
+}
+
+function closeBakeryEditModal() {
+  document.getElementById('bakeryEditModal').classList.remove('open');
+  unlockScroll();
+  editingBakeryName = null;
+}
+
+// ─── REVIEW FLAGGING ──────────────────────────────────────────────────────────
+async function flagReview(itemId, reviewerName) {
+  if (!currentUser) return;
+  if (!confirm(`Report this review by ${reviewerName} as inappropriate?`)) return;
+  try {
+    const { db, doc, setDoc, serverTimestamp } = fb;
+    await setDoc(doc(db, 'flags', itemId), {
+      itemId,
+      reviewerName,
+      reportedBy: currentUser.uid,
+      reportedAt: serverTimestamp(),
+      status: 'pending'
+    }, { merge: true });
+    showToast('Review reported — an admin will review it');
+  } catch(e) { showToast('Could not submit report'); }
+}
+
+// ─── ADMIN PANEL ──────────────────────────────────────────────────────────────
+async function showAdminTab(tab) {
+  ['users','bakeries','flags'].forEach(t => {
+    const btn = document.getElementById('adminTab' + t.charAt(0).toUpperCase() + t.slice(1));
+    if (btn) { btn.className = t === tab ? 'btn-espresso' : 'btn-ghost'; btn.style.cssText = t === tab ? 'font-size:0.85rem;padding:9px 18px;' : 'font-size:0.85rem;padding:9px 18px;border:1.5px solid var(--border);'; }
+  });
+  const content = document.getElementById('adminTabContent');
+  content.innerHTML = '<div style="text-align:center;padding:24px;"><div class="spinner" style="margin:0 auto;"></div></div>';
+
+  if (tab === 'users') await renderAdminUsers(content);
+  else if (tab === 'bakeries') renderAdminBakeries(content);
+  else if (tab === 'flags') await renderAdminFlags(content);
+}
+
+async function renderAdminUsers(content) {
+  try {
+    const { db, collection, getDocs } = fb;
+    const [profilesSnap, rolesSnap] = await Promise.all([
+      getDocs(collection(db, 'profiles')),
+      getDocs(collection(db, 'roles'))
+    ]);
+    const profiles = {};
+    profilesSnap.docs.forEach(d => { profiles[d.id] = d.data(); });
+    const roles = {};
+    rolesSnap.docs.forEach(d => { roles[d.id] = d.data(); });
+
+    const users = Object.keys(profiles).map(uid => ({
+      uid, ...profiles[uid], role: roles[uid]?.role || 'user', bakeries: roles[uid]?.bakeries || []
+    }));
+
+    content.innerHTML = `
+      <table class="admin-table">
+        <thead><tr><th>User</th><th>Role</th><th>Actions</th></tr></thead>
+        <tbody>
+          ${users.map(u => `
+            <tr>
+              <td>
+                <div style="font-weight:600;color:var(--espresso);">${u.displayName || 'Anonymous'}</div>
+                <div style="font-size:0.72rem;color:var(--text-muted);">${u.uid.slice(0,12)}…</div>
+              </td>
+              <td><span class="role-badge ${u.role}">${u.role}</span></td>
+              <td>
+                <select onchange="setUserRole('${u.uid}', this.value)" style="font-size:0.8rem;padding:4px 8px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--parchment);">
+                  <option value="user" ${u.role==='user'?'selected':''}>User</option>
+                  <option value="business" ${u.role==='business'?'selected':''}>Business</option>
+                  <option value="admin" ${u.role==='admin'?'selected':''}>Admin</option>
+                </select>
+              </td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+  } catch(e) { content.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;">Could not load users.</div>'; }
+}
+
+async function setUserRole(uid, role) {
+  try {
+    const { db, doc, setDoc, getDoc } = fb;
+    const existing = await getDoc(doc(db, 'roles', uid));
+    const current = existing.exists() ? existing.data() : {};
+    await setDoc(doc(db, 'roles', uid), { ...current, role }, { merge: true });
+    showToast('Role updated ✓');
+  } catch(e) { showToast('Could not update role'); }
+}
+
+function renderAdminBakeries(content) {
+  buildBakeryIndex();
+  const bakeryNames = Object.keys(allBakeries);
+  if (!bakeryNames.length) { content.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;">No bakeries yet.</div>'; return; }
+  content.innerHTML = `
+    <div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px;">Search for a user above, then assign bakeries to them by entering the bakery name.</div>
+    <table class="admin-table">
+      <thead><tr><th>Bakery</th><th>Reviews</th><th>Assign to user (UID)</th></tr></thead>
+      <tbody>
+        ${bakeryNames.map(name => {
+          const b = allBakeries[name];
+          return `<tr>
+            <td style="font-weight:600;color:var(--espresso);">${name}</td>
+            <td>${b.items.length}</td>
+            <td style="display:flex;gap:6px;">
+              <input type="text" placeholder="User UID" id="assignUid_${escJS(name)}" style="font-size:0.8rem;padding:4px 8px;border:1.5px solid var(--border);border-radius:var(--radius-sm);flex:1;background:var(--parchment);">
+              <button onclick="assignBakeryToUser('${escJS(name)}')" style="font-size:0.78rem;padding:5px 10px;background:var(--sage);color:white;border:none;border-radius:var(--radius-sm);cursor:pointer;">Assign</button>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+}
+
+async function assignBakeryToUser(bakeryName) {
+  const uid = document.getElementById('assignUid_' + bakeryName)?.value?.trim();
+  if (!uid) { showToast('Enter a user UID first'); return; }
+  try {
+    const { db, doc, getDoc, setDoc } = fb;
+    const snap = await getDoc(doc(db, 'roles', uid));
+    const current = snap.exists() ? snap.data() : { role: 'business' };
+    const bakeries = current.bakeries || [];
+    if (!bakeries.includes(bakeryName)) bakeries.push(bakeryName);
+    await setDoc(doc(db, 'roles', uid), { ...current, role: current.role === 'user' ? 'business' : current.role, bakeries }, { merge: true });
+    showToast(`${bakeryName} assigned ✓`);
+  } catch(e) { showToast('Could not assign bakery'); }
+}
+
+async function renderAdminFlags(content) {
+  try {
+    const { db, collection, getDocs, doc, updateDoc } = fb;
+    const snap = await getDocs(collection(db, 'flags'));
+    const flags = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(f => f.status === 'pending');
+    if (!flags.length) { content.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;padding:12px 0;">No flagged reviews — all clear ✓</div>'; return; }
+    content.innerHTML = `
+      <table class="admin-table">
+        <thead><tr><th>Item</th><th>Reviewer</th><th>Actions</th></tr></thead>
+        <tbody>
+          ${flags.map(f => `<tr>
+            <td><span style="color:var(--caramel);cursor:pointer;" onclick="openDetail('${f.itemId}')">${f.itemId.slice(0,12)}… ↗</span></td>
+            <td>${f.reviewerName || 'Unknown'}</td>
+            <td style="display:flex;gap:6px;">
+              <button onclick="resolveFlag('${f.id}','dismissed')" style="font-size:0.78rem;padding:5px 10px;background:var(--parchment);border:1.5px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;">Dismiss</button>
+              <button onclick="resolveFlag('${f.id}','removed')" style="font-size:0.78rem;padding:5px 10px;background:#c0392b;color:white;border:none;border-radius:var(--radius-sm);cursor:pointer;">Remove review</button>
+            </td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+  } catch(e) { content.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;">Could not load flags.</div>'; }
+}
+
+async function resolveFlag(flagId, action) {
+  try {
+    const { db, doc, updateDoc, deleteDoc } = fb;
+    await updateDoc(doc(db, 'flags', flagId), { status: action });
+    if (action === 'removed') {
+      await deleteDoc(doc(db, 'items', flagId));
+      await loadData();
+    }
+    showToast(action === 'dismissed' ? 'Flag dismissed' : 'Review removed');
+    showAdminTab('flags');
+  } catch(e) { showToast('Could not resolve flag'); }
+}
+
 // ─── USER PROFILES ────────────────────────────────────────────────────────────
 let profilePhotoFile = null;
 let allProfiles = {}; // uid -> profile data
@@ -3604,6 +4446,317 @@ async function deleteReview() {
   }
 }
 
+
+// ─── SETTINGS MODAL ───────────────────────────────────────────────────────────
+function openSettingsModal() {
+  closeAvatarDropdown();
+  const body = document.getElementById('settingsBody');
+  const profile = allProfiles[currentUser?.uid] || {};
+  const roleBadge = isAdmin()
+    ? '<span class="role-badge admin">⚙️ Admin</span>'
+    : isBusiness()
+    ? '<span class="role-badge business">🏪 Business</span>'
+    : '';
+
+  body.innerHTML = `
+    <div class="settings-section">
+      <div class="settings-section-title">Account</div>
+      <div class="settings-row">
+        <div>
+          <div class="settings-row-label">${profile.displayName || currentUser?.displayName || 'Your profile'} ${roleBadge}</div>
+          <div class="settings-row-sub">${currentUser?.email || ''}</div>
+        </div>
+        <button class="admin-btn primary" onclick="closeSettingsModal(); openMyProfileModal();">Edit profile</button>
+      </div>
+    </div>
+
+    ${isBusiness() && currentUserBakery ? `
+    <div class="settings-section">
+      <div class="settings-section-title">Bakery management</div>
+      <div class="settings-row">
+        <div>
+          <div class="settings-row-label">🏪 ${currentUserBakery}</div>
+          <div class="settings-row-sub">Manage your bakery page</div>
+        </div>
+        <button class="admin-btn primary" onclick="closeSettingsModal(); openManageBakeryModal('${escJS(currentUserBakery)}');">Manage page</button>
+      </div>
+    </div>` : ''}
+
+    ${isAdmin() ? `
+    <div class="settings-section">
+      <div class="settings-section-title">Administration</div>
+      <div class="settings-row">
+        <div>
+          <div class="settings-row-label">Admin panel</div>
+          <div class="settings-row-sub">Manage users, roles and flagged reviews</div>
+        </div>
+        <button class="admin-btn primary" onclick="closeSettingsModal(); openAdminModal();">Open panel</button>
+      </div>
+    </div>` : ''}
+
+    <div class="settings-section">
+      <div class="settings-section-title">Session</div>
+      <div class="settings-row">
+        <div class="settings-row-label">Sign out</div>
+        <button class="admin-btn danger" onclick="closeSettingsModal(); fb.signOut(fb.auth); showToast('Signed out');">Sign out</button>
+      </div>
+    </div>`;
+
+  document.getElementById('settingsModal').classList.add('open');
+  lockScroll();
+}
+
+function closeSettingsModal() {
+  document.getElementById('settingsModal').classList.remove('open');
+  unlockScroll();
+}
+
+// ─── ADMIN PANEL ──────────────────────────────────────────────────────────────
+async function openAdminModal() {
+  if (!isAdmin()) return;
+  document.getElementById('adminModal').classList.add('open');
+  lockScroll();
+  await loadAllUserRoles();
+  renderAdminUsers();
+  renderAdminFlags();
+}
+
+function closeAdminModal() {
+  document.getElementById('adminModal').classList.remove('open');
+  unlockScroll();
+}
+
+function switchAdminTab(tab) {
+  document.querySelectorAll('#adminTabs .auth-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('#adminTabs .auth-tab')[tab === 'users' ? 0 : 1].classList.add('active');
+  document.getElementById('adminUsersPanel').style.display = tab === 'users' ? 'block' : 'none';
+  document.getElementById('adminFlagsPanel').style.display = tab === 'flags' ? 'block' : 'none';
+}
+
+function renderAdminUsers() {
+  const panel = document.getElementById('adminUsersPanel');
+  // Build user list from profiles + items
+  const userMap = {};
+  allItems.forEach(i => {
+    if (!i.userId) return;
+    if (!userMap[i.userId]) userMap[i.userId] = { uid: i.userId, name: i.userName || 'Anonymous', photo: i.userPhoto || null, email: '', reviews: 0 };
+    userMap[i.userId].reviews++;
+  });
+  Object.entries(allProfiles).forEach(([uid, p]) => {
+    if (!userMap[uid]) userMap[uid] = { uid, name: p.displayName || 'Anonymous', photo: p.photoURL || null, email: '', reviews: 0 };
+    else { userMap[uid].name = p.displayName || userMap[uid].name; userMap[uid].photo = p.photoURL || userMap[uid].photo; }
+  });
+
+  const users = Object.values(userMap).filter(u => u.uid !== SUPER_ADMIN_UID);
+  if (!users.length) { panel.innerHTML = '<div class="empty-state" style="padding:24px 0;"><div class="empty-state-title">No users yet</div></div>'; return; }
+
+  panel.innerHTML = users.map(u => {
+    const role = allUserRoles[u.uid];
+    const roleBadge = role?.role === 'admin' ? '<span class="role-badge admin">Admin</span>'
+      : role?.role === 'business' ? `<span class="role-badge business">Business · ${role.bakeryName || ''}</span>`
+      : '';
+    const avatarInner = u.photo ? `<img src="${u.photo}" alt="">` : (u.name || '?').charAt(0).toUpperCase();
+    return `
+      <div class="admin-user-row">
+        <div class="admin-user-avatar">${avatarInner}</div>
+        <div class="admin-user-info">
+          <div class="admin-user-name">${u.name} ${roleBadge}</div>
+          <div class="admin-user-email">${u.reviews} review${u.reviews !== 1 ? 's' : ''}</div>
+        </div>
+        <div class="admin-user-actions">
+          ${role?.role !== 'admin' ? `<button class="admin-btn" onclick="promoteUser('${u.uid}','admin','')">Make admin</button>` : ''}
+          ${role?.role !== 'business' ? `<button class="admin-btn" onclick="promptAssignBakery('${u.uid}','${escJS(u.name)}')">Assign bakery</button>` : `<button class="admin-btn" onclick="promptAssignBakery('${u.uid}','${escJS(u.name)}')">Change bakery</button>`}
+          ${role ? `<button class="admin-btn danger" onclick="removeUserRole('${u.uid}')">Remove role</button>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+async function promoteUser(uid, role, bakeryName) {
+  if (!isAdmin() || !fb) return;
+  const { db, doc, setDoc, serverTimestamp } = fb;
+  try {
+    await setDoc(doc(db, 'userRoles', uid), { role, bakeryName: bakeryName || '', assignedBy: currentUser.uid, assignedAt: serverTimestamp() });
+    allUserRoles[uid] = { role, bakeryName };
+    renderAdminUsers();
+    showToast(`Role updated ✓`);
+  } catch(e) { showToast('Error updating role'); }
+}
+
+function promptAssignBakery(uid, userName) {
+  const allBakeryNames = Object.keys(allBakeries);
+  const options = allBakeryNames.map(n => `<option value="${escJS(n)}">${n}</option>`).join('');
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(44,24,16,0.6);z-index:400;display:flex;align-items:center;justify-content:center;padding:24px;';
+  overlay.innerHTML = `
+    <div style="background:var(--cream-white);border-radius:var(--radius);padding:24px;max-width:400px;width:100%;">
+      <div style="font-family:'Playfair Display',serif;font-size:1.1rem;margin-bottom:16px;">Assign bakery to ${userName}</div>
+      <select class="form-select" id="assignBakerySelect" style="margin-bottom:16px;">
+        <option value="">— Select a bakery —</option>
+        ${options}
+      </select>
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button class="btn-ghost" onclick="this.closest('div[style]').remove()">Cancel</button>
+        <button class="btn-espresso" onclick="
+          const val = document.getElementById('assignBakerySelect').value;
+          if (!val) return;
+          promoteUser('${uid}', 'business', val);
+          this.closest('div[style]').remove();
+        ">Assign</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+async function removeUserRole(uid) {
+  if (!isAdmin() || !fb) return;
+  const { db, doc, deleteDoc } = fb;
+  try {
+    await deleteDoc(doc(db, 'userRoles', uid));
+    delete allUserRoles[uid];
+    renderAdminUsers();
+    showToast('Role removed');
+  } catch(e) { showToast('Error removing role'); }
+}
+
+async function renderAdminFlags() {
+  const panel = document.getElementById('adminFlagsPanel');
+  if (!fb) return;
+  const { db, collection, getDocs, query, orderBy } = fb;
+  try {
+    const snap = await getDocs(query(collection(db, 'flaggedReviews'), orderBy('createdAt', 'desc')));
+    const flags = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (!flags.length) {
+      panel.innerHTML = '<div class="empty-state" style="padding:24px 0;"><div class="empty-state-icon">✓</div><div class="empty-state-title">No flagged reviews</div></div>';
+      return;
+    }
+    panel.innerHTML = flags.map(f => {
+      const item = allItems.find(i => i.id === f.itemId);
+      return `
+        <div class="flag-item">
+          <div class="flag-item-name">${item?.name || 'Unknown item'} — ${f.bakeryName || ''}</div>
+          <div class="flag-item-meta">Flagged by ${f.flaggedByName || 'someone'} · ${f.reason || 'No reason given'}</div>
+          <div class="flag-item-actions">
+            <button class="admin-btn" onclick="dismissFlag('${f.id}')">Dismiss flag</button>
+            <button class="admin-btn danger" onclick="removeReviewAndFlag('${f.itemId}','${f.id}')">Remove review</button>
+          </div>
+        </div>`;
+    }).join('');
+  } catch(e) { panel.innerHTML = '<div style="padding:16px;color:var(--text-muted);">Could not load flagged reviews.</div>'; }
+}
+
+async function dismissFlag(flagId) {
+  const { db, doc, deleteDoc } = fb;
+  await deleteDoc(doc(db, 'flaggedReviews', flagId));
+  showToast('Flag dismissed');
+  renderAdminFlags();
+}
+
+async function removeReviewAndFlag(itemId, flagId) {
+  if (!confirm('Permanently remove this review?')) return;
+  const { db, doc, deleteDoc } = fb;
+  await Promise.all([
+    deleteDoc(doc(db, 'items', itemId)),
+    deleteDoc(doc(db, 'flaggedReviews', flagId))
+  ]);
+  showToast('Review removed');
+  await loadData();
+  renderAdminFlags();
+}
+
+// ─── MANAGE BAKERY ────────────────────────────────────────────────────────────
+let managingBakeryName = null;
+let bakeryPhotoFile = null;
+
+async function openManageBakeryModal(bakeryName) {
+  if (!ownsBakery(bakeryName)) return;
+  managingBakeryName = bakeryName;
+  bakeryPhotoFile = null;
+  document.getElementById('manageBakeryTitle').textContent = bakeryName;
+
+  // Load existing profile
+  let profile = bakeryProfiles[encodeURIComponent(bakeryName)] || bakeryProfiles[bakeryName] || {};
+  try {
+    const { db, doc, getDoc } = fb;
+    const snap = await getDoc(doc(db, 'bakeryProfiles', encodeURIComponent(bakeryName)));
+    if (snap.exists()) profile = snap.data();
+  } catch(e) {}
+
+  document.getElementById('manageBakeryBlurb').value = profile.blurb || '';
+  document.getElementById('manageBakeryWebsite').value = profile.website || '';
+  document.getElementById('manageBakeryInstagram').value = profile.instagram || '';
+
+  const photoWrap = document.getElementById('bakeryPhotoWrap');
+  if (profile.photoURL) {
+    photoWrap.innerHTML = `<img src="${profile.photoURL}" class="bakery-hero-photo" alt="${bakeryName}">`;
+  } else {
+    photoWrap.innerHTML = '🏪';
+  }
+
+  document.getElementById('manageBakeryModal').classList.add('open');
+  lockScroll();
+}
+
+function closeManageBakeryModal() {
+  document.getElementById('manageBakeryModal').classList.remove('open');
+  unlockScroll();
+}
+
+async function handleBakeryPhoto(input) {
+  if (!input.files[0]) return;
+  const compressed = await compressImage(input.files[0], 1400, 0.85);
+  bakeryPhotoFile = compressed;
+  const dataURL = await compressToDataURL(input.files[0], 1400, 0.85);
+  document.getElementById('bakeryPhotoWrap').innerHTML = `<img src="${dataURL}" class="bakery-hero-photo" alt="">`;
+}
+
+async function saveBakeryProfile() {
+  if (!managingBakeryName || !fb) return;
+  const btn = document.querySelector('#manageBakeryModal .btn-espresso');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const { db, storage, doc, setDoc, ref, uploadBytes, getDownloadURL } = fb;
+    const key = encodeURIComponent(managingBakeryName);
+    let photoURL = bakeryProfiles[key]?.photoURL || null;
+    if (bakeryPhotoFile) {
+      const storageRef = ref(storage, `bakeries/${key}/hero.jpg`);
+      const snap = await uploadBytes(storageRef, bakeryPhotoFile, { contentType: 'image/jpeg' });
+      photoURL = await getDownloadURL(snap.ref);
+    }
+    const profileData = {
+      name: managingBakeryName,
+      blurb: document.getElementById('manageBakeryBlurb').value.trim(),
+      website: document.getElementById('manageBakeryWebsite').value.trim(),
+      instagram: document.getElementById('manageBakeryInstagram').value.trim().replace(/^@/, ''),
+      photoURL,
+      ownerId: currentUser.uid,
+      updatedAt: new Date().toISOString()
+    };
+    await setDoc(doc(db, 'bakeryProfiles', key), profileData, { merge: true });
+    bakeryProfiles[key] = profileData;
+    closeManageBakeryModal();
+    showToast('Bakery page saved ✓');
+  } catch(e) { showToast('Error saving — try again'); console.error(e); }
+  finally { btn.disabled = false; btn.textContent = 'Save'; }
+}
+
+// ─── FLAG REVIEW ──────────────────────────────────────────────────────────────
+async function flagReview(itemId, bakeryName) {
+  if (!currentUser) return;
+  const reason = prompt('Reason for flagging this review (optional):') ?? '';
+  const { db, collection, addDoc, serverTimestamp } = fb;
+  try {
+    await addDoc(collection(db, 'flaggedReviews'), {
+      itemId, bakeryName,
+      flaggedBy: currentUser.uid,
+      flaggedByName: currentUser.displayName || 'Unknown',
+      reason,
+      createdAt: serverTimestamp()
+    });
+    showToast('Review flagged — admin will review it');
+  } catch(e) { showToast('Could not flag review'); }
+}
+
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
 function openAuthModal() {
   document.getElementById('authModal').classList.add('open');
@@ -3696,9 +4849,13 @@ document.getElementById('bakeryModal').addEventListener('click', e => { if (e.ta
 
 // Keyboard close
 document.getElementById('editModal').addEventListener('click', e => { if (e.target === document.getElementById('editModal')) closeEditModal(); });
+document.getElementById('bakeryEditModal').addEventListener('click', e => { if (e.target === document.getElementById('bakeryEditModal')) closeBakeryEditModal(); });
 document.getElementById('profileModal').addEventListener('click', e => { if (e.target === document.getElementById('profileModal')) closeProfileModal(); });
 document.getElementById('myProfileModal').addEventListener('click', e => { if (e.target === document.getElementById('myProfileModal')) closeMyProfileModal(); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeAddModal(); closeAuthModal(); closeDetailModal(); closeBakeryModal(); closeEditModal(); closeProfileModal(); closeMyProfileModal(); } });
+document.getElementById('settingsModal').addEventListener('click', e => { if (e.target === document.getElementById('settingsModal')) closeSettingsModal(); });
+document.getElementById('adminModal').addEventListener('click', e => { if (e.target === document.getElementById('adminModal')) closeAdminModal(); });
+document.getElementById('manageBakeryModal').addEventListener('click', e => { if (e.target === document.getElementById('manageBakeryModal')) closeManageBakeryModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeAddModal(); closeAuthModal(); closeDetailModal(); closeBakeryModal(); closeEditModal(); closeProfileModal(); closeMyProfileModal(); closeBakeryEditModal(); } });
 
 // Init tasting dims and category chips
 buildTastingDims();
