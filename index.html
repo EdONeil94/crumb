@@ -1905,7 +1905,10 @@ async function loadProfiles() {
   try {
     const snap = await getDocs(collection(db, 'profiles'));
     snap.docs.forEach(d => { allProfiles[d.id] = d.data(); });
-    if (currentUser) updateNav(); // refresh avatar once profile photo available
+    if (currentUser) updateNav();
+    // Re-render People page if visible
+    const peoplePage = document.getElementById('page-people');
+    if (peoplePage && peoplePage.classList.contains('active')) renderPeople();
   } catch(e) { console.log('Profiles load error:', e.message); }
 }
 
@@ -2412,6 +2415,137 @@ function buildItemRowHTML(item, onClickFn) {
       </div>
       <div class="bakery-item-score">${score}</div>
     </div>`;
+}
+
+function renderPeople() {
+  const grid = document.getElementById('peopleGrid');
+  if (!grid) return;
+  const members = {};
+  allItems.forEach(item => {
+    if (!item.userId) return;
+    if (!members[item.userId]) members[item.userId] = { uid: item.userId, name: item.userName || 'Anonymous', photo: item.userPhoto || null, reviews: 0, totalRating: 0 };
+    members[item.userId].reviews++;
+    members[item.userId].totalRating += (item.overallRating || 0);
+  });
+  Object.keys(members).forEach(uid => {
+    if (allProfiles[uid]) {
+      const p = allProfiles[uid];
+      members[uid].name = p.displayName || members[uid].name;
+      members[uid].photo = p.photoURL || members[uid].photo;
+      members[uid].location = p.location || '';
+    }
+  });
+  Object.entries(allProfiles).forEach(([uid, p]) => {
+    if (!members[uid]) members[uid] = { uid, name: p.displayName || 'Anonymous', photo: p.photoURL || null, location: p.location || '', reviews: 0, totalRating: 0 };
+  });
+  const list = Object.values(members).sort((a, b) => b.reviews - a.reviews);
+  if (!list.length) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon">👤</div><div class="empty-state-title">No members yet</div><div class="empty-state-text">Sign in and start reviewing to join the community.</div></div>`;
+    return;
+  }
+  grid.innerHTML = list.map(m => {
+    const initials = (m.name || '?').charAt(0).toUpperCase();
+    const avatarInner = m.photo ? `<img src="${m.photo}" alt="${m.name}">` : initials;
+    const avg = m.reviews ? (m.totalRating / m.reviews).toFixed(1) : '–';
+    return `<div class="member-card" onclick="${currentUser ? `openProfileModal('${m.uid}')` : 'openAuthModal()'}">
+      <div class="member-avatar-lg">${avatarInner}</div>
+      <div class="member-info">
+        <div class="member-name">${m.name || 'Anonymous'}</div>
+        ${m.location ? `<div class="member-location">📍 ${m.location}</div>` : ''}
+        <div class="member-stats">${m.reviews} review${m.reviews !== 1 ? 's' : ''} · avg ${avg}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+let profileActiveCatFilter = '';
+let profileActiveLocFilter = '';
+let profileModalUid = null;
+
+async function openProfileModal(uid, catFilter, locFilter) {
+  if (!currentUser) { openAuthModal(); return; }
+  profileModalUid = uid;
+  profileActiveCatFilter = catFilter || '';
+  profileActiveLocFilter = locFilter || '';
+  document.getElementById('profileModal').classList.add('open');
+  lockScroll();
+  document.getElementById('profileModalContent').innerHTML = `<div style="padding:40px; text-align:center;"><div class="spinner" style="margin:0 auto;"></div></div>`;
+  let profile = allProfiles[uid] || {};
+  try {
+    const { db, doc, getDoc } = fb;
+    const snap = await getDoc(doc(db, 'profiles', uid));
+    if (snap.exists()) { profile = snap.data(); allProfiles[uid] = profile; }
+  } catch(e) {}
+  const userItems = allItems.filter(i => i.userId === uid);
+  const name = profile.displayName || profile.name || (userItems[0]?.userName) || 'Anonymous';
+  const photo = profile.photoURL || userItems[0]?.userPhoto || null;
+  const initials = name.charAt(0).toUpperCase();
+  const avgRating = userItems.length ? (userItems.reduce((s,i) => s + (i.overallRating||0), 0) / userItems.length).toFixed(1) : '–';
+  const catCounts = {};
+  userItems.forEach(i => { const c = i.category || 'other'; catCounts[c] = (catCounts[c]||0)+1; });
+  const topCat = Object.entries(catCounts).sort((a,b)=>b[1]-a[1])[0];
+  const autoTopCat = topCat ? (CATEGORY_TREE[topCat[0]]?.label || topCat[0]) : '–';
+  const faveCatKey = profile.favCategory || (topCat ? topCat[0] : null);
+  const faveCatLabel = faveCatKey ? (CATEGORY_TREE[faveCatKey]?.label || autoTopCat) : autoTopCat;
+  const isOwnProfile = currentUser && currentUser.uid === uid;
+  document.getElementById('profileModalTitle').textContent = isOwnProfile ? 'Your profile' : name;
+  const editBtn = document.getElementById('profileEditBtn');
+  if (editBtn) editBtn.style.display = isOwnProfile ? 'flex' : 'none';
+  let filtered = [...userItems].sort((a,b)=>(b.communityAvg||b.overallRating||0)-(a.communityAvg||a.overallRating||0));
+  if (profileActiveCatFilter) filtered = filtered.filter(i => i.category === profileActiveCatFilter);
+  if (profileActiveLocFilter) filtered = filtered.filter(i => i.bakeryName === profileActiveLocFilter);
+  const catFilterBar = buildCategoryFilterBar(userItems, profileActiveCatFilter, 'openProfileModal', [`'${uid}'`]);
+  const locs = [...new Set(userItems.map(i => i.bakeryName).filter(Boolean))];
+  let locFilterBar = '';
+  if (locs.length > 1) {
+    const allBtn = `<button class="filter-chip location-chip${!profileActiveLocFilter ? ' active' : ''}" onclick="openProfileModal('${uid}', '${profileActiveCatFilter || ''}', '')">All locations</button>`;
+    const locBtns = locs.map(loc => {
+      const isActive = profileActiveLocFilter === loc;
+      return `<button class="filter-chip location-chip${isActive ? ' active' : ''}" onclick="openProfileModal('${uid}', '${profileActiveCatFilter}', '${escJS(loc)}')">${loc}${isActive ? ` <span onclick="event.stopPropagation(); closeProfileModal(); openBakeryProfile('${escJS(loc)}')" style="opacity:0.7;margin-left:4px;">↗</span>` : ''}</button>`;
+    }).join('');
+    locFilterBar = `<div class="filter-bar">${allBtn}${locBtns}</div>`;
+  } else if (locs.length === 1) {
+    locFilterBar = `<div style="margin-bottom:12px;font-size:0.82rem;">All reviews from <span style="color:var(--caramel);cursor:pointer;font-weight:600;" onclick="closeProfileModal(); openBakeryProfile('${escJS(locs[0])}')">📍 ${locs[0]} ↗</span></div>`;
+  }
+  const reviewsHTML = filtered.map(item => {
+    const catDisp = getCategoryDisplay(item);
+    const record = item.itemRecordId ? allItemRecords.find(r => r.id === item.itemRecordId) : null;
+    const score = record ? record.communityAvg.toFixed(1) : (item.communityAvg ? item.communityAvg.toFixed(1) : (item.overallRating ? item.overallRating.toFixed(1) : '–'));
+    const thumb = item.photoURL ? `<div class="bakery-item-thumb"><img src="${item.photoURL}" alt="${item.name}"></div>` : `<div class="bakery-item-thumb">${catDisp.emoji}</div>`;
+    return `<div class="bakery-item-row" onclick="closeProfileModal(); openDetail('${item.id}')">
+      ${thumb}
+      <div class="bakery-item-info">
+        <div class="bakery-item-name">${item.name || 'Unknown bake'}</div>
+        <div class="bakery-item-meta"><span style="cursor:pointer;color:var(--caramel);" onclick="event.stopPropagation(); closeProfileModal(); openBakeryProfile('${escJS(item.bakeryName || '')}')">📍 ${item.bakeryName || ''}</span> · ${catDisp.sub || catDisp.main}</div>
+      </div>
+      <div class="bakery-item-score">${score}</div>
+    </div>`;
+  }).join('');
+  const filterLabel = [profileActiveCatFilter ? CATEGORY_TREE[profileActiveCatFilter]?.label : '', profileActiveLocFilter ? `at ${profileActiveLocFilter}` : ''].filter(Boolean).join(' ') || 'All';
+  document.getElementById('profileModalContent').innerHTML = `
+    <div class="profile-hero">
+      <div class="profile-hero-avatar">${photo ? `<img src="${photo}" alt="${name}">` : initials}</div>
+      <div class="profile-hero-info">
+        <div class="profile-hero-name">${name}</div>
+        ${profile.location ? `<div class="profile-hero-location">📍 ${profile.location}</div>` : ''}
+        <div class="profile-hero-stats">
+          <div class="profile-stat"><div class="profile-stat-num">${userItems.length}</div><div class="profile-stat-label">Reviews</div></div>
+          <div class="profile-stat"><div class="profile-stat-num">${avgRating}</div><div class="profile-stat-label">Avg score</div></div>
+          <div class="profile-stat"><div class="profile-stat-num" style="font-size:0.85rem;line-height:1.2;">${faveCatLabel}</div><div class="profile-stat-label">Fave type</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="profile-body">
+      ${profile.bio ? `<div class="profile-bio">"${profile.bio}"</div>` : ''}
+      ${catFilterBar}${locFilterBar}
+      ${userItems.length ? `<div class="profile-reviews-title">${filterLabel} reviews (${filtered.length})</div><div>${reviewsHTML || '<div class="empty-state" style="padding:20px 0;"><div class="empty-state-icon">🥐</div><div class="empty-state-title">No reviews match this filter</div></div>'}</div>`
+        : `<div class="empty-state"><div class="empty-state-icon">🥐</div><div class="empty-state-title">No reviews yet</div></div>`}
+    </div>`;
+}
+
+function closeProfileModal() {
+  document.getElementById('profileModal').classList.remove('open');
+  unlockScroll();
 }
 
 function buildCategoryFilterBar(items, activeCategory, fnName, fixedArgs) {
