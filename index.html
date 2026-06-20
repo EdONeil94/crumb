@@ -1359,24 +1359,26 @@ nav {
 .reaction-bar {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 10px 16px;
+  gap: 8px;
+  padding: 12px 16px;
   border-top: 1px solid var(--border);
   flex-wrap: wrap;
 }
 .reaction-btn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
+  gap: 5px;
+  padding: 6px 12px;
   border-radius: 100px;
   border: 1.5px solid var(--border);
   background: var(--parchment);
-  font-size: 0.82rem;
+  font-size: 0.85rem;
   cursor: pointer;
   transition: all 0.15s;
   color: var(--text-muted);
   font-family: inherit;
+  min-width: 52px;
+  justify-content: center;
 }
 .reaction-btn:hover { border-color: var(--honey); background: var(--parchment-dark); }
 .reaction-btn.reacted {
@@ -1391,11 +1393,11 @@ nav {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px; height: 30px;
+  width: 36px; height: 36px;
   border-radius: 50%;
   border: 1.5px dashed var(--border);
   background: transparent;
-  font-size: 1rem;
+  font-size: 1.1rem;
   cursor: pointer;
   transition: all 0.15s;
   color: var(--text-muted);
@@ -2432,7 +2434,12 @@ function getCategoryDisplay(item) {
   return { main: 'Other', sub: null, emoji: '✦' };
 }
 
-const TASTING_DIMS_UNIVERSAL = ['Appearance', 'Texture', 'Flavour', 'Value'];
+const TASTING_DIMS_UNIVERSAL = [
+  { label: 'Appearance', tip: 'Does it look the part?' },
+  { label: 'Texture',    tip: 'The mouthfeel and structure' },
+  { label: 'Flavour',    tip: 'The overall taste' },
+  { label: 'Value',      tip: 'Worth the price?' },
+];
 
 const TASTING_DIM_5TH = {
   bread:      { key: 'dim_crust',       label: 'Crust',             tip: 'Quality and character of the crust' },
@@ -2453,7 +2460,7 @@ const DEFAULT_DIM_5TH = { key: 'dim_impression', label: 'Overall Impression', ti
 function getTastingDims(category) {
   const fifth = TASTING_DIM_5TH[category] || DEFAULT_DIM_5TH;
   return [
-    ...TASTING_DIMS_UNIVERSAL.map(l => ({ key: 'dim_' + l.toLowerCase(), label: l, tip: '' })),
+    ...TASTING_DIMS_UNIVERSAL.map(d => ({ key: 'dim_' + d.label.toLowerCase(), label: d.label, tip: d.tip })),
     fifth
   ];
 }
