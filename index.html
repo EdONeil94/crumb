@@ -1052,10 +1052,10 @@ const CATEGORIES = {
 
 const TASTING_DIMS = ['Texture', 'Flavour', 'Sweetness', 'Appearance', 'Value'];
 // Google Maps API key - replace with yours
-const GOOGLE_MAPS_KEY = 'YOUR_GOOGLE_MAPS_API_KEY';
+const GOOGLE_MAPS_KEY = 'AIzaSyCQa9SwvrPmdnk5S2-q8Mem2ZP22GVB1Yo';
 // Anthropic API key - replace with yours (for AI identification)
 // Note: in production move this to a backend/Firebase function
-const ANTHROPIC_KEY = 'YOUR_ANTHROPIC_API_KEY';
+const ANTHROPIC_KEY = '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';
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 window.addEventListener('crumb-firebase-ready', () => {
@@ -1386,7 +1386,7 @@ function removePhoto() {
 }
 
 async function identifyWithAI(dataURL) {
-  if (!ANTHROPIC_KEY || ANTHROPIC_KEY === 'YOUR_ANTHROPIC_API_KEY') {
+  if (!ANTHROPIC_KEY) {
     document.getElementById('aiResult').classList.add('visible');
     document.getElementById('aiResultText').textContent = 'AI identification requires an Anthropic API key.';
     return;
@@ -1453,7 +1453,7 @@ function searchBakery(val) {
 }
 
 async function fetchBakeryPlaces(query) {
-  if (!GOOGLE_MAPS_KEY || GOOGLE_MAPS_KEY === 'YOUR_GOOGLE_MAPS_API_KEY') {
+  if (!GOOGLE_MAPS_KEY) {
     // Fallback: manual entry
     document.getElementById('bakeryResults').innerHTML = `
       <div style="font-size:0.8rem; color:var(--text-muted); padding:8px; background:var(--parchment); border-radius:var(--radius-sm);">
@@ -1490,7 +1490,7 @@ function selectBakery(placeId, name, address) {
   document.getElementById('selectedBakeryName').textContent = name;
   document.getElementById('selectedBakeryAddress').textContent = address;
   document.getElementById('locationSelected').classList.add('visible');
-  if (GOOGLE_MAPS_KEY !== 'YOUR_GOOGLE_MAPS_API_KEY') {
+  if (GOOGLE_MAPS_KEY !== 'AIzaSyCQa9SwvrPmdnk5S2-q8Mem2ZP22GVB1Yo') {
     document.getElementById('mapContainer').innerHTML = `
       <iframe width="100%" height="180" style="border:0;border-radius:var(--radius);"
         src="https://www.google.com/maps/embed/v1/place?key=${GOOGLE_MAPS_KEY}&q=place_id:${placeId}" allowfullscreen></iframe>`;
