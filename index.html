@@ -1932,6 +1932,7 @@ async function loadAllUserRoles() {
 // ─── STATE ────────────────────────────────────────────────────────────────────
 let currentUser = null;
 let fb = null;
+let allProfiles = {}; // uid -> profile data
 let currentStep = 1;
 let totalSteps = 4;
 let selectedCategory = '';
