@@ -389,14 +389,16 @@ nav {
   display: flex; align-items: center; gap: 6px;
 }
 .rating-circle {
-  width: 40px; height: 40px;
+  width: 44px; height: 44px;
   border-radius: 50%;
   background: var(--espresso);
   color: var(--honey);
   font-family: 'Playfair Display', serif;
   font-size: 0.95rem;
   font-weight: 700;
+  line-height: 1;
   display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
 }
 .rating-label { font-size: 0.72rem; color: var(--text-muted); line-height: 1.3; }
 .rating-count { font-size: 0.7rem; color: var(--text-muted); }
@@ -3675,18 +3677,18 @@ async function saveReview() {
       photoURL = await getDownloadURL(snap.ref);
     }
 
+    const overallRating = parseFloat(document.getElementById('overallRating').value);
+    const itemName = document.getElementById('itemName').value.trim();
+    const bakeryName = selectedBakery?.name || '';
+    const category = matchedItemRecord?.category || selectedCategory || 'other';
+    const subCategory = matchedItemRecord?.subCategory || selectedSubCategory || '';
+
     const dims = getTastingDims(category);
     const dimData = {};
     dims.forEach(d => {
       const el = document.getElementById(d.key);
       dimData[d.key] = el ? parseFloat(el.value) : 0;
     });
-
-    const overallRating = parseFloat(document.getElementById('overallRating').value);
-    const itemName = document.getElementById('itemName').value.trim();
-    const bakeryName = selectedBakery?.name || '';
-    const category = matchedItemRecord?.category || selectedCategory || 'other';
-    const subCategory = matchedItemRecord?.subCategory || selectedSubCategory || '';
 
     // ── Step A: Upsert the itemRecord (shared item+bakery record) ────────────
     let itemRecordId;
