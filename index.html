@@ -787,9 +787,9 @@ nav {
 .profile-hero-name { font-family: 'Playfair Display', serif; font-size: 1.4rem; font-weight: 700; color: var(--cream-white); margin-bottom: 2px; }
 .profile-hero-location { font-size: 0.82rem; color: var(--honey-light); margin-bottom: 10px; }
 .profile-hero-stats { display: flex; gap: 20px; flex-wrap: wrap; }
-.profile-stat { text-align: center; }
-.profile-stat-num { font-family: 'Playfair Display', serif; font-size: 1.4rem; font-weight: 700; color: var(--honey); }
-.profile-stat-label { font-size: 0.68rem; letter-spacing: 1.5px; text-transform: uppercase; color: var(--honey-light); margin-top: 1px; }
+.profile-stat { text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; min-width: 60px; }
+.profile-stat-num { font-family: 'Playfair Display', serif; font-size: 1.4rem; font-weight: 700; color: var(--honey); line-height: 1.2; min-height: 1.8rem; display: flex; align-items: center; justify-content: center; }
+.profile-stat-label { font-size: 0.68rem; letter-spacing: 1.5px; text-transform: uppercase; color: var(--honey-light); margin-top: 3px; }
 .profile-body { padding: 20px 24px 32px; }
 .profile-bio { font-size: 0.88rem; color: var(--text-body); line-height: 1.65; font-style: italic; margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
 .profile-reviews-title { font-family: 'Playfair Display', serif; font-size: 1.1rem; color: var(--espresso); margin-bottom: 14px; }
@@ -1200,6 +1200,12 @@ nav {
       <div class="form-group">
         <label class="form-label">Bio <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">(optional)</span></label>
         <textarea class="form-textarea" id="profileBio" placeholder="A few words about you and your love of baked goods…" style="min-height:90px;"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Favourite category <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">(optional)</span></label>
+        <select class="form-select" id="profileFavCategory">
+          <option value="">Auto — based on my reviews</option>
+        </select>
       </div>
       <div class="form-group">
         <label class="form-label">Avatar</label>
@@ -2275,11 +2281,13 @@ async function openProfileModal(uid) {
   const initials = name.charAt(0).toUpperCase();
   const avgRating = userItems.length ? (userItems.reduce((s,i) => s + (i.overallRating||0), 0) / userItems.length).toFixed(1) : '–';
 
-  // Top category
+  // Top category — use profile override or auto-calculate from reviews
   const catCounts = {};
   userItems.forEach(i => { const c = i.category || 'other'; catCounts[c] = (catCounts[c]||0)+1; });
   const topCat = Object.entries(catCounts).sort((a,b)=>b[1]-a[1])[0];
-  const topCatLabel = topCat ? (CATEGORY_TREE[topCat[0]]?.label || topCat[0]) : '–';
+  const autoTopCat = topCat ? (CATEGORY_TREE[topCat[0]]?.label || topCat[0]) : '–';
+  const faveCatKey = profile.favCategory || (topCat ? topCat[0] : null);
+  const faveCatLabel = faveCatKey ? (CATEGORY_TREE[faveCatKey]?.label || autoTopCat) : autoTopCat;
 
   const isOwnProfile = currentUser && currentUser.uid === uid;
 
@@ -2311,7 +2319,7 @@ async function openProfileModal(uid) {
         <div class="profile-hero-stats">
           <div class="profile-stat"><div class="profile-stat-num">${userItems.length}</div><div class="profile-stat-label">Reviews</div></div>
           <div class="profile-stat"><div class="profile-stat-num">${avgRating}</div><div class="profile-stat-label">Avg score</div></div>
-          <div class="profile-stat"><div class="profile-stat-num" style="font-size:0.9rem;">${topCatLabel}</div><div class="profile-stat-label">Fave type</div></div>
+          <div class="profile-stat"><div class="profile-stat-num" style="font-size:0.85rem; line-height:1.2;">${faveCatLabel}</div><div class="profile-stat-label">Fave type</div></div>
         </div>
       </div>
     </div>
@@ -2343,6 +2351,17 @@ async function openMyProfileModal() {
   document.getElementById('profileLocation').value = profile.location || '';
   document.getElementById('profileBio').value = profile.bio || '';
   profilePhotoFile = null;
+
+  // Populate fave category dropdown
+  const favSelect = document.getElementById('profileFavCategory');
+  favSelect.innerHTML = '<option value="">Auto — based on my reviews</option>';
+  Object.entries(CATEGORY_TREE).forEach(([key, cat]) => {
+    const opt = document.createElement('option');
+    opt.value = key;
+    opt.textContent = cat.emoji + ' ' + cat.label;
+    if (profile.favCategory === key) opt.selected = true;
+    favSelect.appendChild(opt);
+  });
 
   const prev = document.getElementById('profileAvatarPreview');
   if (photo) {
@@ -2388,6 +2407,7 @@ async function saveMyProfile() {
       displayName,
       location: document.getElementById('profileLocation').value.trim(),
       bio: document.getElementById('profileBio').value.trim(),
+      favCategory: document.getElementById('profileFavCategory').value || '',
       photoURL,
       uid: currentUser.uid,
       updatedAt: new Date().toISOString()
