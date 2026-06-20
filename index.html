@@ -938,6 +938,32 @@ nav {
 }
 .item-match-new:hover { border-color: var(--caramel); }
 
+/* ─── FILTER CHIPS ───────────────────────────────────────────────────────────── */
+.filter-bar {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.filter-chip {
+  padding: 5px 12px;
+  border-radius: 100px;
+  border: 1.5px solid var(--border);
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  background: var(--parchment);
+  white-space: nowrap;
+}
+.filter-chip:hover { border-color: var(--honey); color: var(--caramel); }
+.filter-chip.active { background: var(--espresso); border-color: var(--espresso); color: var(--honey); font-weight: 600; }
+.filter-chip.location-chip { border-color: var(--sage); color: var(--sage); }
+.filter-chip.location-chip.active { background: var(--sage); border-color: var(--sage); color: white; }
+
 /* ─── SPINNER ────────────────────────────────────────────────────────────────── */
 @keyframes spin { to { transform: rotate(360deg); } }
 .spinner { width: 20px; height: 20px; border: 2.5px solid rgba(139,94,60,0.2); border-top-color: var(--caramel); border-radius: 50%; animation: spin 0.8s linear infinite; }
@@ -1923,10 +1949,54 @@ function renderBakeries() {
   }).join('');
 }
 
-async function openBakeryProfile(bakeryName) {
+// ─── FILTER HELPERS ───────────────────────────────────────────────────────────
+function buildItemRowHTML(item, onClickFn) {
+  const catDisp = getCategoryDisplay(item);
+  const record = item.itemRecordId ? allItemRecords.find(r => r.id === item.itemRecordId) : null;
+  const score = record ? record.communityAvg.toFixed(1) : (item.communityAvg ? item.communityAvg.toFixed(1) : (item.overallRating ? item.overallRating.toFixed(1) : '–'));
+  const thumb = item.photoURL
+    ? `<div class="bakery-item-thumb"><img src="${item.photoURL}" alt="${item.name}"></div>`
+    : `<div class="bakery-item-thumb">${catDisp.emoji}</div>`;
+  return `
+    <div class="bakery-item-row" onclick="${onClickFn}">
+      ${thumb}
+      <div class="bakery-item-info">
+        <div class="bakery-item-name">${item.name || 'Unknown bake'}</div>
+        <div class="bakery-item-meta">${item.bakeryName ? `<span class="loc-link" onclick="event.stopPropagation(); closeProfileModal(); openBakeryProfile('${escJS(item.bakeryName)}')" style="cursor:pointer; color:var(--caramel);">📍 ${item.bakeryName}</span> · ` : ''}${catDisp.sub || catDisp.main}</div>
+      </div>
+      <div class="bakery-item-score">${score}</div>
+    </div>`;
+}
+
+function buildCategoryFilterBar(items, activeCategory, onClickFn) {
+  const cats = [...new Set(items.map(i => i.category).filter(Boolean))];
+  if (cats.length <= 1) return '';
+  const allBtn = `<button class="filter-chip${!activeCategory ? ' active' : ''}" onclick="${onClickFn}('')">All</button>`;
+  const catBtns = cats.map(cat => {
+    const label = CATEGORY_TREE[cat]?.label || cat;
+    const emoji = CATEGORY_TREE[cat]?.emoji || '✦';
+    return `<button class="filter-chip${activeCategory === cat ? ' active' : ''}" onclick="${onClickFn}('${cat}')">${emoji} ${label}</button>`;
+  }).join('');
+  return `<div class="filter-bar">${allBtn}${catBtns}</div>`;
+}
+
+function buildLocationFilterBar(items, activeLoc, onClickFn) {
+  const locs = [...new Set(items.map(i => i.bakeryName).filter(Boolean))];
+  if (locs.length <= 1) return '';
+  const allBtn = `<button class="filter-chip location-chip${!activeLoc ? ' active' : ''}" onclick="${onClickFn}('')">All locations</button>`;
+  const locBtns = locs.map(loc =>
+    `<button class="filter-chip location-chip${activeLoc === loc ? ' active' : ''}" onclick="${onClickFn}('${escJS(loc)}')">${loc}</button>`
+  ).join('');
+  return `<div class="filter-bar">${allBtn}${locBtns}</div>`;
+}
+
+let bakeryActiveCatFilter = '';
+
+async function openBakeryProfile(bakeryName, catFilter) {
   buildBakeryIndex();
   const b = allBakeries[bakeryName];
   if (!b) return;
+  bakeryActiveCatFilter = catFilter || '';
   document.getElementById('bakeryModalTitle').textContent = bakeryName;
   document.getElementById('bakeryModal').classList.add('open');
   document.body.style.overflow = 'hidden';
@@ -1943,19 +2013,28 @@ async function openBakeryProfile(bakeryName) {
   const sortedItems = [...b.items].sort((x,y) => (y.communityAvg||y.overallRating||0) - (x.communityAvg||x.overallRating||0));
   const canEdit = !!currentUser;
 
-  const itemsHTML = sortedItems.map(item => {
+  const filtered = bakeryActiveCatFilter
+    ? sortedItems.filter(i => i.category === bakeryActiveCatFilter)
+    : sortedItems;
+
+  const catFilterBar = buildCategoryFilterBar(
+    sortedItems,
+    bakeryActiveCatFilter,
+    `openBakeryProfile('${escJS(bakeryName)}',`
+  );
+
+  const itemsHTML = filtered.map(item => {
     const catDisp = getCategoryDisplay(item);
-    const emoji = catDisp.emoji;
     const score = item.communityAvg ? item.communityAvg.toFixed(1) : (item.overallRating ? item.overallRating.toFixed(1) : '–');
     const thumb = item.photoURL
       ? `<div class="bakery-item-thumb"><img src="${item.photoURL}" alt="${item.name}"></div>`
-      : `<div class="bakery-item-thumb">${emoji}</div>`;
+      : `<div class="bakery-item-thumb">${catDisp.emoji}</div>`;
     return `
       <div class="bakery-item-row" onclick="closeBakeryModal(); openDetail('${item.id}')">
         ${thumb}
         <div class="bakery-item-info">
           <div class="bakery-item-name">${item.name || 'Unknown bake'}</div>
-          <div class="bakery-item-meta">${item.userName || 'Anonymous'} · ${item.createdAt ? timeAgo(item.createdAt.toDate ? item.createdAt.toDate() : new Date(item.createdAt)) : ''}</div>
+          <div class="bakery-item-meta">${catDisp.sub || catDisp.main} · ${item.userName || 'Anonymous'}</div>
         </div>
         <div class="bakery-item-score">${score}</div>
       </div>`;
@@ -1988,8 +2067,9 @@ async function openBakeryProfile(bakeryName) {
         }
         ${canEdit ? `<span class="bakery-blurb-edit" onclick="editBakeryBlurb('${escJS(bakeryName)}', '${escJS(blurb)}')">${blurb ? '✏️ Edit description' : '+ Add a description'}</span>` : ''}
       </div>
-      <div class="bakery-items-title">All reviews (${b.items.length})</div>
-      <div>${itemsHTML}</div>
+      ${catFilterBar}
+      <div class="bakery-items-title">${bakeryActiveCatFilter ? CATEGORY_TREE[bakeryActiveCatFilter]?.label + ' reviews' : 'All reviews'} (${filtered.length})</div>
+      <div>${itemsHTML || '<div class="empty-state" style="padding:24px 0;"><div class="empty-state-icon">🥐</div><div class="empty-state-title">No reviews in this category</div></div>'}</div>
     </div>`;
 }
 
@@ -2762,8 +2842,16 @@ function renderPeople() {
   }).join('');
 }
 
-async function openProfileModal(uid) {
+let profileActiveCatFilter = '';
+let profileActiveLocFilter = '';
+let profileModalUid = null;
+
+async function openProfileModal(uid, catFilter, locFilter) {
   if (!currentUser) { openAuthModal(); return; }
+  profileModalUid = uid;
+  profileActiveCatFilter = catFilter || '';
+  profileActiveLocFilter = locFilter || '';
+
   document.getElementById('profileModal').classList.add('open');
   document.body.style.overflow = 'hidden';
   document.getElementById('profileModalContent').innerHTML = `<div style="padding:40px; text-align:center;"><div class="spinner" style="margin:0 auto;"></div></div>`;
@@ -2782,7 +2870,7 @@ async function openProfileModal(uid) {
   const initials = name.charAt(0).toUpperCase();
   const avgRating = userItems.length ? (userItems.reduce((s,i) => s + (i.overallRating||0), 0) / userItems.length).toFixed(1) : '–';
 
-  // Top category — use profile override or auto-calculate from reviews
+  // Top category
   const catCounts = {};
   userItems.forEach(i => { const c = i.category || 'other'; catCounts[c] = (catCounts[c]||0)+1; });
   const topCat = Object.entries(catCounts).sort((a,b)=>b[1]-a[1])[0];
@@ -2791,12 +2879,43 @@ async function openProfileModal(uid) {
   const faveCatLabel = faveCatKey ? (CATEGORY_TREE[faveCatKey]?.label || autoTopCat) : autoTopCat;
 
   const isOwnProfile = currentUser && currentUser.uid === uid;
-
   document.getElementById('profileModalTitle').textContent = isOwnProfile ? 'Your profile' : name;
 
-  const reviewsHTML = userItems.sort((a,b)=>(b.communityAvg||b.overallRating||0)-(a.communityAvg||a.overallRating||0)).map(item => {
+  // Apply filters
+  let filtered = [...userItems].sort((a,b)=>(b.communityAvg||b.overallRating||0)-(a.communityAvg||a.overallRating||0));
+  if (profileActiveCatFilter) filtered = filtered.filter(i => i.category === profileActiveCatFilter);
+  if (profileActiveLocFilter) filtered = filtered.filter(i => i.bakeryName === profileActiveLocFilter);
+
+  // Build filter bars
+  const catFilterBar = buildCategoryFilterBar(
+    userItems,
+    profileActiveCatFilter,
+    `openProfileModal('${uid}',`
+  );
+
+  // Location filter bar — chips are clickable through to bakery profile
+  const locs = [...new Set(userItems.map(i => i.bakeryName).filter(Boolean))];
+  let locFilterBar = '';
+  if (locs.length > 1) {
+    const allBtn = `<button class="filter-chip location-chip${!profileActiveLocFilter ? ' active' : ''}" onclick="openProfileModal('${uid}', '${profileActiveCatFilter}', '')">All locations</button>`;
+    const locBtns = locs.map(loc => {
+      const isActive = profileActiveLocFilter === loc;
+      return `<button class="filter-chip location-chip${isActive ? ' active' : ''}"
+        onclick="openProfileModal('${uid}', '${profileActiveCatFilter}', '${escJS(loc)}')"
+        >${loc}${isActive ? ` <span onclick="event.stopPropagation(); closeProfileModal(); openBakeryProfile('${escJS(loc)}')" style="opacity:0.7; margin-left:4px;" title="View bakery">↗</span>` : ''}</button>`;
+    }).join('');
+    locFilterBar = `<div class="filter-bar">${allBtn}${locBtns}</div>`;
+  } else if (locs.length === 1) {
+    // Single location — show as clickable link
+    locFilterBar = `<div style="margin-bottom:12px; font-size:0.82rem;">
+      All reviews from <span style="color:var(--caramel); cursor:pointer; font-weight:600;" onclick="closeProfileModal(); openBakeryProfile('${escJS(locs[0])}')">📍 ${locs[0]} ↗</span>
+    </div>`;
+  }
+
+  const reviewsHTML = filtered.map(item => {
     const catDisp = getCategoryDisplay(item);
-    const score = item.communityAvg ? item.communityAvg.toFixed(1) : (item.overallRating ? item.overallRating.toFixed(1) : '–');
+    const record = item.itemRecordId ? allItemRecords.find(r => r.id === item.itemRecordId) : null;
+    const score = record ? record.communityAvg.toFixed(1) : (item.communityAvg ? item.communityAvg.toFixed(1) : (item.overallRating ? item.overallRating.toFixed(1) : '–'));
     const thumb = item.photoURL
       ? `<div class="bakery-item-thumb"><img src="${item.photoURL}" alt="${item.name}"></div>`
       : `<div class="bakery-item-thumb">${catDisp.emoji}</div>`;
@@ -2805,11 +2924,19 @@ async function openProfileModal(uid) {
         ${thumb}
         <div class="bakery-item-info">
           <div class="bakery-item-name">${item.name || 'Unknown bake'}</div>
-          <div class="bakery-item-meta">${item.bakeryName || ''} · ${catDisp.sub || catDisp.main}</div>
+          <div class="bakery-item-meta">
+            <span style="cursor:pointer; color:var(--caramel);" onclick="event.stopPropagation(); closeProfileModal(); openBakeryProfile('${escJS(item.bakeryName || '')}')">📍 ${item.bakeryName || ''}</span>
+            · ${catDisp.sub || catDisp.main}
+          </div>
         </div>
         <div class="bakery-item-score">${score}</div>
       </div>`;
   }).join('');
+
+  const filterLabel = [
+    profileActiveCatFilter ? CATEGORY_TREE[profileActiveCatFilter]?.label : '',
+    profileActiveLocFilter ? `at ${profileActiveLocFilter}` : ''
+  ].filter(Boolean).join(' ') || 'All';
 
   document.getElementById('profileModalContent').innerHTML = `
     <div class="profile-hero">
@@ -2826,8 +2953,12 @@ async function openProfileModal(uid) {
     </div>
     <div class="profile-body">
       ${profile.bio ? `<div class="profile-bio">"${profile.bio}"</div>` : ''}
-      ${isOwnProfile ? `<div style="margin-bottom:20px;"><button class="btn-caramel" style="font-size:0.82rem; padding:8px 16px;" onclick="closeProfileModal(); openMyProfileModal();">✏️ Edit profile</button></div>` : ''}
-      ${userItems.length ? `<div class="profile-reviews-title">Reviews (${userItems.length})</div><div>${reviewsHTML}</div>` : `<div class="empty-state"><div class="empty-state-icon">🥐</div><div class="empty-state-title">No reviews yet</div></div>`}
+      ${isOwnProfile ? `<div style="margin-bottom:16px;"><button class="btn-caramel" style="font-size:0.82rem; padding:8px 16px;" onclick="closeProfileModal(); openMyProfileModal();">✏️ Edit profile</button></div>` : ''}
+      ${catFilterBar}
+      ${locFilterBar}
+      ${userItems.length
+        ? `<div class="profile-reviews-title">${filterLabel} reviews (${filtered.length})</div><div>${reviewsHTML || '<div class="empty-state" style="padding:20px 0;"><div class="empty-state-icon">🥐</div><div class="empty-state-title">No reviews match this filter</div></div>'}</div>`
+        : `<div class="empty-state"><div class="empty-state-icon">🥐</div><div class="empty-state-title">No reviews yet</div></div>`}
     </div>`;
 }
 
