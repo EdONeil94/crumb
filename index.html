@@ -1968,14 +1968,16 @@ function buildItemRowHTML(item, onClickFn) {
     </div>`;
 }
 
-function buildCategoryFilterBar(items, activeCategory, onClickFn) {
+function buildCategoryFilterBar(items, activeCategory, fnName, fixedArgs) {
   const cats = [...new Set(items.map(i => i.category).filter(Boolean))];
   if (cats.length <= 1) return '';
-  const allBtn = `<button class="filter-chip${!activeCategory ? ' active' : ''}" onclick="${onClickFn}('')">All</button>`;
+  // fixedArgs is an array of already-quoted args to prepend, e.g. ["'uid123'"]
+  const prefix = fixedArgs && fixedArgs.length ? fixedArgs.join(',') + ',' : '';
+  const allBtn = `<button class="filter-chip${!activeCategory ? ' active' : ''}" onclick="${fnName}(${prefix}'')">All</button>`;
   const catBtns = cats.map(cat => {
     const label = CATEGORY_TREE[cat]?.label || cat;
     const emoji = CATEGORY_TREE[cat]?.emoji || '✦';
-    return `<button class="filter-chip${activeCategory === cat ? ' active' : ''}" onclick="${onClickFn}('${cat}')">${emoji} ${label}</button>`;
+    return `<button class="filter-chip${activeCategory === cat ? ' active' : ''}" onclick="${fnName}(${prefix}'${cat}')">${emoji} ${label}</button>`;
   }).join('');
   return `<div class="filter-bar">${allBtn}${catBtns}</div>`;
 }
@@ -2020,7 +2022,8 @@ async function openBakeryProfile(bakeryName, catFilter) {
   const catFilterBar = buildCategoryFilterBar(
     sortedItems,
     bakeryActiveCatFilter,
-    `openBakeryProfile('${escJS(bakeryName)}',`
+    'openBakeryProfile',
+    [`'${escJS(bakeryName)}'`]
   );
 
   const itemsHTML = filtered.map(item => {
@@ -2390,27 +2393,55 @@ function buildCategoryChips() {
   const parentWrap = document.getElementById('categoryParentChips');
   const subWrap = document.getElementById('categorySubChips');
   if (!parentWrap) return;
-  parentWrap.innerHTML = Object.entries(CATEGORY_TREE).map(([key, cat]) =>
-    `<div class="category-chip" onclick="selectParentCategory(this,'${key}')">${cat.emoji} ${cat.label}</div>`
-  ).join('');
+  renderParentChips(parentWrap);
   subWrap.innerHTML = '';
   subWrap.style.display = 'none';
 }
 
-function selectParentCategory(el, parentKey) {
-  document.querySelectorAll('#categoryParentChips .category-chip').forEach(c => c.classList.remove('selected'));
-  el.classList.add('selected');
+function renderParentChips(parentWrap) {
+  parentWrap.innerHTML = Object.entries(CATEGORY_TREE).map(([key, cat]) =>
+    `<div class="category-chip" onclick="selectParentCategory('${key}')">${cat.emoji} ${cat.label}</div>`
+  ).join('');
+}
+
+function selectParentCategory(parentKey) {
   selectedCategory = parentKey;
   selectedSubCategory = '';
-  // Show sub-categories
+  const cat = CATEGORY_TREE[parentKey];
+  const parentWrap = document.getElementById('categoryParentChips');
   const subWrap = document.getElementById('categorySubChips');
-  const subs = CATEGORY_TREE[parentKey]?.subs || {};
-  subWrap.innerHTML = Object.entries(subs).map(([key, label]) =>
-    `<div class="category-chip" onclick="selectSubCategory(this,'${key}')">${label}</div>`
-  ).join('');
+  if (!parentWrap || !cat) return;
+
+  // Collapse parent chips to just the selected one with a ✕
+  parentWrap.innerHTML = `
+    <div class="category-chip selected" style="display:flex; align-items:center; gap:6px;">
+      ${cat.emoji} ${cat.label}
+      <span onclick="event.stopPropagation(); clearParentCategory()" style="
+        display:inline-flex; align-items:center; justify-content:center;
+        width:16px; height:16px; border-radius:50%;
+        background:rgba(255,255,255,0.25); font-size:0.7rem;
+        cursor:pointer; margin-left:2px; line-height:1;
+        transition:background 0.15s;" title="Change category">✕</span>
+    </div>`;
+
+  // Show sub-categories
+  const subs = cat.subs || {};
+  subWrap.innerHTML = `<div style="font-size:0.72rem; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--text-muted); width:100%; margin-bottom:4px;">Choose type</div>` +
+    Object.entries(subs).map(([key, label]) =>
+      `<div class="category-chip" onclick="selectSubCategory(this,'${key}')">${label}</div>`
+    ).join('');
   subWrap.style.display = 'flex';
   subWrap.style.flexWrap = 'wrap';
   subWrap.style.gap = '8px';
+}
+
+function clearParentCategory() {
+  selectedCategory = '';
+  selectedSubCategory = '';
+  const parentWrap = document.getElementById('categoryParentChips');
+  const subWrap = document.getElementById('categorySubChips');
+  if (parentWrap) renderParentChips(parentWrap);
+  if (subWrap) { subWrap.innerHTML = ''; subWrap.style.display = 'none'; }
 }
 
 function selectSubCategory(el, subKey) {
@@ -2422,8 +2453,7 @@ function selectSubCategory(el, subKey) {
 
 function selectCategory(el, cat) {
   // legacy shim for AI auto-select
-  const parentEl = document.querySelector(`#categoryParentChips .category-chip[onclick*="'${cat}'"]`);
-  if (parentEl) selectParentCategory(parentEl, cat);
+  selectParentCategory(cat);
 }
 
 // ─── BAKERY SEARCH ────────────────────────────────────────────────────────────
@@ -2633,8 +2663,7 @@ function selectItemMatch(recordId) {
 
   // Auto-select category
   if (record.category) {
-    const chip = document.querySelector(`#categoryParentChips .category-chip[onclick*="'${record.category}'"]`);
-    if (chip) selectParentCategory(chip, record.category);
+    selectParentCategory(record.category);
     if (record.subCategory) {
       setTimeout(() => {
         const subChip = document.querySelector(`#categorySubChips .category-chip[onclick*="'${record.subCategory}'"]`);
@@ -2890,14 +2919,15 @@ async function openProfileModal(uid, catFilter, locFilter) {
   const catFilterBar = buildCategoryFilterBar(
     userItems,
     profileActiveCatFilter,
-    `openProfileModal('${uid}',`
+    'openProfileModal',
+    [`'${uid}'`]
   );
 
   // Location filter bar — chips are clickable through to bakery profile
   const locs = [...new Set(userItems.map(i => i.bakeryName).filter(Boolean))];
   let locFilterBar = '';
   if (locs.length > 1) {
-    const allBtn = `<button class="filter-chip location-chip${!profileActiveLocFilter ? ' active' : ''}" onclick="openProfileModal('${uid}', '${profileActiveCatFilter}', '')">All locations</button>`;
+    const allBtn = `<button class="filter-chip location-chip${!profileActiveLocFilter ? ' active' : ''}" onclick="openProfileModal('${uid}', '${profileActiveCatFilter || ''}', '')">All locations</button>`;
     const locBtns = locs.map(loc => {
       const isActive = profileActiveLocFilter === loc;
       return `<button class="filter-chip location-chip${isActive ? ' active' : ''}"
@@ -3173,18 +3203,42 @@ function openEditModal(id) {
 }
 
 function selectEditParent(el, parentKey) {
-  document.querySelectorAll('#editParentChips .category-chip').forEach(c => c.classList.remove('selected'));
-  el.classList.add('selected');
   document.getElementById('editModal')._editCategory = parentKey;
   document.getElementById('editModal')._editSubCategory = '';
+  const cat = CATEGORY_TREE[parentKey];
+  const parentWrap = document.getElementById('editParentChips');
   const subWrap = document.getElementById('editSubChips');
-  const subs = CATEGORY_TREE[parentKey]?.subs || {};
-  subWrap.innerHTML = Object.entries(subs).map(([key, label]) =>
-    `<div class="category-chip" onclick="selectEditSub(this,'${key}')">${label}</div>`
-  ).join('');
+
+  // Collapse to selected chip with ✕
+  parentWrap.innerHTML = `
+    <div class="category-chip selected" style="display:flex; align-items:center; gap:6px;">
+      ${cat.emoji} ${cat.label}
+      <span onclick="event.stopPropagation(); clearEditParentCategory()" style="
+        display:inline-flex; align-items:center; justify-content:center;
+        width:16px; height:16px; border-radius:50%;
+        background:rgba(255,255,255,0.25); font-size:0.7rem;
+        cursor:pointer; margin-left:2px;" title="Change category">✕</span>
+    </div>`;
+
+  const subs = cat?.subs || {};
+  subWrap.innerHTML = `<div style="font-size:0.72rem; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--text-muted); width:100%; margin-bottom:4px;">Choose type</div>` +
+    Object.entries(subs).map(([key, label]) =>
+      `<div class="category-chip" onclick="selectEditSub(this,'${key}')">${label}</div>`
+    ).join('');
   subWrap.style.display = 'flex';
   subWrap.style.flexWrap = 'wrap';
   subWrap.style.gap = '8px';
+}
+
+function clearEditParentCategory() {
+  document.getElementById('editModal')._editCategory = '';
+  document.getElementById('editModal')._editSubCategory = '';
+  const parentWrap = document.getElementById('editParentChips');
+  const subWrap = document.getElementById('editSubChips');
+  parentWrap.innerHTML = Object.entries(CATEGORY_TREE).map(([key, cat]) =>
+    `<div class="category-chip" onclick="selectEditParent(this,'${key}')">${cat.emoji} ${cat.label}</div>`
+  ).join('');
+  if (subWrap) { subWrap.innerHTML = ''; subWrap.style.display = 'none'; }
 }
 
 function selectEditSub(el, subKey) {
