@@ -14,8 +14,8 @@
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
   import { getAuth, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-  import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, query, orderBy, where, getDoc, setDoc, increment, onSnapshot, serverTimestamp, limit } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-  import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
+  import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, where, getDoc, setDoc, increment, onSnapshot, serverTimestamp, limit } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+  import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 
   // ─── FIREBASE CONFIG ───────────────────────────────────────────────────────
   // Replace with your Firebase project config
@@ -35,7 +35,7 @@
   const googleProvider = new GoogleAuthProvider();
 
   // Expose to global scope for non-module usage
-  window._crumb = { auth, db, storage, googleProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile, collection, addDoc, getDocs, doc, updateDoc, query, orderBy, where, getDoc, setDoc, increment, onSnapshot, serverTimestamp, limit, ref, uploadBytes, getDownloadURL };
+  window._crumb = { auth, db, storage, googleProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, where, getDoc, setDoc, increment, onSnapshot, serverTimestamp, limit, ref, uploadBytes, getDownloadURL, deleteObject };
   window.dispatchEvent(new Event('crumb-firebase-ready'));
 </script>
 
@@ -1237,8 +1237,11 @@ nav {
     </div>
     <div class="modal-body" id="editModalBody" style="padding-bottom:0;"></div>
     <div class="modal-footer">
-      <button class="btn-ghost" onclick="closeEditModal()">Cancel</button>
-      <button class="btn-caramel" id="editSaveBtn" onclick="saveEdit()">Save changes</button>
+      <button class="btn-ghost" style="color:#c0392b;" onclick="deleteReview()">🗑 Delete</button>
+      <div style="display:flex; gap:10px;">
+        <button class="btn-ghost" onclick="closeEditModal()">Cancel</button>
+        <button class="btn-caramel" id="editSaveBtn" onclick="saveEdit()">Save changes</button>
+      </div>
     </div>
   </div>
 </div>
@@ -2635,6 +2638,32 @@ function closeEditModal() {
   document.getElementById('editModal').classList.remove('open');
   document.body.style.overflow = '';
   editingItemId = null;
+}
+
+async function deleteReview() {
+  if (!editingItemId || !currentUser) return;
+  const item = allItems.find(i => i.id === editingItemId);
+  if (!item || item.userId !== currentUser.uid) return;
+  if (!confirm(`Delete your review of "${item.name || 'this item'}"? This cannot be undone.`)) return;
+
+  try {
+    const { db, doc, deleteDoc, storage, ref, deleteObject } = fb;
+    // Delete photo from storage if it exists and was uploaded by user
+    if (item.photoURL && item.photoURL.includes('firebasestorage')) {
+      try {
+        const photoRef = ref(storage, item.photoURL);
+        await deleteObject(photoRef);
+      } catch(e) { /* photo may already be gone, continue */ }
+    }
+    await deleteDoc(doc(db, 'items', editingItemId));
+    closeEditModal();
+    showToast('Review deleted');
+    await loadData();
+    renderLeaderboard(lbCurrentTab);
+  } catch(e) {
+    showToast('Could not delete — try again');
+    console.error(e);
+  }
 }
 
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
