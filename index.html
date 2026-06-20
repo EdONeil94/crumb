@@ -2053,20 +2053,18 @@ async function openBakeryProfile(bakeryName, catFilter) {
     const thumb = item.photoURL
       ? `<div class="bakery-item-thumb"><img src="${item.photoURL}" alt="${item.name}"></div>`
       : `<div class="bakery-item-thumb">${catDisp.emoji}</div>`;
+    const rec2 = item.itemRecordId ? allItemRecords.find(r => r.id === item.itemRecordId) : null;
+    const avgP2 = rec2?.avgPrice ?? item.price ?? null;
+    const avgPStr = avgP2 !== null ? ('£' + parseFloat(avgP2).toFixed(2) + (rec2 && rec2.priceCount > 1 ? ' avg' : '')) : '';
     return `
-      (() => {
-        const rec2 = item.itemRecordId ? allItemRecords.find(r => r.id === item.itemRecordId) : null;
-        const avgP = rec2?.avgPrice ?? item.price ?? null;
-        const avgPStr = avgP !== null ? ('\u00A3' + parseFloat(avgP).toFixed(2) + (rec2 && rec2.priceCount > 1 ? ' avg' : '')) : '';
-        return '<div class="bakery-item-row" onclick="closeBakeryModal(); openDetail(\'' + item.id + '\')">'
-          + thumb
-          + '<div class="bakery-item-info">'
-          + '<div class="bakery-item-name">' + (item.name || 'Unknown bake') + '</div>'
-          + '<div class="bakery-item-meta">' + (catDisp.sub || catDisp.main) + ' · ' + (item.userName || 'Anonymous') + (avgPStr ? ' · <span style="color:var(--sage);font-weight:600;">' + avgPStr + '</span>' : '') + '</div>'
-          + '</div>'
-          + '<div class="bakery-item-score">' + score + '</div>'
-          + '</div>';
-      })()`;
+      <div class="bakery-item-row" onclick="closeBakeryModal(); openDetail('${item.id}')">
+        ${thumb}
+        <div class="bakery-item-info">
+          <div class="bakery-item-name">${item.name || 'Unknown bake'}</div>
+          <div class="bakery-item-meta">${catDisp.sub || catDisp.main} · ${item.userName || 'Anonymous'}${avgPStr ? ` · <span style="color:var(--sage);font-weight:600;">${avgPStr}</span>` : ''}</div>
+        </div>
+        <div class="bakery-item-score">${score}</div>
+      </div>`;
   }).join('');
 
   document.getElementById('bakeryModalContent').innerHTML = `
