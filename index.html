@@ -3542,6 +3542,10 @@ let settingsPhotoFile = null;
 
 async function openSettingsPage() {
   if (!currentUser) { openAuthModal(); return; }
+  // Re-check role in case it hasn't loaded yet
+  if (!currentUserRole && currentUser.uid !== SUPER_ADMIN_UID) {
+    await loadUserRole();
+  }
 
   // Profile fields
   const profile = allProfiles[currentUser.uid] || {};
