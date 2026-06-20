@@ -1607,7 +1607,10 @@ nav {
   <div class="modal" style="max-width:600px;" role="dialog" aria-label="User profile">
     <div class="modal-header">
       <div class="modal-title" id="profileModalTitle">Profile</div>
-      <button class="modal-close" onclick="closeProfileModal()">✕</button>
+      <div style="display:flex; align-items:center; gap:6px;">
+        <button class="modal-close" id="profileEditBtn" onclick="closeProfileModal(); openMyProfileModal();" title="Edit profile" style="display:none;">✏️</button>
+        <button class="modal-close" onclick="closeProfileModal()">✕</button>
+      </div>
     </div>
     <div id="profileModalContent"></div>
   </div>
@@ -4008,6 +4011,8 @@ async function openProfileModal(uid, catFilter, locFilter) {
 
   const isOwnProfile = currentUser && currentUser.uid === uid;
   document.getElementById('profileModalTitle').textContent = isOwnProfile ? 'Your profile' : name;
+  const editBtn = document.getElementById('profileEditBtn');
+  if (editBtn) editBtn.style.display = isOwnProfile ? 'flex' : 'none';
 
   // Apply filters
   let filtered = [...userItems].sort((a,b)=>(b.communityAvg||b.overallRating||0)-(a.communityAvg||a.overallRating||0));
@@ -4082,7 +4087,7 @@ async function openProfileModal(uid, catFilter, locFilter) {
     </div>
     <div class="profile-body">
       ${profile.bio ? `<div class="profile-bio">"${profile.bio}"</div>` : ''}
-      ${isOwnProfile ? `<div style="margin-bottom:16px;"><button class="btn-caramel" style="font-size:0.82rem; padding:8px 16px;" onclick="closeProfileModal(); openMyProfileModal();">✏️ Edit profile</button></div>` : ''}
+
       ${catFilterBar}
       ${locFilterBar}
       ${userItems.length
