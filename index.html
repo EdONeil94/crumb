@@ -94,6 +94,12 @@ h1, h2, h3 { font-family: 'Playfair Display', serif; }
 }
 
 /* ─── NAV ────────────────────────────────────────────────────────────────────── */
+body.scroll-locked {
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+}
+
 nav {
   background: var(--espresso);
   padding: 0 20px;
@@ -1237,8 +1243,39 @@ nav {
         <div class="step-dot" id="dot4"></div>
       </div>
 
-      <!-- Step 1: Photo & AI identify -->
+      <!-- Step 1: Location & price -->
       <div class="modal-step active" id="step1">
+        <div class="form-group">
+          <label class="form-label">Bakery</label>
+          <input type="text" class="form-input" id="bakerySearch" placeholder="Search for a bakery…" oninput="searchBakery(this.value)">
+          <div id="bakeryResults" style="margin-top:8px; display:flex; flex-direction:column; gap:6px;"></div>
+          <div class="location-selected" id="locationSelected">
+            <div class="location-selected-icon">📍</div>
+            <div class="location-selected-text">
+              <div class="location-selected-name" id="selectedBakeryName"></div>
+              <div class="location-selected-address" id="selectedBakeryAddress"></div>
+            </div>
+            <button class="btn-ghost" onclick="clearBakery()" style="font-size:0.8rem;">Change</button>
+          </div>
+        </div>
+
+        <div class="map-placeholder" id="mapContainer">
+          <div class="map-placeholder-icon">🗺️</div>
+          <div>Map will appear here once you select a bakery</div>
+          <div style="font-size:0.75rem; margin-top:4px;">Requires Google Maps API key</div>
+        </div>
+
+        <div class="form-group" style="margin-top:16px;">
+          <label class="form-label">Price paid</label>
+          <div style="position:relative;">
+            <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-weight:600;">£</span>
+            <input type="number" class="form-input" id="itemPrice" placeholder="0.00" step="0.01" min="0" style="padding-left:30px;">
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2: Photo, item name & category -->
+      <div class="modal-step" id="step2">
         <div class="form-group">
           <label class="form-label">Photo</label>
           <div id="photoUploadWrap">
@@ -1281,37 +1318,6 @@ nav {
           <div id="categoryChips">
             <div id="categoryParentChips" class="category-chips" style="margin-bottom:10px;"></div>
             <div id="categorySubChips" class="category-chips" style="display:none;"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Step 2: Location & price -->
-      <div class="modal-step" id="step2">
-        <div class="form-group">
-          <label class="form-label">Bakery</label>
-          <input type="text" class="form-input" id="bakerySearch" placeholder="Search for a bakery…" oninput="searchBakery(this.value)">
-          <div id="bakeryResults" style="margin-top:8px; display:flex; flex-direction:column; gap:6px;"></div>
-          <div class="location-selected" id="locationSelected">
-            <div class="location-selected-icon">📍</div>
-            <div class="location-selected-text">
-              <div class="location-selected-name" id="selectedBakeryName"></div>
-              <div class="location-selected-address" id="selectedBakeryAddress"></div>
-            </div>
-            <button class="btn-ghost" onclick="clearBakery()" style="font-size:0.8rem;">Change</button>
-          </div>
-        </div>
-
-        <div class="map-placeholder" id="mapContainer">
-          <div class="map-placeholder-icon">🗺️</div>
-          <div>Map will appear here once you select a bakery</div>
-          <div style="font-size:0.75rem; margin-top:4px;">Requires Google Maps API key</div>
-        </div>
-
-        <div class="form-group" style="margin-top:16px;">
-          <label class="form-label">Price paid</label>
-          <div style="position:relative;">
-            <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-weight:600;">£</span>
-            <input type="number" class="form-input" id="itemPrice" placeholder="0.00" step="0.01" min="0" style="padding-left:30px;">
           </div>
         </div>
       </div>
@@ -1519,6 +1525,19 @@ nav {
 <div id="toast"></div>
 
 <script>
+// ─── SCROLL LOCK ──────────────────────────────────────────────────────────────
+let scrollY = 0;
+function lockScroll() {
+  scrollY = window.scrollY;
+  document.body.style.top = `-${scrollY}px`;
+  document.body.classList.add('scroll-locked');
+}
+function unlockScroll() {
+  document.body.classList.remove('scroll-locked');
+  document.body.style.top = '';
+  window.scrollTo(0, scrollY);
+}
+
 // ─── STATE ────────────────────────────────────────────────────────────────────
 let currentUser = null;
 let fb = null;
@@ -1862,7 +1881,9 @@ function cardHTML(item) {
   const record = item.itemRecordId ? allItemRecords.find(r => r.id === item.itemRecordId) : null;
   const score = record ? record.communityAvg.toFixed(1) : (item.communityAvg ? item.communityAvg.toFixed(1) : (item.overallRating ? item.overallRating.toFixed(1) : '–'));
   const ratingCount = record ? (record.reviewCount || 1) : (item.ratingCount || 1);
-  const price = item.price ? `£${parseFloat(item.price).toFixed(2)}` : '';
+  const avgPrice = record?.avgPrice ?? (record?.priceCount > 0 ? record.avgPrice : null) ?? item.price ?? null;
+  const price = avgPrice !== null && avgPrice !== undefined ? ('£' + parseFloat(avgPrice).toFixed(2)) : '';
+  const priceLabel = record && record.priceCount > 1 ? ('avg ' + price) : price;
   const imageTag = item.photoURL
     ? `<img src="${item.photoURL}" alt="${item.name}" loading="lazy">`
     : `<div class="card-image-placeholder">${emoji}</div>`;
@@ -1885,7 +1906,7 @@ function cardHTML(item) {
             <div class="rating-circle">${score}</div>
             <div class="rating-label">Community<br><span class="rating-count">${ratingCount} review${ratingCount !== 1 ? 's' : ''}</span></div>
           </div>
-          ${price ? `<div class="card-price">${price}</div>` : ''}
+          ${priceLabel ? `<div class="card-price">${priceLabel}</div>` : ''}
         </div>
       </div>
     </div>`;
@@ -2001,7 +2022,7 @@ async function openBakeryProfile(bakeryName, catFilter) {
   bakeryActiveCatFilter = catFilter || '';
   document.getElementById('bakeryModalTitle').textContent = bakeryName;
   document.getElementById('bakeryModal').classList.add('open');
-  document.body.style.overflow = 'hidden';
+  lockScroll();
 
   // Fetch blurb from Firestore
   let blurb = b.blurb || '';
@@ -2033,14 +2054,19 @@ async function openBakeryProfile(bakeryName, catFilter) {
       ? `<div class="bakery-item-thumb"><img src="${item.photoURL}" alt="${item.name}"></div>`
       : `<div class="bakery-item-thumb">${catDisp.emoji}</div>`;
     return `
-      <div class="bakery-item-row" onclick="closeBakeryModal(); openDetail('${item.id}')">
-        ${thumb}
-        <div class="bakery-item-info">
-          <div class="bakery-item-name">${item.name || 'Unknown bake'}</div>
-          <div class="bakery-item-meta">${catDisp.sub || catDisp.main} · ${item.userName || 'Anonymous'}</div>
-        </div>
-        <div class="bakery-item-score">${score}</div>
-      </div>`;
+      (() => {
+        const rec2 = item.itemRecordId ? allItemRecords.find(r => r.id === item.itemRecordId) : null;
+        const avgP = rec2?.avgPrice ?? item.price ?? null;
+        const avgPStr = avgP !== null ? ('\u00A3' + parseFloat(avgP).toFixed(2) + (rec2 && rec2.priceCount > 1 ? ' avg' : '')) : '';
+        return '<div class="bakery-item-row" onclick="closeBakeryModal(); openDetail(\'' + item.id + '\')">'
+          + thumb
+          + '<div class="bakery-item-info">'
+          + '<div class="bakery-item-name">' + (item.name || 'Unknown bake') + '</div>'
+          + '<div class="bakery-item-meta">' + (catDisp.sub || catDisp.main) + ' · ' + (item.userName || 'Anonymous') + (avgPStr ? ' · <span style="color:var(--sage);font-weight:600;">' + avgPStr + '</span>' : '') + '</div>'
+          + '</div>'
+          + '<div class="bakery-item-score">' + score + '</div>'
+          + '</div>';
+      })()`;
   }).join('');
 
   document.getElementById('bakeryModalContent').innerHTML = `
@@ -2078,7 +2104,7 @@ async function openBakeryProfile(bakeryName, catFilter) {
 
 function closeBakeryModal() {
   document.getElementById('bakeryModal').classList.remove('open');
-  document.body.style.overflow = '';
+  unlockScroll();
 }
 
 function editBakeryBlurb(bakeryName, currentBlurb) {
@@ -2163,7 +2189,7 @@ async function openDetail(id) {
   const item = allItems.find(i => i.id === id);
   if (!item) return;
   document.getElementById('detailModal').classList.add('open');
-  document.body.style.overflow = 'hidden';
+  lockScroll();
 
   const catDisp = getCategoryDisplay(item);
   const emoji = catDisp.emoji;
@@ -2192,7 +2218,15 @@ async function openDetail(id) {
       <div class="detail-name">${item.name || 'Unknown bake'}</div>
       <div class="detail-bakery" style="cursor:pointer;" onclick="closeDetailModal(); openBakeryProfile('${escJS(item.bakeryName || 'Unknown bakery')}')">${item.bakeryName || 'Unknown bakery'} →</div>
       ${item.bakeryAddress ? `<div class="detail-address">📍 ${item.bakeryAddress}</div>` : ''}
-      ${item.price ? `<div style="font-size:0.85rem; color:var(--sage); font-weight:600; margin-bottom:16px;">£${parseFloat(item.price).toFixed(2)}</div>` : ''}
+      ${(() => {
+        const detailRecord = item.itemRecordId ? allItemRecords.find(r => r.id === item.itemRecordId) : null;
+        const avgP = detailRecord?.avgPrice ?? item.price ?? null;
+        if (avgP === null) return '';
+        const label = detailRecord && detailRecord.priceCount > 1
+          ? ('avg £' + parseFloat(avgP).toFixed(2) + ' <span style="font-weight:400; font-size:0.75rem; color:var(--text-muted);">(' + detailRecord.priceCount + ' prices)</span>')
+          : ('£' + parseFloat(avgP).toFixed(2));
+        return `<div style="font-size:0.88rem; color:var(--sage); font-weight:600; margin-bottom:16px;">${label}</div>`;
+      })()}
       <div class="detail-scores">
         <div class="detail-score-box">
           <div class="detail-score-label">Community</div>
@@ -2242,7 +2276,7 @@ async function openDetail(id) {
 
 function closeDetailModal() {
   document.getElementById('detailModal').classList.remove('open');
-  document.body.style.overflow = '';
+  unlockScroll();
 }
 
 // ─── ADD ITEM MODAL ───────────────────────────────────────────────────────────
@@ -2250,12 +2284,12 @@ function openAddModal() {
   if (!currentUser) { openAuthModal(); return; }
   resetAddModal();
   document.getElementById('addModal').classList.add('open');
-  document.body.style.overflow = 'hidden';
+  lockScroll();
 }
 
 function closeAddModal() {
   document.getElementById('addModal').classList.remove('open');
-  document.body.style.overflow = '';
+  unlockScroll();
 }
 
 function resetAddModal() {
@@ -2566,6 +2600,9 @@ function clearBakery() {
   document.getElementById('bakerySearch').value = '';
   document.getElementById('locationSelected').classList.remove('visible');
   document.getElementById('mapContainer').innerHTML = `<div class="map-placeholder"><div class="map-placeholder-icon">🗺️</div><div>Map will appear here once you select a bakery</div></div>`;
+  // Clear item hints
+  const matchResults = document.getElementById('itemMatchResults');
+  if (matchResults) matchResults.innerHTML = '';
 }
 
 // ─── RATING ───────────────────────────────────────────────────────────────────
@@ -2595,7 +2632,40 @@ function goToStep(step) {
     nextBtn.textContent = 'Next →';
     nextBtn.className = 'btn-espresso';
   }
-  document.getElementById('addModalTitle').textContent = ['Rate a Bake!', 'Where did you find it?', 'Rate it', 'Final notes'][step - 1];
+  document.getElementById('addModalTitle').textContent = ['Where did you find it?', 'What did you have?', 'Rate it', 'Final notes'][step - 1];
+  // When entering step 2, re-run item search if name already filled (bakery now known)
+  if (step === 2) {
+    const nameVal = document.getElementById('itemName')?.value;
+    if (nameVal && nameVal.length >= 2) searchExistingItems(nameVal);
+    // Also show items already at this bakery as hints
+    else if (selectedBakery) showBakeryItemHints();
+  }
+}
+
+function showBakeryItemHints() {
+  if (!selectedBakery) return;
+  const bakeryName = selectedBakery.name.toLowerCase();
+  const bakeryItems = allItemRecords.filter(r => r.bakeryName?.toLowerCase() === bakeryName).slice(0, 5);
+  if (!bakeryItems.length) return;
+  const el = document.getElementById('itemMatchResults');
+  if (!el) return;
+  el.innerHTML = `<div style="font-size:0.72rem; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Already reviewed here</div>` +
+    bakeryItems.map(r => {
+      const catDisp = getCategoryDisplay(r);
+      const score = r.communityAvg ? r.communityAvg.toFixed(1) : '–';
+      const thumb = r.photoURL
+        ? `<div class="item-match-thumb"><img src="${r.photoURL}" alt="${r.name}"></div>`
+        : `<div class="item-match-thumb">${catDisp.emoji}</div>`;
+      return `
+        <div class="item-match-result" onclick="selectItemMatch('${r.id}')">
+          ${thumb}
+          <div class="item-match-info">
+            <div class="item-match-name">${r.name}</div>
+            <div class="item-match-meta">${r.reviewCount || 0} review${(r.reviewCount||0) !== 1 ? 's' : ''}</div>
+          </div>
+          <div class="item-match-score">${score}</div>
+        </div>`;
+    }).join('');
 }
 
 function modalNext() {
@@ -2615,9 +2685,10 @@ function buildSummary() {
   const bakery = selectedBakery?.name || 'Unknown bakery';
   const price = document.getElementById('itemPrice').value;
   const overall = parseFloat(document.getElementById('overallRating').value).toFixed(1);
+  const catLabel = selectedSubCategory ? SUB_LABEL[selectedSubCategory] : (selectedCategory ? CATEGORY_TREE[selectedCategory]?.label : '');
   document.getElementById('reviewSummary').innerHTML = `
     <strong>${name}</strong> from <strong>${bakery}</strong>${price ? ` · <strong>£${parseFloat(price).toFixed(2)}</strong>` : ''}<br>
-    Overall: <strong>${overall}/5</strong>${selectedCategory ? ` · ${selectedCategory.charAt(0).toUpperCase() + selectedCategory.slice(1)}` : ''}`;
+    Overall: <strong>${overall}/5</strong>${catLabel ? ` · ${catLabel}` : ''}`;
 }
 
 // ─── ITEM MATCHING ────────────────────────────────────────────────────────────
@@ -2769,13 +2840,24 @@ async function saveReview() {
 
     // ── Step A: Upsert the itemRecord (shared item+bakery record) ────────────
     let itemRecordId;
+    const newPrice = document.getElementById('itemPrice').value ? parseFloat(document.getElementById('itemPrice').value) : null;
+
     if (matchedItemRecord) {
-      // Linked to existing record — recalculate community avg
+      // Linked to existing record — recalculate community avg and avg price
       itemRecordId = matchedItemRecord.id;
       const recSnap = await getDoc(doc(db, 'itemRecords', itemRecordId));
       const rec = recSnap.data();
       const newCount = (rec.reviewCount || 1) + 1;
       const newAvg = ((rec.communityAvg || rec.overallRating || 0) * (newCount - 1) + overallRating) / newCount;
+      // Recalculate avg price (only include reviews that have a price)
+      let newAvgPrice = rec.avgPrice || null;
+      let newPriceCount = rec.priceCount || 0;
+      if (newPrice !== null) {
+        newPriceCount += 1;
+        newAvgPrice = newPriceCount === 1
+          ? newPrice
+          : ((rec.avgPrice || 0) * (newPriceCount - 1) + newPrice) / newPriceCount;
+      }
       // Recalculate dim averages
       const newDims = {};
       TASTING_DIMS.forEach(dim => {
@@ -2786,7 +2868,8 @@ async function saveReview() {
       await updateDoc(doc(db, 'itemRecords', itemRecordId), {
         communityAvg: Math.round(newAvg * 10) / 10,
         reviewCount: newCount,
-        // Use new photo if provided and record has none
+        avgPrice: newAvgPrice !== null ? Math.round(newAvgPrice * 100) / 100 : null,
+        priceCount: newPriceCount,
         ...(photoURL && !rec.photoURL ? { photoURL } : {}),
         ...newDims
       });
@@ -2801,6 +2884,8 @@ async function saveReview() {
         bakeryPlaceId: selectedBakery?.placeId || null,
         communityAvg: overallRating,
         reviewCount: 1,
+        avgPrice: newPrice !== null ? newPrice : null,
+        priceCount: newPrice !== null ? 1 : 0,
         photoURL: photoURL || null,
         createdAt: serverTimestamp(),
         ...dimData
@@ -2917,7 +3002,7 @@ async function openProfileModal(uid, catFilter, locFilter) {
   profileActiveLocFilter = locFilter || '';
 
   document.getElementById('profileModal').classList.add('open');
-  document.body.style.overflow = 'hidden';
+  lockScroll();
   document.getElementById('profileModalContent').innerHTML = `<div style="padding:40px; text-align:center;"><div class="spinner" style="margin:0 auto;"></div></div>`;
 
   // Get profile data
@@ -3029,7 +3114,7 @@ async function openProfileModal(uid, catFilter, locFilter) {
 
 function closeProfileModal() {
   document.getElementById('profileModal').classList.remove('open');
-  document.body.style.overflow = '';
+  unlockScroll();
 }
 
 // ─── MY PROFILE EDIT ──────────────────────────────────────────────────────────
@@ -3068,7 +3153,7 @@ async function openMyProfileModal() {
   }
 
   document.getElementById('myProfileModal').classList.add('open');
-  document.body.style.overflow = 'hidden';
+  lockScroll();
 }
 
 async function handleProfilePhoto(input) {
@@ -3124,7 +3209,7 @@ async function saveMyProfile() {
 
 function closeMyProfileModal() {
   document.getElementById('myProfileModal').classList.remove('open');
-  document.body.style.overflow = '';
+  unlockScroll();
 }
 
 // ─── EDIT REVIEW ──────────────────────────────────────────────────────────────
@@ -3233,7 +3318,7 @@ function openEditModal(id) {
   document.getElementById('editModal')._editSubCategory = item.subCategory || '';
 
   document.getElementById('editModal').classList.add('open');
-  document.body.style.overflow = 'hidden';
+  lockScroll();
 }
 
 function selectEditParent(el, parentKey) {
@@ -3350,7 +3435,7 @@ async function saveEdit() {
 
 function closeEditModal() {
   document.getElementById('editModal').classList.remove('open');
-  document.body.style.overflow = '';
+  unlockScroll();
   editingItemId = null;
 }
 
@@ -3383,11 +3468,11 @@ async function deleteReview() {
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
 function openAuthModal() {
   document.getElementById('authModal').classList.add('open');
-  document.body.style.overflow = 'hidden';
+  lockScroll();
 }
 function closeAuthModal() {
   document.getElementById('authModal').classList.remove('open');
-  document.body.style.overflow = '';
+  unlockScroll();
 }
 function switchAuthTab(tab) {
   document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
