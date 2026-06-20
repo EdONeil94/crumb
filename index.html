@@ -1868,7 +1868,20 @@ nav {
         </div>
         <div id="adminTabContent"></div>
       </div>
+
+      <!-- Data migration -->
+      <div style="margin-top:20px; padding:16px; background:var(--parchment); border-radius:var(--radius); border:1.5px solid var(--border);">
+        <div style="font-size:0.75rem; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--text-muted); margin-bottom:8px;">🔧 Data tools</div>
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+          <div>
+            <div style="font-size:0.88rem; font-weight:600; color:var(--espresso);">Category migration</div>
+            <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">Updates legacy reviews to use the new category system</div>
+          </div>
+          <button class="admin-btn primary" id="migrationBtn" onclick="runCategoryMigration()">Run migration</button>
+        </div>
+      </div>
     </div>
+  </div>
 
     <!-- Danger zone -->
     <div class="settings-card" style="border-color:#e8c4c4;">
@@ -4522,6 +4535,280 @@ function openAddModalForBakery(name, address, placeId, lat, lng) {
     document.getElementById('locationSelected').classList.add('visible');
     showKnownBakeries();
   }, 100);
+}
+
+// ─── EDIT REVIEW ──────────────────────────────────────────────────────────────
+let editingItemId = null;
+let editPhotoFile = null;
+let editPhotoDataURL = null;
+
+function openEditModal(id) {
+  const item = allItems.find(i => i.id === id);
+  if (!item || !currentUser || currentUser.uid !== item.userId) return;
+  editingItemId = id;
+  editPhotoFile = null;
+  editPhotoDataURL = item.photoURL || null;
+
+  const editDims = getTastingDims(item.category || 'other');
+  const dimsHTML = editDims.map(d => {
+    const val = item[d.key] || 0;
+    return `
+      <div>
+        <div class="tasting-dim-label">
+          <span class="tasting-dim-name">${d.label}${d.tip ? `<span style="font-size:0.68rem;font-weight:400;color:var(--text-muted);margin-left:6px;">${d.tip}</span>` : ''}</span>
+          <span class="tasting-dim-val" id="edit_display_${d.key}">${parseFloat(val).toFixed(1)}</span>
+        </div>
+        <input type="range" class="rating-slider" id="edit_${d.key}"
+          min="0" max="5" step="0.1" value="${val}"
+          oninput="document.getElementById('edit_display_${d.key}').textContent=parseFloat(this.value).toFixed(1)">
+      </div>`;
+  }).join('');
+
+  const photoSection = item.photoURL
+    ? `<div class="photo-preview" id="editPhotoWrap">
+        <img src="${item.photoURL}" alt="Current photo" style="max-height:180px;width:100%;object-fit:cover;border-radius:var(--radius);">
+        <button class="photo-preview-remove" onclick="clearEditPhoto()">✕</button>
+       </div>`
+    : `<div class="photo-upload" id="editPhotoWrap">
+        <input type="file" accept="image/*" capture="environment" id="editPhotoInput" onchange="handleEditPhoto(this)">
+        <div class="photo-upload-icon">📷</div>
+        <div class="photo-upload-text">Tap to add a photo</div>
+       </div>`;
+
+  document.getElementById('editModalBody').innerHTML = `
+    <div style="padding:0 24px 24px;display:flex;flex-direction:column;gap:20px;">
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Photo</label>
+        ${photoSection}
+        <label class="form-label" style="font-size:0.72rem;cursor:pointer;color:var(--caramel);margin-top:8px;display:inline-block;">
+          <input type="file" accept="image/*" capture="environment" style="display:none;" onchange="handleEditPhoto(this)"> 🔄 Replace photo
+        </label>
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Name</label>
+        <input type="text" class="form-input" id="editName" value="${item.name || ''}">
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Price paid</label>
+        <div style="position:relative;">
+          <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-weight:600;">£</span>
+          <input type="number" class="form-input" id="editPrice" value="${item.price || ''}" step="0.01" min="0" style="padding-left:30px;">
+        </div>
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Overall rating</label>
+        <div class="rating-value-display" id="editOverallDisplay">${parseFloat(item.overallRating || 0).toFixed(1)}</div>
+        <input type="range" class="rating-slider" id="editOverallRating" min="0" max="5" step="0.1" value="${item.overallRating || 0}"
+          oninput="document.getElementById('editOverallDisplay').textContent=parseFloat(this.value).toFixed(1)">
+        <div class="rating-scale-labels"><span>0 — Stale</span><span>2.5 — Decent</span><span>5 — Legendary</span></div>
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label class="form-label" style="margin-bottom:16px;">Tasting dimensions</label>
+        <div class="tasting-dims">${dimsHTML}</div>
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Notes</label>
+        <textarea class="form-textarea" id="editNotes" style="min-height:100px;">${item.notes || ''}</textarea>
+      </div>
+    </div>`;
+
+  document.getElementById('editModal').classList.add('open');
+  lockScroll();
+}
+
+function closeEditModal() {
+  document.getElementById('editModal').classList.remove('open');
+  unlockScroll();
+  editingItemId = null;
+}
+
+async function handleEditPhoto(input) {
+  if (!input.files[0]) return;
+  const original = input.files[0];
+  editPhotoFile = await compressImage(original, 1200, 0.82);
+  editPhotoDataURL = await compressToDataURL(original, 1200, 0.82);
+  const wrap = document.getElementById('editPhotoWrap');
+  if (wrap) wrap.innerHTML = `<img src="${editPhotoDataURL}" style="max-height:180px;width:100%;object-fit:cover;border-radius:var(--radius);">`;
+}
+
+function clearEditPhoto() {
+  editPhotoFile = null;
+  editPhotoDataURL = null;
+  const wrap = document.getElementById('editPhotoWrap');
+  if (wrap) wrap.innerHTML = `<div style="background:var(--parchment-dark);border-radius:var(--radius);height:80px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:0.85rem;">No photo</div>`;
+}
+
+async function saveEdit() {
+  if (!editingItemId || !currentUser) return;
+  const btn = document.getElementById('editSaveBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const { db, storage, doc, updateDoc, ref, uploadBytes, getDownloadURL } = fb;
+    let photoURL = editPhotoDataURL && !editPhotoFile ? editPhotoDataURL : null;
+    if (editPhotoFile) {
+      const storageRef = ref(storage, `items/${currentUser.uid}/${Date.now()}_edit.jpg`);
+      const snap = await uploadBytes(storageRef, editPhotoFile, { contentType: 'image/jpeg' });
+      photoURL = await getDownloadURL(snap.ref);
+    }
+    const item = allItems.find(i => i.id === editingItemId);
+    const category = item?.category || 'other';
+    const overallRating = parseFloat(document.getElementById('editOverallRating').value);
+    const editSaveDims = getTastingDims(category);
+    const dimData = {};
+    editSaveDims.forEach(d => {
+      const el = document.getElementById('edit_' + d.key);
+      dimData[d.key] = el ? parseFloat(el.value) : 0;
+    });
+    const updates = {
+      name: document.getElementById('editName').value,
+      price: document.getElementById('editPrice').value ? parseFloat(document.getElementById('editPrice').value) : null,
+      overallRating,
+      communityAvg: overallRating,
+      notes: document.getElementById('editNotes').value,
+      ...dimData,
+      ...(photoURL !== null ? { photoURL } : {})
+    };
+    await updateDoc(doc(db, 'items', editingItemId), updates);
+    closeEditModal();
+    showToast('Review updated ✓');
+    await loadData();
+  } catch(e) {
+    showToast('Could not save — check your connection');
+    console.error(e);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save changes';
+  }
+}
+
+async function deleteReview() {
+  if (!editingItemId || !currentUser) return;
+  const item = allItems.find(i => i.id === editingItemId);
+  if (!item || item.userId !== currentUser.uid) return;
+  if (!confirm(`Delete your review of "${item.name || 'this item'}"? This cannot be undone.`)) return;
+  try {
+    const { db, storage, doc, deleteDoc, ref, deleteObject } = fb;
+    if (item.photoURL && item.photoURL.includes('firebasestorage')) {
+      try { await deleteObject(ref(storage, item.photoURL)); } catch(e) {}
+    }
+    await deleteDoc(doc(db, 'items', editingItemId));
+    closeEditModal();
+    showToast('Review deleted');
+    await loadData();
+    renderLeaderboard(lbCurrentTab);
+  } catch(e) {
+    showToast('Could not delete — try again');
+    console.error(e);
+  }
+}
+
+// ─── CATEGORY MIGRATION ───────────────────────────────────────────────────────
+const CATEGORY_MIGRATION_MAP = {
+  // Old flat category -> { category: newParent, subCategory: newSub }
+  'croissant':       { category: 'pastry',     subCategory: 'croissant' },
+  'pain_au_chocolat':{ category: 'pastry',     subCategory: 'pain_au_chocolat' },
+  'danish':          { category: 'pastry',     subCategory: 'danish' },
+  'eclair':          { category: 'pastry',     subCategory: 'eclair' },
+  'sourdough':       { category: 'bread',      subCategory: 'sourdough' },
+  'baguette':        { category: 'bread',      subCategory: 'baguette' },
+  'focaccia':        { category: 'bread',      subCategory: 'focaccia' },
+  'ciabatta':        { category: 'bread',      subCategory: 'ciabatta' },
+  'rye':             { category: 'bread',      subCategory: 'rye' },
+  'tart':            { category: 'tart',       subCategory: 'fruit_tart' },
+  'lemon_tart':      { category: 'tart',       subCategory: 'lemon_tart' },
+  'custard_tart':    { category: 'tart',       subCategory: 'custard_tart' },
+  'quiche':          { category: 'tart',       subCategory: 'quiche' },
+  'cake':            { category: 'cake',       subCategory: 'victoria_sponge' },
+  'cheesecake':      { category: 'cake',       subCategory: 'cheesecake' },
+  'carrot_cake':     { category: 'cake',       subCategory: 'carrot_cake' },
+  'bun':             { category: 'bun',        subCategory: 'cinnamon_bun' },
+  'cinnamon_bun':    { category: 'bun',        subCategory: 'cinnamon_bun' },
+  'cookie':          { category: 'cookie',     subCategory: 'chocolate_chip' },
+  'brownie':         { category: 'cookie',     subCategory: 'brownie' },
+  'shortbread':      { category: 'cookie',     subCategory: 'shortbread' },
+  'flapjack':        { category: 'cookie',     subCategory: 'flapjack' },
+  'bread':           { category: 'bread',      subCategory: 'sourdough' },
+  'pastry':          { category: 'pastry',     subCategory: 'croissant' },
+  'sandwich':        { category: 'sandwich',   subCategory: 'sandwich' },
+  'sausage_roll':    { category: 'sandwich',   subCategory: 'sausage_roll' },
+  'scone':           { category: 'scone',      subCategory: 'plain_scone' },
+  'doughnut':        { category: 'sweet_treat',subCategory: 'doughnut' },
+  'waffle':          { category: 'sweet_treat',subCategory: 'waffle' },
+  'macaron':         { category: 'sweet_treat',subCategory: 'macaron' },
+  'madeleine':       { category: 'sweet_treat',subCategory: 'madeleine' },
+};
+
+async function runCategoryMigration() {
+  if (!isAdmin()) { showToast('Admin only'); return; }
+  if (!confirm('This will update all legacy reviews to use the new category system. Continue?')) return;
+
+  const btn = document.getElementById('migrationBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Migrating…'; }
+
+  const { db, collection, getDocs, doc, updateDoc } = fb;
+  let updated = 0;
+  let skipped = 0;
+  let errors = 0;
+
+  try {
+    const snap = await getDocs(collection(db, 'items'));
+    const updates = [];
+
+    snap.docs.forEach(d => {
+      const item = d.data();
+      const cat = item.category || '';
+
+      // Skip if already on new system (category is a parent key in CATEGORY_TREE)
+      if (CATEGORY_TREE[cat] && item.subCategory) { skipped++; return; }
+
+      // Check if it needs migration
+      const migration = CATEGORY_MIGRATION_MAP[cat];
+      if (!migration) {
+        // Unknown category — set to other
+        updates.push({ id: d.id, category: 'other', subCategory: 'other' });
+        return;
+      }
+
+      updates.push({ id: d.id, ...migration });
+    });
+
+    // Also migrate itemRecords
+    const recSnap = await getDocs(collection(db, 'itemRecords'));
+    recSnap.docs.forEach(d => {
+      const item = d.data();
+      const cat = item.category || '';
+      if (CATEGORY_TREE[cat] && item.subCategory) { return; }
+      const migration = CATEGORY_MIGRATION_MAP[cat];
+      if (migration) updates.push({ id: d.id, _collection: 'itemRecords', ...migration });
+    });
+
+    // Batch updates (Firestore limit is 500 per batch but we'll do sequential for simplicity)
+    for (const u of updates) {
+      try {
+        const colName = u._collection || 'items';
+        await updateDoc(doc(db, colName, u.id), {
+          category: u.category,
+          subCategory: u.subCategory
+        });
+        updated++;
+      } catch(e) {
+        errors++;
+        console.error('Migration error for', u.id, e);
+      }
+    }
+
+    const msg = `Migration complete: ${updated} updated, ${skipped} already current, ${errors} errors`;
+    showToast(msg);
+    if (btn) { btn.textContent = `✓ Done (${updated} updated)`; }
+
+    // Reload data to reflect changes
+    await loadData();
+    await loadItemRecords();
+
+  } catch(e) {
+    showToast('Migration failed — check console');
+    console.error(e);
+    if (btn) { btn.disabled = false; btn.textContent = 'Run migration'; }
+  }
 }
 
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
