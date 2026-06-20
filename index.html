@@ -1355,6 +1355,80 @@ nav {
   border-color: var(--espresso);
 }
 
+/* ─── REACTIONS ──────────────────────────────────────────────────────────────── */
+.reaction-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.reaction-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 100px;
+  border: 1.5px solid var(--border);
+  background: var(--parchment);
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: var(--text-muted);
+  font-family: inherit;
+}
+.reaction-btn:hover { border-color: var(--honey); background: var(--parchment-dark); }
+.reaction-btn.reacted {
+  background: var(--espresso);
+  border-color: var(--espresso);
+  color: var(--honey);
+  font-weight: 600;
+}
+.reaction-btn .emoji { font-size: 1rem; line-height: 1; }
+.reaction-btn .count { font-size: 0.75rem; min-width: 10px; }
+.reaction-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  border: 1.5px dashed var(--border);
+  background: transparent;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: var(--text-muted);
+  position: relative;
+}
+.reaction-add:hover { border-color: var(--honey); color: var(--caramel); }
+.reaction-picker {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--cream-white);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  padding: 8px;
+  display: flex;
+  gap: 4px;
+  z-index: 50;
+  white-space: nowrap;
+}
+.reaction-picker-btn {
+  font-size: 1.4rem;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.12s;
+  border: none;
+  background: transparent;
+  line-height: 1;
+}
+.reaction-picker-btn:hover { background: var(--parchment-dark); }
+
 /* ─── SPINNER ────────────────────────────────────────────────────────────────── */
 @keyframes spin { to { transform: rotate(360deg); } }
 .spinner { width: 20px; height: 20px; border: 2.5px solid rgba(139,94,60,0.2); border-top-color: var(--caramel); border-radius: 50%; animation: spin 0.8s linear infinite; }
@@ -2586,13 +2660,59 @@ function renderRecentGrid() {
   grid.innerHTML = allItems.slice(0, 9).map(item => cardHTML(item)).join('');
 }
 
-function renderFeed() {
+async function renderFeed() {
   const grid = document.getElementById('feedGrid');
   if (!allItems.length) {
     grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon">🍞</div><div class="empty-state-title">The bakery is quiet</div><div class="empty-state-text">No reviews yet — be the first!</div></div>`;
     return;
   }
-  grid.innerHTML = allItems.map(item => cardHTML(item)).join('');
+
+  // Build feed cards with reaction bars
+  const itemIds = allItems.map(i => i.id);
+  const reactionsMap = await loadReactionsForItems(itemIds);
+
+  grid.innerHTML = allItems.map(item => {
+    const reactions = reactionsMap[item.id] || [];
+    const reactionBarHTML = `<div class="reaction-bar" data-item-id="${item.id}">${buildReactionBarInner(item.id, reactions)}</div>`;
+    return feedCardHTML(item, reactionBarHTML);
+  }).join('');
+}
+
+function feedCardHTML(item, reactionBarHTML) {
+  const catDisp = getCategoryDisplay(item);
+  const record = item.itemRecordId ? allItemRecords.find(r => r.id === item.itemRecordId) : null;
+  const score = record ? record.communityAvg.toFixed(1) : (item.communityAvg ? item.communityAvg.toFixed(1) : (item.overallRating ? item.overallRating.toFixed(1) : '–'));
+  const ratingCount = record ? (record.reviewCount || 1) : (item.ratingCount || 1);
+  const avgPrice = record?.avgPrice ?? item.price ?? null;
+  const price = avgPrice !== null ? ('£' + parseFloat(avgPrice).toFixed(2)) : '';
+  const priceLabel = record && record.priceCount > 1 ? ('avg ' + price) : price;
+  const imageTag = item.photoURL
+    ? `<img src="${item.photoURL}" alt="${item.name}" loading="lazy">`
+    : `<div class="card-image-placeholder">${catDisp.emoji}</div>`;
+  const catLabel = catDisp.sub ? `${catDisp.main} · ${catDisp.sub}` : catDisp.main;
+  return `
+    <div class="card" onclick="openDetail('${item.id}')">
+      <div class="card-image">
+        ${imageTag}
+        <div class="card-badge">${catLabel}</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span style="cursor:pointer;color:var(--caramel);" onclick="event.stopPropagation(); if(currentUser) openProfileModal('${item.userId}')">${item.userName || 'Anonymous'}</span>
+          ${item.createdAt ? `<span>·</span><span>${timeAgo(item.createdAt.toDate ? item.createdAt.toDate() : new Date(item.createdAt))}</span>` : ''}
+        </div>
+        <div class="card-name">${item.name || 'Unknown bake'}</div>
+        <div class="card-bakery" onclick="event.stopPropagation(); openBakeryProfile('${escJS(item.bakeryName || 'Unknown bakery')}')">📍 ${item.bakeryName || 'Unknown bakery'}</div>
+        <div class="card-footer">
+          <div class="rating-display">
+            <div class="rating-circle">${score}</div>
+            <div class="rating-label">Community<br><span class="rating-count">${ratingCount} review${ratingCount !== 1 ? 's' : ''}</span></div>
+          </div>
+          ${priceLabel ? `<div class="card-price">${priceLabel}</div>` : ''}
+        </div>
+      </div>
+      ${reactionBarHTML}
+    </div>`;
 }
 
 function cardHTML(item) {
@@ -4980,6 +5100,117 @@ async function runCategoryMigration() {
     console.error(e);
     if (btn) { btn.disabled = false; btn.textContent = 'Run migration'; }
   }
+}
+
+// ─── REACTIONS ────────────────────────────────────────────────────────────────
+const REACTION_EMOJIS = ['🥐', '😍', '🔥', '👏'];
+
+async function toggleReaction(itemId, emoji) {
+  if (!currentUser) { openAuthModal(); return; }
+  const { db, doc, getDoc, setDoc, deleteDoc, serverTimestamp } = fb;
+  const reactionId = `${itemId}_${currentUser.uid}_${encodeURIComponent(emoji)}`;
+  const reactionRef = doc(db, 'reactions', reactionId);
+  try {
+    const snap = await getDoc(reactionRef);
+    if (snap.exists()) {
+      await deleteDoc(reactionRef);
+    } else {
+      await setDoc(reactionRef, {
+        itemId,
+        userId: currentUser.uid,
+        userName: currentUser.displayName || currentUser.email?.split('@')[0] || 'Anonymous',
+        emoji,
+        createdAt: serverTimestamp()
+      });
+    }
+    // Re-render the reaction bar for this item
+    await refreshReactionBar(itemId);
+  } catch(e) {
+    showToast('Could not save reaction');
+    console.error(e);
+  }
+}
+
+async function refreshReactionBar(itemId) {
+  const { db, collection, query, where, getDocs } = fb;
+  const q = query(collection(db, 'reactions'), where('itemId', '==', itemId));
+  const snap = await getDocs(q);
+  const reactions = snap.docs.map(d => d.data());
+  const bar = document.querySelector(`.reaction-bar[data-item-id="${itemId}"]`);
+  if (bar) bar.innerHTML = buildReactionBarInner(itemId, reactions);
+}
+
+function buildReactionBarInner(itemId, reactions) {
+  // Group by emoji
+  const counts = {};
+  const userReacted = {};
+  reactions.forEach(r => {
+    counts[r.emoji] = (counts[r.emoji] || 0) + 1;
+    if (currentUser && r.userId === currentUser.uid) userReacted[r.emoji] = true;
+  });
+
+  // Show existing reactions + add button
+  const existingEmojis = Object.keys(counts);
+  const reactionBtns = existingEmojis.map(emoji => {
+    const reacted = !!userReacted[emoji];
+    return `<button class="reaction-btn${reacted ? ' reacted' : ''}"
+      onclick="toggleReaction('${itemId}', '${emoji}')"
+      title="${reacted ? 'Remove reaction' : 'React'}">
+      <span class="emoji">${emoji}</span>
+      <span class="count">${counts[emoji]}</span>
+    </button>`;
+  }).join('');
+
+  // Add button — only show if user hasn't used all 4 emojis
+  const allReacted = REACTION_EMOJIS.every(e => userReacted[e]);
+  const addBtn = currentUser && !allReacted ? `
+    <div style="position:relative;">
+      <button class="reaction-add" onclick="toggleReactionPicker(this, '${itemId}')" title="Add reaction">+</button>
+    </div>` : '';
+
+  return reactionBtns + addBtn;
+}
+
+function toggleReactionPicker(btn, itemId) {
+  // Remove any existing picker
+  document.querySelectorAll('.reaction-picker').forEach(p => p.remove());
+
+  const picker = document.createElement('div');
+  picker.className = 'reaction-picker';
+  picker.innerHTML = REACTION_EMOJIS.map(emoji =>
+    `<button class="reaction-picker-btn" onclick="toggleReaction('${itemId}','${emoji}'); this.closest('.reaction-picker').remove();">${emoji}</button>`
+  ).join('');
+  btn.parentElement.appendChild(picker);
+
+  // Close picker on outside click
+  setTimeout(() => {
+    document.addEventListener('click', function closePicker(e) {
+      if (!picker.contains(e.target) && e.target !== btn) {
+        picker.remove();
+        document.removeEventListener('click', closePicker);
+      }
+    });
+  }, 0);
+}
+
+async function loadReactionsForItems(itemIds) {
+  if (!itemIds.length || !fb) return {};
+  const { db, collection, query, where, getDocs } = fb;
+  const results = {};
+  // Query in batches of 10 (Firestore 'in' limit)
+  for (let i = 0; i < itemIds.length; i += 10) {
+    const batch = itemIds.slice(i, i + 10);
+    try {
+      const q = query(collection(db, 'reactions'), where('itemId', 'in', batch));
+      const snap = await getDocs(q);
+      snap.docs.forEach(d => {
+        const r = d.data();
+        if (!results[r.itemId]) results[r.itemId] = [];
+        results[r.itemId].push(r);
+      });
+    } catch(e) { console.log('Reactions load error:', e); }
+  }
+  return results;
 }
 
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
