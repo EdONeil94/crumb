@@ -1111,7 +1111,7 @@ nav {
     <h1 class="hero-title">Every great bite<br>deserves a <em>record.</em></h1>
     <p class="hero-sub">Track and rate the pastries you discover at local bakeries. Build your personal record. Share with the community.</p>
     <div class="hero-actions">
-      <button class="btn-primary" onclick="openAddModal()">Log a pastry</button>
+      <button class="btn-primary" onclick="openAddModal()">Rate a Bake!</button>
       <button class="btn-secondary" onclick="showPage('leaderboard')">See top picks</button>
     </div>
     <div class="hero-stats">
@@ -1222,9 +1222,9 @@ nav {
 
 <!-- ─── ADD ITEM MODAL ─────────────────────────────────────────────────────────── -->
 <div class="modal-overlay" id="addModal">
-  <div class="modal" role="dialog" aria-modal="true" aria-label="Log a pastry">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Rate a Bake!">
     <div class="modal-header">
-      <div class="modal-title" id="addModalTitle">Log a pastry</div>
+      <div class="modal-title" id="addModalTitle">Rate a Bake!</div>
       <button class="modal-close" onclick="closeAddModal()">✕</button>
     </div>
     <div class="modal-body">
@@ -2595,7 +2595,7 @@ function goToStep(step) {
     nextBtn.textContent = 'Next →';
     nextBtn.className = 'btn-espresso';
   }
-  document.getElementById('addModalTitle').textContent = ['Log a pastry', 'Where did you find it?', 'Rate it', 'Final notes'][step - 1];
+  document.getElementById('addModalTitle').textContent = ['Rate a Bake!', 'Where did you find it?', 'Rate it', 'Final notes'][step - 1];
 }
 
 function modalNext() {
