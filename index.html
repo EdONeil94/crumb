@@ -2307,20 +2307,55 @@ function buildTastingDims() {
     </div>`).join('');
 }
 
+// ─── IMAGE COMPRESSION ────────────────────────────────────────────────────────
+function compressImage(file, maxPx, quality) {
+  // maxPx: max dimension in pixels, quality: 0-1 JPEG quality
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = maxPx || 1200;
+        const Q = quality || 0.82;
+        let w = img.width, h = img.height;
+        if (w > MAX || h > MAX) {
+          if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+          else { w = Math.round(w * MAX / h); h = MAX; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        canvas.toBlob(blob => resolve(blob), 'image/jpeg', Q);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function compressToDataURL(file, maxPx, quality) {
+  const blob = await compressImage(file, maxPx, quality);
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(e.target.result);
+    reader.readAsDataURL(blob);
+  });
+}
+
 async function handlePhotoChange(input) {
   if (!input.files[0]) return;
-  photoFile = input.files[0];
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    photoDataURL = e.target.result;
-    document.getElementById('photoUploadWrap').innerHTML = `
-      <div class="photo-preview">
-        <img src="${photoDataURL}" alt="Preview">
-        <button class="photo-preview-remove" onclick="removePhoto()">✕</button>
-      </div>`;
-    identifyWithAI(photoDataURL);
-  };
-  reader.readAsDataURL(photoFile);
+  const original = input.files[0];
+  // Compress to max 1200px, 82% quality before storing
+  const compressed = await compressImage(original, 1200, 0.82);
+  photoFile = compressed;
+  photoDataURL = await compressToDataURL(original, 1200, 0.82);
+  document.getElementById('photoUploadWrap').innerHTML = `
+    <div class="photo-preview">
+      <img src="${photoDataURL}" alt="Preview">
+      <button class="photo-preview-remove" onclick="removePhoto()">✕</button>
+    </div>`;
+  identifyWithAI(photoDataURL);
 }
 
 function removePhoto() {
@@ -2716,8 +2751,8 @@ async function saveReview() {
 
     let photoURL = null;
     if (photoFile) {
-      const storageRef = ref(storage, `items/${currentUser.uid}/${Date.now()}_${photoFile.name}`);
-      const snap = await uploadBytes(storageRef, photoFile);
+      const storageRef = ref(storage, `items/${currentUser.uid}/${Date.now()}_photo.jpg`);
+      const snap = await uploadBytes(storageRef, photoFile, { contentType: 'image/jpeg' });
       photoURL = await getDownloadURL(snap.ref);
     }
 
@@ -3036,15 +3071,14 @@ async function openMyProfileModal() {
   document.body.style.overflow = 'hidden';
 }
 
-function handleProfilePhoto(input) {
+async function handleProfilePhoto(input) {
   if (!input.files[0]) return;
-  profilePhotoFile = input.files[0];
-  const reader = new FileReader();
-  reader.onload = e => {
-    const prev = document.getElementById('profileAvatarPreview');
-    prev.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
-  };
-  reader.readAsDataURL(profilePhotoFile);
+  const original = input.files[0];
+  // Avatars can be smaller — 400px is plenty
+  profilePhotoFile = await compressImage(original, 400, 0.85);
+  const dataURL = await compressToDataURL(original, 400, 0.85);
+  const prev = document.getElementById('profileAvatarPreview');
+  prev.innerHTML = `<img src="${dataURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
 }
 
 async function saveMyProfile() {
@@ -3057,8 +3091,8 @@ async function saveMyProfile() {
     let photoURL = allProfiles[currentUser.uid]?.photoURL || currentUser.photoURL || null;
 
     if (profilePhotoFile) {
-      const storageRef = ref(storage, `avatars/${currentUser.uid}`);
-      const snap = await uploadBytes(storageRef, profilePhotoFile);
+      const storageRef = ref(storage, `avatars/${currentUser.uid}.jpg`);
+      const snap = await uploadBytes(storageRef, profilePhotoFile, { contentType: 'image/jpeg' });
       photoURL = await getDownloadURL(snap.ref);
     }
 
@@ -3248,16 +3282,13 @@ function selectEditSub(el, subKey) {
   document.getElementById('editModal')._editCategory = SUB_TO_PARENT[subKey] || document.getElementById('editModal')._editCategory;
 }
 
-function handleEditPhoto(input) {
+async function handleEditPhoto(input) {
   if (!input.files[0]) return;
-  editPhotoFile = input.files[0];
-  const reader = new FileReader();
-  reader.onload = e => {
-    editPhotoDataURL = e.target.result;
-    const wrap = document.getElementById('editPhotoWrap');
-    if (wrap) wrap.innerHTML = `<img src="${e.target.result}" style="max-height:180px; width:100%; object-fit:cover; border-radius:var(--radius);">`;
-  };
-  reader.readAsDataURL(editPhotoFile);
+  const original = input.files[0];
+  editPhotoFile = await compressImage(original, 1200, 0.82);
+  editPhotoDataURL = await compressToDataURL(original, 1200, 0.82);
+  const wrap = document.getElementById('editPhotoWrap');
+  if (wrap) wrap.innerHTML = `<img src="${editPhotoDataURL}" style="max-height:180px; width:100%; object-fit:cover; border-radius:var(--radius);">`;
 }
 
 function clearEditPhoto() {
@@ -3277,8 +3308,8 @@ async function saveEdit() {
     const { db, storage, doc, updateDoc, ref, uploadBytes, getDownloadURL } = fb;
     let photoURL = editPhotoDataURL && !editPhotoFile ? editPhotoDataURL : null;
     if (editPhotoFile) {
-      const storageRef = ref(storage, `items/${currentUser.uid}/${Date.now()}_edit`);
-      const snap = await uploadBytes(storageRef, editPhotoFile);
+      const storageRef = ref(storage, `items/${currentUser.uid}/${Date.now()}_edit.jpg`);
+      const snap = await uploadBytes(storageRef, editPhotoFile, { contentType: 'image/jpeg' });
       photoURL = await getDownloadURL(snap.ref);
     }
 
