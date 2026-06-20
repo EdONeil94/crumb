@@ -1,0 +1,1718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crumb — Rate Every Bite</title>
+
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+<!-- Firebase -->
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+  import { getAuth, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+  import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, query, orderBy, where, getDoc, setDoc, increment, onSnapshot, serverTimestamp, limit } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+  import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
+
+  // ─── FIREBASE CONFIG ───────────────────────────────────────────────────────
+  // Replace with your Firebase project config
+  const firebaseConfig = {
+    apiKey: "AIzaSyCEtZuELlMR_pxiJ0Ew3d1gBjXyXbKV1kA",
+    authDomain: "crumb-ddeb6.firebaseapp.com",
+    projectId: "crumb-ddeb6",
+    storageBucket: "crumb-ddeb6.firebasestorage.app",
+    messagingSenderId: "273733440798",
+    appId: "1:273733440798:web:70ae58f391a0b9be20650f"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const storage = getStorage(app);
+  const googleProvider = new GoogleAuthProvider();
+
+  // Expose to global scope for non-module usage
+  window._crumb = { auth, db, storage, googleProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile, collection, addDoc, getDocs, doc, updateDoc, query, orderBy, where, getDoc, setDoc, increment, onSnapshot, serverTimestamp, limit, ref, uploadBytes, getDownloadURL };
+  window.dispatchEvent(new Event('crumb-firebase-ready'));
+</script>
+
+<style>
+/* ─── TOKENS ────────────────────────────────────────────────────────────────── */
+:root {
+  --parchment: #F5ECD7;
+  --parchment-dark: #EDD9B4;
+  --espresso: #2C1810;
+  --espresso-mid: #4A2C1A;
+  --caramel: #8B5E3C;
+  --honey: #D4A574;
+  --honey-light: #E8C99A;
+  --sage: #6B7C5C;
+  --sage-light: #8FA07E;
+  --cream-white: #FDFAF4;
+  --text-body: #3D2B1A;
+  --text-muted: #7A6050;
+  --border: #D9C5A8;
+  --radius: 12px;
+  --radius-sm: 6px;
+  --shadow: 0 2px 12px rgba(44,24,16,0.10);
+  --shadow-lg: 0 8px 32px rgba(44,24,16,0.15);
+}
+
+/* ─── RESET ─────────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; scroll-behavior: smooth; }
+body {
+  font-family: 'Inter', sans-serif;
+  background: var(--parchment);
+  color: var(--text-body);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+img { max-width: 100%; display: block; }
+button { cursor: pointer; border: none; background: none; font-family: inherit; }
+input, textarea, select { font-family: inherit; }
+a { color: inherit; text-decoration: none; }
+
+/* ─── TYPOGRAPHY ────────────────────────────────────────────────────────────── */
+.serif { font-family: 'Playfair Display', serif; }
+h1, h2, h3 { font-family: 'Playfair Display', serif; }
+
+/* ─── TORN PAPER DIVIDER (signature element) ────────────────────────────────── */
+.torn {
+  width: 100%;
+  height: 40px;
+  background: var(--espresso);
+  clip-path: polygon(0 60%, 2% 20%, 5% 70%, 8% 30%, 11% 65%, 14% 25%, 17% 70%, 20% 35%, 23% 65%, 26% 20%, 29% 60%, 32% 30%, 35% 70%, 38% 25%, 41% 65%, 44% 30%, 47% 70%, 50% 20%, 53% 65%, 56% 30%, 59% 70%, 62% 25%, 65% 60%, 68% 30%, 71% 65%, 74% 20%, 77% 60%, 80% 30%, 83% 65%, 86% 25%, 89% 60%, 92% 30%, 95% 65%, 98% 25%, 100% 60%, 100% 100%, 0% 100%);
+  margin: 0;
+}
+.torn.inverted {
+  background: var(--parchment);
+  clip-path: polygon(0 40%, 2% 80%, 5% 30%, 8% 70%, 11% 35%, 14% 75%, 17% 30%, 20% 65%, 23% 35%, 26% 80%, 29% 40%, 32% 70%, 35% 30%, 38% 75%, 41% 35%, 44% 70%, 47% 30%, 50% 80%, 53% 35%, 56% 70%, 59% 30%, 62% 75%, 65% 40%, 68% 70%, 71% 35%, 74% 80%, 77% 40%, 80% 70%, 83% 35%, 86% 75%, 89% 40%, 92% 70%, 95% 35%, 98% 75%, 100% 40%, 100% 0%, 0% 0%);
+}
+
+/* ─── NAV ────────────────────────────────────────────────────────────────────── */
+nav {
+  background: var(--espresso);
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 16px rgba(44,24,16,0.3);
+}
+.nav-logo {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--honey);
+  letter-spacing: -0.5px;
+  font-style: italic;
+}
+.nav-logo span { color: var(--parchment); font-style: normal; font-size: 0.7rem; display: block; letter-spacing: 3px; text-transform: uppercase; font-family: 'Inter', sans-serif; font-weight: 500; margin-top: -4px; }
+.nav-links { display: flex; gap: 8px; align-items: center; }
+.nav-btn {
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.2s;
+  color: var(--parchment);
+}
+.nav-btn:hover { background: rgba(255,255,255,0.1); }
+.nav-btn.active { color: var(--honey); }
+.nav-btn-primary {
+  background: var(--honey);
+  color: var(--espresso) !important;
+  padding: 8px 18px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+}
+.nav-btn-primary:hover { background: var(--honey-light); }
+.nav-avatar {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  background: var(--caramel);
+  color: var(--parchment);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 2px solid var(--honey);
+  overflow: hidden;
+}
+.nav-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+/* ─── PAGES ──────────────────────────────────────────────────────────────────── */
+.page { display: none; }
+.page.active { display: block; }
+
+/* ─── HERO ───────────────────────────────────────────────────────────────────── */
+#hero {
+  background: var(--espresso);
+  color: var(--parchment);
+  padding: 72px 24px 0;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+#hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 60% 40%, rgba(212,165,116,0.15) 0%, transparent 60%);
+  pointer-events: none;
+}
+.hero-eyebrow {
+  font-size: 0.75rem;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--honey);
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+.hero-title {
+  font-size: clamp(2.4rem, 6vw, 4rem);
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--cream-white);
+  margin-bottom: 20px;
+}
+.hero-title em { color: var(--honey); font-style: italic; }
+.hero-sub {
+  font-size: 1.1rem;
+  color: var(--honey-light);
+  max-width: 480px;
+  margin: 0 auto 40px;
+  line-height: 1.6;
+  font-weight: 300;
+}
+.hero-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 56px; }
+.btn-primary {
+  background: var(--honey);
+  color: var(--espresso);
+  padding: 14px 28px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 0.95rem;
+  transition: all 0.2s;
+  border: none;
+  cursor: pointer;
+}
+.btn-primary:hover { background: var(--honey-light); transform: translateY(-1px); }
+.btn-secondary {
+  background: transparent;
+  color: var(--parchment);
+  padding: 14px 28px;
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  font-size: 0.95rem;
+  border: 1.5px solid rgba(255,255,255,0.25);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-secondary:hover { border-color: var(--honey); color: var(--honey); }
+.hero-stats {
+  display: flex;
+  justify-content: center;
+  gap: 48px;
+  padding: 32px 0 0;
+  border-top: 1px solid rgba(255,255,255,0.1);
+}
+.hero-stat { text-align: center; }
+.hero-stat-num { font-family: 'Playfair Display', serif; font-size: 2rem; font-weight: 700; color: var(--honey); }
+.hero-stat-label { font-size: 0.75rem; letter-spacing: 2px; text-transform: uppercase; color: var(--honey-light); margin-top: 4px; font-weight: 400; }
+
+/* ─── SECTION ────────────────────────────────────────────────────────────────── */
+.section { padding: 56px 24px; max-width: 1100px; margin: 0 auto; }
+.section-header { margin-bottom: 36px; }
+.section-eyebrow { font-size: 0.72rem; letter-spacing: 3px; text-transform: uppercase; color: var(--caramel); font-weight: 600; margin-bottom: 8px; }
+.section-title { font-size: clamp(1.6rem, 3vw, 2.2rem); font-weight: 600; color: var(--espresso); }
+
+/* ─── FEED ───────────────────────────────────────────────────────────────────── */
+.feed-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+.card {
+  background: var(--cream-white);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  transition: transform 0.2s, box-shadow 0.2s;
+  cursor: pointer;
+  border: 1px solid var(--border);
+}
+.card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
+.card-image {
+  height: 200px;
+  background: var(--parchment-dark);
+  overflow: hidden;
+  position: relative;
+}
+.card-image img { width: 100%; height: 100%; object-fit: cover; }
+.card-image-placeholder {
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 3rem;
+  background: linear-gradient(135deg, var(--parchment-dark) 0%, var(--honey-light) 100%);
+}
+.card-badge {
+  position: absolute;
+  top: 10px; left: 10px;
+  background: var(--espresso);
+  color: var(--honey);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 100px;
+}
+.card-body { padding: 16px; }
+.card-meta { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+.card-name { font-family: 'Playfair Display', serif; font-size: 1.1rem; font-weight: 600; color: var(--espresso); margin-bottom: 4px; }
+.card-bakery { font-size: 0.82rem; color: var(--caramel); font-weight: 500; margin-bottom: 12px; }
+.card-footer { display: flex; align-items: center; justify-content: space-between; }
+.rating-display {
+  display: flex; align-items: center; gap: 6px;
+}
+.rating-circle {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  background: var(--espresso);
+  color: var(--honey);
+  font-family: 'Playfair Display', serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+.rating-label { font-size: 0.72rem; color: var(--text-muted); line-height: 1.3; }
+.rating-count { font-size: 0.7rem; color: var(--text-muted); }
+.card-price {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--sage);
+}
+
+/* ─── LEADERBOARD ────────────────────────────────────────────────────────────── */
+.leaderboard-bg {
+  background: var(--espresso);
+  padding: 0 0 56px;
+}
+.leaderboard-inner { max-width: 1100px; margin: 0 auto; padding: 56px 24px 0; }
+.leaderboard-title { font-family: 'Playfair Display', serif; font-size: 1.8rem; color: var(--honey); margin-bottom: 8px; }
+.leaderboard-sub { font-size: 0.85rem; color: var(--honey-light); margin-bottom: 32px; }
+.lb-tabs { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
+.lb-tab {
+  padding: 8px 18px;
+  border-radius: 100px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--honey-light);
+  border: 1.5px solid rgba(255,255,255,0.15);
+  cursor: pointer;
+  transition: all 0.2s;
+  background: transparent;
+}
+.lb-tab.active { background: var(--honey); color: var(--espresso); border-color: var(--honey); font-weight: 600; }
+.lb-list { display: flex; flex-direction: column; gap: 12px; }
+.lb-item {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.lb-item:hover { background: rgba(255,255,255,0.1); }
+.lb-rank {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--honey);
+  width: 36px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.lb-rank.gold { color: #FFD700; }
+.lb-rank.silver { color: #C0C0C0; }
+.lb-rank.bronze { color: #CD7F32; }
+.lb-image {
+  width: 52px; height: 52px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--parchment-dark);
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.4rem;
+}
+.lb-info { flex: 1; }
+.lb-name { font-family: 'Playfair Display', serif; font-size: 1rem; color: var(--cream-white); font-weight: 600; }
+.lb-bakery { font-size: 0.78rem; color: var(--honey-light); margin-top: 2px; }
+.lb-right { text-align: right; flex-shrink: 0; }
+.lb-score {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--honey);
+}
+.lb-reviews { font-size: 0.7rem; color: var(--honey-light); }
+
+/* ─── ADD ITEM MODAL ──────────────────────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(44,24,16,0.75);
+  z-index: 200;
+  display: none;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+}
+@media (min-width: 600px) {
+  .modal-overlay { align-items: center; padding: 24px; }
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--cream-white);
+  border-radius: var(--radius) var(--radius) 0 0;
+  width: 100%;
+  max-width: 560px;
+  max-height: 92vh;
+  overflow-y: auto;
+  position: relative;
+}
+@media (min-width: 600px) {
+  .modal { border-radius: var(--radius); max-height: 88vh; }
+}
+.modal-header {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  background: var(--cream-white);
+  z-index: 1;
+}
+.modal-title { font-family: 'Playfair Display', serif; font-size: 1.2rem; font-weight: 600; color: var(--espresso); }
+.modal-close { width: 32px; height: 32px; border-radius: 50%; background: var(--parchment); display: flex; align-items: center; justify-content: center; font-size: 1.1rem; color: var(--text-muted); transition: background 0.2s; }
+.modal-close:hover { background: var(--border); }
+.modal-body { padding: 24px; }
+.modal-step { display: none; }
+.modal-step.active { display: block; }
+.step-indicator { display: flex; gap: 6px; margin-bottom: 24px; }
+.step-dot { height: 4px; border-radius: 2px; flex: 1; background: var(--border); transition: background 0.3s; }
+.step-dot.done { background: var(--caramel); }
+.step-dot.active { background: var(--honey); }
+
+/* ─── FORM ELEMENTS ──────────────────────────────────────────────────────────── */
+.form-group { margin-bottom: 20px; }
+.form-label { display: block; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.5px; color: var(--espresso-mid); text-transform: uppercase; margin-bottom: 8px; }
+.form-input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--parchment);
+  color: var(--text-body);
+  font-size: 0.95rem;
+  transition: border-color 0.2s;
+  outline: none;
+}
+.form-input:focus { border-color: var(--honey); background: var(--cream-white); }
+.form-select {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--parchment);
+  color: var(--text-body);
+  font-size: 0.95rem;
+  appearance: none;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.form-select:focus { border-color: var(--honey); }
+.form-textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--parchment);
+  color: var(--text-body);
+  font-size: 0.95rem;
+  resize: vertical;
+  min-height: 88px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.form-textarea:focus { border-color: var(--honey); }
+
+/* Photo upload */
+.photo-upload {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 32px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--parchment);
+  position: relative;
+}
+.photo-upload:hover { border-color: var(--honey); background: var(--parchment-dark); }
+.photo-upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.photo-upload-icon { font-size: 2.5rem; margin-bottom: 10px; }
+.photo-upload-text { font-size: 0.9rem; color: var(--text-muted); }
+.photo-upload-text strong { color: var(--caramel); }
+.photo-preview { border-radius: var(--radius); overflow: hidden; position: relative; }
+.photo-preview img { width: 100%; max-height: 220px; object-fit: cover; }
+.photo-preview-remove {
+  position: absolute; top: 8px; right: 8px;
+  background: rgba(44,24,16,0.7); color: white;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.85rem;
+}
+
+/* AI identify */
+.ai-result {
+  background: linear-gradient(135deg, var(--parchment) 0%, var(--parchment-dark) 100%);
+  border: 1.5px solid var(--honey);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-top: 12px;
+  display: none;
+}
+.ai-result.visible { display: block; }
+.ai-result-label { font-size: 0.7rem; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; color: var(--caramel); margin-bottom: 4px; }
+.ai-result-text { font-family: 'Playfair Display', serif; font-size: 1rem; color: var(--espresso); }
+.ai-loading { display: none; align-items: center; gap: 10px; padding: 12px; color: var(--caramel); font-size: 0.85rem; margin-top: 8px; }
+.ai-loading.visible { display: flex; }
+
+/* Slider rating */
+.rating-slider-wrap { position: relative; margin: 8px 0 4px; }
+.rating-slider {
+  width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+  outline: none;
+  cursor: pointer;
+}
+.rating-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--espresso);
+  border: 3px solid var(--honey);
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+.rating-slider::-webkit-slider-thumb:hover { transform: scale(1.2); }
+.rating-slider::-moz-range-thumb {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--espresso);
+  border: 3px solid var(--honey);
+  cursor: pointer;
+}
+.rating-value-display {
+  text-align: center;
+  font-family: 'Playfair Display', serif;
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--espresso);
+  margin-bottom: 4px;
+}
+.rating-scale-labels { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-muted); }
+
+/* Tasting dimensions */
+.tasting-dims { display: flex; flex-direction: column; gap: 16px; }
+.tasting-dim-label { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.tasting-dim-name { font-size: 0.82rem; font-weight: 600; color: var(--espresso-mid); }
+.tasting-dim-val { font-family: 'Playfair Display', serif; font-size: 0.95rem; font-weight: 600; color: var(--caramel); }
+
+/* Map placeholder */
+.map-placeholder {
+  background: var(--parchment-dark);
+  border-radius: var(--radius);
+  height: 180px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1.5px solid var(--border);
+  flex-direction: column;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+.map-placeholder-icon { font-size: 2rem; }
+.location-selected {
+  background: var(--parchment);
+  border: 1.5px solid var(--sage);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  display: none;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+.location-selected.visible { display: flex; }
+.location-selected-icon { font-size: 1.2rem; }
+.location-selected-text { flex: 1; font-size: 0.88rem; }
+.location-selected-name { font-weight: 600; color: var(--espresso); }
+.location-selected-address { color: var(--text-muted); font-size: 0.78rem; }
+
+/* Category chips */
+.category-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.category-chip {
+  padding: 8px 14px;
+  border-radius: 100px;
+  border: 1.5px solid var(--border);
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--parchment);
+}
+.category-chip:hover { border-color: var(--honey); color: var(--caramel); }
+.category-chip.selected { background: var(--espresso); border-color: var(--espresso); color: var(--honey); }
+
+/* Modal footer */
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  position: sticky;
+  bottom: 0;
+  background: var(--cream-white);
+}
+.btn-ghost { background: transparent; color: var(--text-muted); font-size: 0.88rem; padding: 10px 16px; border-radius: var(--radius-sm); transition: background 0.2s; }
+.btn-ghost:hover { background: var(--parchment); }
+.btn-caramel { background: var(--caramel); color: white; padding: 11px 22px; border-radius: var(--radius-sm); font-weight: 600; font-size: 0.9rem; transition: all 0.2s; }
+.btn-caramel:hover { background: var(--espresso-mid); }
+.btn-espresso { background: var(--espresso); color: var(--honey); padding: 11px 22px; border-radius: var(--radius-sm); font-weight: 600; font-size: 0.9rem; transition: all 0.2s; }
+.btn-espresso:hover { background: var(--espresso-mid); }
+
+/* ─── AUTH MODAL ─────────────────────────────────────────────────────────────── */
+.auth-tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+.auth-tab { flex: 1; padding: 12px; text-align: center; font-size: 0.88rem; font-weight: 500; color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; }
+.auth-tab.active { color: var(--espresso); border-bottom-color: var(--honey); }
+.auth-divider { display: flex; align-items: center; gap: 12px; margin: 16px 0; color: var(--text-muted); font-size: 0.8rem; }
+.auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.btn-google {
+  width: 100%;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  padding: 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem; font-weight: 500;
+  color: var(--text-body);
+  background: var(--cream-white);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-google:hover { border-color: var(--honey); background: var(--parchment); }
+.btn-full { width: 100%; padding: 13px; border-radius: var(--radius-sm); font-size: 0.95rem; font-weight: 600; }
+
+/* ─── ITEM DETAIL MODAL ──────────────────────────────────────────────────────── */
+.detail-hero { position: relative; height: 240px; background: var(--parchment-dark); overflow: hidden; }
+.detail-hero img { width: 100%; height: 100%; object-fit: cover; }
+.detail-hero-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 5rem; background: linear-gradient(135deg, var(--parchment-dark), var(--honey-light)); }
+.detail-hero-badge { position: absolute; top: 12px; left: 12px; background: var(--espresso); color: var(--honey); font-size: 0.72rem; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; padding: 5px 12px; border-radius: 100px; }
+.detail-body { padding: 20px 24px 32px; }
+.detail-name { font-family: 'Playfair Display', serif; font-size: 1.6rem; font-weight: 700; color: var(--espresso); margin-bottom: 4px; }
+.detail-bakery { font-size: 0.9rem; color: var(--caramel); font-weight: 500; margin-bottom: 4px; }
+.detail-address { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 16px; }
+.detail-scores { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+.detail-score-box { background: var(--parchment); border-radius: var(--radius); padding: 14px; text-align: center; border: 1px solid var(--border); }
+.detail-score-label { font-size: 0.7rem; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-muted); font-weight: 600; margin-bottom: 4px; }
+.detail-score-num { font-family: 'Playfair Display', serif; font-size: 2.2rem; font-weight: 700; color: var(--espresso); }
+.detail-score-num span { font-size: 0.85rem; color: var(--text-muted); font-family: 'Inter', sans-serif; font-weight: 400; }
+.detail-dims { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
+.detail-dim { display: flex; align-items: center; gap: 10px; }
+.detail-dim-name { font-size: 0.82rem; font-weight: 500; color: var(--text-muted); width: 80px; flex-shrink: 0; }
+.detail-dim-bar-wrap { flex: 1; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+.detail-dim-bar { height: 100%; background: linear-gradient(90deg, var(--honey) 0%, var(--caramel) 100%); border-radius: 4px; transition: width 0.5s ease; }
+.detail-dim-val { font-size: 0.82rem; font-weight: 600; color: var(--caramel); width: 28px; text-align: right; flex-shrink: 0; }
+.detail-notes-section { margin-bottom: 24px; }
+.detail-notes-title { font-size: 0.8rem; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--espresso-mid); margin-bottom: 8px; }
+.detail-notes-text { font-size: 0.9rem; color: var(--text-body); line-height: 1.65; }
+.detail-reviews { border-top: 1px solid var(--border); padding-top: 20px; }
+.detail-reviews-title { font-family: 'Playfair Display', serif; font-size: 1.1rem; margin-bottom: 16px; color: var(--espresso); }
+.review-item { display: flex; gap: 12px; margin-bottom: 16px; }
+.review-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--caramel); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 600; color: white; overflow: hidden; }
+.review-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.review-content { flex: 1; }
+.review-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.review-name { font-size: 0.85rem; font-weight: 600; color: var(--espresso); }
+.review-score { font-family: 'Playfair Display', serif; font-size: 1rem; font-weight: 700; color: var(--caramel); }
+.review-text { font-size: 0.83rem; color: var(--text-body); line-height: 1.55; }
+.review-date { font-size: 0.72rem; color: var(--text-muted); margin-top: 4px; }
+
+/* ─── TOAST ──────────────────────────────────────────────────────────────────── */
+#toast {
+  position: fixed;
+  bottom: 24px; left: 50%;
+  transform: translateX(-50%) translateY(80px);
+  background: var(--espresso);
+  color: var(--parchment);
+  padding: 12px 22px;
+  border-radius: 100px;
+  font-size: 0.88rem;
+  font-weight: 500;
+  z-index: 999;
+  transition: transform 0.3s ease;
+  white-space: nowrap;
+  box-shadow: var(--shadow-lg);
+}
+#toast.show { transform: translateX(-50%) translateY(0); }
+
+/* ─── EMPTY STATE ────────────────────────────────────────────────────────────── */
+.empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+.empty-state-icon { font-size: 3.5rem; margin-bottom: 16px; }
+.empty-state-title { font-family: 'Playfair Display', serif; font-size: 1.2rem; color: var(--espresso); margin-bottom: 8px; }
+.empty-state-text { font-size: 0.88rem; line-height: 1.6; }
+
+/* ─── SPINNER ────────────────────────────────────────────────────────────────── */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner { width: 20px; height: 20px; border: 2.5px solid rgba(139,94,60,0.2); border-top-color: var(--caramel); border-radius: 50%; animation: spin 0.8s linear infinite; }
+
+/* ─── RESPONSIVE ─────────────────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .hero-stats { gap: 24px; }
+  .hero-stat-num { font-size: 1.6rem; }
+  nav { padding: 0 16px; }
+  .section { padding: 40px 16px; }
+}
+
+/* ─── CONFIG BANNER ──────────────────────────────────────────────────────────── */
+.config-banner {
+  background: #FFF3CD;
+  border-bottom: 2px solid #FFAA00;
+  padding: 12px 20px;
+  text-align: center;
+  font-size: 0.85rem;
+  color: #6B4A00;
+  display: none;
+}
+.config-banner.show { display: block; }
+.config-banner strong { font-weight: 700; }
+</style>
+</head>
+
+<body>
+
+<!-- Config warning -->
+<div class="config-banner" id="configBanner">
+  ⚙️ <strong>Setup required:</strong> Replace the Firebase config and API keys in the source code before using Crumb. <a href="#" onclick="document.getElementById('configBanner').style.display='none'">Dismiss</a>
+</div>
+
+<!-- ─── NAV ──────────────────────────────────────────────────────────────────── -->
+<nav>
+  <div class="nav-logo" onclick="showPage('home')">
+    Crumb
+    <span>Rate every bite</span>
+  </div>
+  <div class="nav-links" id="navLinks">
+    <button class="nav-btn active" onclick="showPage('home')">Discover</button>
+    <button class="nav-btn" onclick="showPage('leaderboard')">Top Picks</button>
+    <button class="nav-btn" id="feedNavBtn" onclick="showPage('feed')" style="display:none">Feed</button>
+    <button class="nav-btn-primary nav-btn" onclick="openAddModal()" id="addBtn">+ Add</button>
+    <div class="nav-avatar" id="navAvatar" onclick="toggleUserMenu()" style="display:none">?</div>
+    <button class="nav-btn" onclick="openAuthModal()" id="signInBtn">Sign in</button>
+  </div>
+</nav>
+
+<!-- ─── HOME PAGE ─────────────────────────────────────────────────────────────── -->
+<div class="page active" id="page-home">
+
+  <!-- Hero -->
+  <div id="hero">
+    <div class="hero-eyebrow">A community of pastry lovers</div>
+    <h1 class="hero-title">Every great bite<br>deserves a <em>record.</em></h1>
+    <p class="hero-sub">Track and rate the pastries you discover at local bakeries. Build your personal record. Share with the community.</p>
+    <div class="hero-actions">
+      <button class="btn-primary" onclick="openAddModal()">Log a pastry</button>
+      <button class="btn-secondary" onclick="showPage('leaderboard')">See top picks</button>
+    </div>
+    <div class="hero-stats">
+      <div class="hero-stat">
+        <div class="hero-stat-num" id="statItems">0</div>
+        <div class="hero-stat-label">Items rated</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-num" id="statBakeries">0</div>
+        <div class="hero-stat-label">Bakeries</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-num" id="statRaters">0</div>
+        <div class="hero-stat-label">Members</div>
+      </div>
+    </div>
+  </div>
+  <div class="torn"></div>
+
+  <!-- Recent reviews -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-eyebrow">Fresh from the oven</div>
+      <h2 class="section-title">Recent reviews</h2>
+    </div>
+    <div class="feed-grid" id="recentGrid">
+      <div class="empty-state" style="grid-column:1/-1">
+        <div class="empty-state-icon">🥐</div>
+        <div class="empty-state-title">Nothing here yet</div>
+        <div class="empty-state-text">Be the first to log a pastry and start the community.</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ─── LEADERBOARD PAGE ───────────────────────────────────────────────────────── -->
+<div class="page" id="page-leaderboard">
+  <div class="leaderboard-bg">
+    <div class="leaderboard-inner">
+      <div class="leaderboard-title">🏆 The Hall of Crumbs</div>
+      <div class="leaderboard-sub">Community's highest-rated bakes, ranked by average score</div>
+      <div class="lb-tabs">
+        <button class="lb-tab active" onclick="switchLbTab(this,'all')">All</button>
+        <button class="lb-tab" onclick="switchLbTab(this,'croissant')">Croissants</button>
+        <button class="lb-tab" onclick="switchLbTab(this,'sourdough')">Sourdough</button>
+        <button class="lb-tab" onclick="switchLbTab(this,'tart')">Tarts</button>
+        <button class="lb-tab" onclick="switchLbTab(this,'cake')">Cakes</button>
+        <button class="lb-tab" onclick="switchLbTab(this,'pastry')">Pastries</button>
+        <button class="lb-tab" onclick="switchLbTab(this,'value')">Best value</button>
+      </div>
+      <div class="lb-list" id="lbList">
+        <div class="empty-state" style="color:var(--honey-light)">
+          <div class="empty-state-icon">🥐</div>
+          <div class="empty-state-title" style="color:var(--honey)">No rankings yet</div>
+          <div class="empty-state-text">Start logging pastries to build the leaderboard.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="torn inverted" style="background:var(--espresso); clip-path: polygon(0 40%, 2% 80%, 5% 30%, 8% 70%, 11% 35%, 14% 75%, 17% 30%, 20% 65%, 23% 35%, 26% 80%, 29% 40%, 32% 70%, 35% 30%, 38% 75%, 41% 35%, 44% 70%, 47% 30%, 50% 80%, 53% 35%, 56% 70%, 59% 30%, 62% 75%, 65% 40%, 68% 70%, 71% 35%, 74% 80%, 77% 40%, 80% 70%, 83% 35%, 86% 75%, 89% 40%, 92% 70%, 95% 35%, 98% 75%, 100% 40%, 100% 0%, 0% 0%); transform: scaleY(-1); margin-bottom: -1px;"></div>
+</div>
+
+<!-- ─── FEED PAGE ──────────────────────────────────────────────────────────────── -->
+<div class="page" id="page-feed">
+  <div class="section">
+    <div class="section-header">
+      <div class="section-eyebrow">Community</div>
+      <h2 class="section-title">Latest reviews</h2>
+    </div>
+    <div class="feed-grid" id="feedGrid">
+      <div class="empty-state" style="grid-column:1/-1">
+        <div class="empty-state-icon">🍞</div>
+        <div class="empty-state-title">The bakery is quiet</div>
+        <div class="empty-state-text">No reviews yet — be the first!</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── ADD ITEM MODAL ─────────────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Log a pastry">
+    <div class="modal-header">
+      <div class="modal-title" id="addModalTitle">Log a pastry</div>
+      <button class="modal-close" onclick="closeAddModal()">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- Step dots -->
+      <div class="step-indicator">
+        <div class="step-dot active" id="dot1"></div>
+        <div class="step-dot" id="dot2"></div>
+        <div class="step-dot" id="dot3"></div>
+        <div class="step-dot" id="dot4"></div>
+      </div>
+
+      <!-- Step 1: Photo & AI identify -->
+      <div class="modal-step active" id="step1">
+        <div class="form-group">
+          <label class="form-label">Photo</label>
+          <div id="photoUploadWrap">
+            <div class="photo-upload" id="photoUploadArea">
+              <input type="file" accept="image/*" capture="environment" id="photoInput" onchange="handlePhotoChange(this)">
+              <div class="photo-upload-icon">📷</div>
+              <div class="photo-upload-text">Tap to take a photo or <strong>upload from your camera roll</strong></div>
+            </div>
+          </div>
+          <div class="ai-loading" id="aiLoading">
+            <div class="spinner"></div>
+            <span>Identifying your bake…</span>
+          </div>
+          <div class="ai-result" id="aiResult">
+            <div class="ai-result-label">✦ Crumb thinks this is…</div>
+            <div class="ai-result-text" id="aiResultText"></div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Name your bake</label>
+          <input type="text" class="form-input" id="itemName" placeholder="e.g. Almond croissant, pain au chocolat…">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Category</label>
+          <div class="category-chips" id="categoryChips">
+            <div class="category-chip" onclick="selectCategory(this,'croissant')">🥐 Croissant</div>
+            <div class="category-chip" onclick="selectCategory(this,'sourdough')">🍞 Sourdough</div>
+            <div class="category-chip" onclick="selectCategory(this,'tart')">🥧 Tart</div>
+            <div class="category-chip" onclick="selectCategory(this,'cake')">🎂 Cake</div>
+            <div class="category-chip" onclick="selectCategory(this,'pastry')">🫓 Pastry</div>
+            <div class="category-chip" onclick="selectCategory(this,'bun')">🫓 Bun</div>
+            <div class="category-chip" onclick="selectCategory(this,'cookie')">🍪 Cookie</div>
+            <div class="category-chip" onclick="selectCategory(this,'bread')">🥖 Bread</div>
+            <div class="category-chip" onclick="selectCategory(this,'other')">✦ Other</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2: Location & price -->
+      <div class="modal-step" id="step2">
+        <div class="form-group">
+          <label class="form-label">Bakery</label>
+          <input type="text" class="form-input" id="bakerySearch" placeholder="Search for a bakery…" oninput="searchBakery(this.value)">
+          <div id="bakeryResults" style="margin-top:8px; display:flex; flex-direction:column; gap:6px;"></div>
+          <div class="location-selected" id="locationSelected">
+            <div class="location-selected-icon">📍</div>
+            <div class="location-selected-text">
+              <div class="location-selected-name" id="selectedBakeryName"></div>
+              <div class="location-selected-address" id="selectedBakeryAddress"></div>
+            </div>
+            <button class="btn-ghost" onclick="clearBakery()" style="font-size:0.8rem;">Change</button>
+          </div>
+        </div>
+
+        <div class="map-placeholder" id="mapContainer">
+          <div class="map-placeholder-icon">🗺️</div>
+          <div>Map will appear here once you select a bakery</div>
+          <div style="font-size:0.75rem; margin-top:4px;">Requires Google Maps API key</div>
+        </div>
+
+        <div class="form-group" style="margin-top:16px;">
+          <label class="form-label">Price paid</label>
+          <div style="position:relative;">
+            <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-weight:600;">£</span>
+            <input type="number" class="form-input" id="itemPrice" placeholder="0.00" step="0.01" min="0" style="padding-left:30px;">
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: Overall rating -->
+      <div class="modal-step" id="step3">
+        <div class="form-group">
+          <label class="form-label">Your overall rating</label>
+          <div class="rating-value-display" id="overallRatingDisplay">–</div>
+          <div class="rating-slider-wrap">
+            <input type="range" class="rating-slider" id="overallRating" min="0" max="5" step="0.1" value="0" oninput="updateOverallRating(this.value)">
+          </div>
+          <div class="rating-scale-labels"><span>0 — Stale</span><span>2.5 — Decent</span><span>5 — Legendary</span></div>
+        </div>
+
+        <hr style="border:none; border-top:1px solid var(--border); margin: 24px 0;">
+
+        <div class="form-group">
+          <label class="form-label" style="margin-bottom:16px;">Tasting notes</label>
+          <div class="tasting-dims" id="tastingDims">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 4: Notes -->
+      <div class="modal-step" id="step4">
+        <div class="form-group">
+          <label class="form-label">Your notes <span style="font-weight:400; text-transform:none; letter-spacing:0; color:var(--text-muted);">(optional)</span></label>
+          <textarea class="form-textarea" id="itemNotes" placeholder="Anything else worth remembering? The buttery layers, the perfect caramelisation, the queue out the door…" style="min-height:140px;"></textarea>
+        </div>
+        <div style="background:var(--parchment); border-radius:var(--radius); padding:14px; border:1px solid var(--border);">
+          <div style="font-size:0.78rem; font-weight:600; color:var(--espresso-mid); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Review summary</div>
+          <div id="reviewSummary" style="font-size:0.88rem; color:var(--text-body); line-height:1.6;"></div>
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" id="backBtn" onclick="modalBack()" style="display:none">← Back</button>
+      <div></div>
+      <button class="btn-espresso" id="nextBtn" onclick="modalNext()">Next →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── AUTH MODAL ─────────────────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="authModal">
+  <div class="modal" style="max-height:80vh;" role="dialog" aria-modal="true" aria-label="Sign in">
+    <div class="modal-header">
+      <div class="modal-title">Join Crumb</div>
+      <button class="modal-close" onclick="closeAuthModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="auth-tabs">
+        <div class="auth-tab active" onclick="switchAuthTab('signin')">Sign in</div>
+        <div class="auth-tab" onclick="switchAuthTab('signup')">Create account</div>
+      </div>
+
+      <button class="btn-google" onclick="signInGoogle()">
+        <svg width="18" height="18" viewBox="0 0 18 18"><path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/><path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.909-2.259c-.806.54-1.837.86-3.047.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z" fill="#34A853"/><path d="M3.964 10.71c-.18-.54-.282-1.117-.282-1.71 0-.593.102-1.17.282-1.71V4.958H.957C.347 6.173 0 7.548 0 9s.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/><path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/></svg>
+        Continue with Google
+      </button>
+
+      <div class="auth-divider">or</div>
+
+      <div id="signinForm">
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" class="form-input" id="authEmail" placeholder="you@example.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input type="password" class="form-input" id="authPassword" placeholder="••••••••">
+        </div>
+        <button class="btn-espresso btn-full" onclick="signInEmail()" id="signInSubmit">Sign in</button>
+      </div>
+
+      <div id="signupForm" style="display:none">
+        <div class="form-group">
+          <label class="form-label">Your name</label>
+          <input type="text" class="form-input" id="authName" placeholder="e.g. Ed">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" class="form-input" id="authEmailSignup" placeholder="you@example.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input type="password" class="form-input" id="authPasswordSignup" placeholder="At least 6 characters">
+        </div>
+        <button class="btn-espresso btn-full" onclick="signUpEmail()">Create account</button>
+      </div>
+
+      <div id="authError" style="color:#c0392b; font-size:0.82rem; margin-top:12px; display:none;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── ITEM DETAIL MODAL ──────────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal" style="max-width:600px;" role="dialog">
+    <div class="modal-header">
+      <div class="modal-title">Review</div>
+      <button class="modal-close" onclick="closeDetailModal()">✕</button>
+    </div>
+    <div id="detailContent"></div>
+  </div>
+</div>
+
+<!-- ─── TOAST ─────────────────────────────────────────────────────────────────── -->
+<div id="toast"></div>
+
+<script>
+// ─── STATE ────────────────────────────────────────────────────────────────────
+let currentUser = null;
+let fb = null;
+let currentStep = 1;
+let totalSteps = 4;
+let selectedCategory = '';
+let selectedBakery = null;
+let photoFile = null;
+let photoDataURL = null;
+let lbCurrentTab = 'all';
+let allItems = [];
+
+const CATEGORIES = {
+  croissant: '🥐', sourdough: '🍞', tart: '🥧', cake: '🎂',
+  pastry: '🫓', bun: '🫓', cookie: '🍪', bread: '🥖', other: '✦'
+};
+
+const TASTING_DIMS = ['Texture', 'Flavour', 'Sweetness', 'Appearance', 'Value'];
+// Google Maps API key - replace with yours
+const GOOGLE_MAPS_KEY = 'YOUR_GOOGLE_MAPS_API_KEY';
+// Anthropic API key - replace with yours (for AI identification)
+// Note: in production move this to a backend/Firebase function
+const ANTHROPIC_KEY = 'YOUR_ANTHROPIC_API_KEY';
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+window.addEventListener('crumb-firebase-ready', () => {
+  fb = window._crumb;
+  const { onAuthStateChanged, auth } = fb;
+  onAuthStateChanged(auth, (user) => {
+    currentUser = user;
+    updateNav();
+    loadData();
+  });
+  document.getElementById('configBanner').classList.add('show');
+});
+
+// ─── NAVIGATION ───────────────────────────────────────────────────────────────
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  if (name === 'leaderboard') renderLeaderboard(lbCurrentTab);
+  if (name === 'feed') renderFeed();
+}
+
+function updateNav() {
+  const avatar = document.getElementById('navAvatar');
+  const signIn = document.getElementById('signInBtn');
+  const feedBtn = document.getElementById('feedNavBtn');
+  if (currentUser) {
+    avatar.style.display = 'flex';
+    signIn.style.display = 'none';
+    feedBtn.style.display = 'block';
+    const initials = (currentUser.displayName || currentUser.email || '?').charAt(0).toUpperCase();
+    if (currentUser.photoURL) {
+      avatar.innerHTML = `<img src="${currentUser.photoURL}" alt="avatar">`;
+    } else {
+      avatar.textContent = initials;
+    }
+  } else {
+    avatar.style.display = 'none';
+    signIn.style.display = 'block';
+    feedBtn.style.display = 'none';
+  }
+}
+
+function toggleUserMenu() {
+  // Simple sign-out on click for now
+  if (confirm('Sign out of Crumb?')) {
+    fb.signOut(fb.auth);
+    showToast('Signed out');
+  }
+}
+
+// ─── DATA ─────────────────────────────────────────────────────────────────────
+async function loadData() {
+  if (!fb) return;
+  const { db, collection, getDocs, query, orderBy, limit } = fb;
+  try {
+    const q = query(collection(db, 'items'), orderBy('createdAt', 'desc'));
+    const snap = await getDocs(q);
+    allItems = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderRecentGrid();
+    updateStats();
+  } catch (e) {
+    console.log('Data load error (likely not configured yet):', e.message);
+  }
+}
+
+function updateStats() {
+  document.getElementById('statItems').textContent = allItems.length;
+  const bakeries = new Set(allItems.map(i => i.bakeryName).filter(Boolean));
+  document.getElementById('statBakeries').textContent = bakeries.size;
+  const raters = new Set(allItems.map(i => i.userId).filter(Boolean));
+  document.getElementById('statRaters').textContent = raters.size;
+}
+
+function renderRecentGrid() {
+  const grid = document.getElementById('recentGrid');
+  if (!allItems.length) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon">🥐</div><div class="empty-state-title">Nothing here yet</div><div class="empty-state-text">Be the first to log a pastry and start the community.</div></div>`;
+    return;
+  }
+  grid.innerHTML = allItems.slice(0, 9).map(item => cardHTML(item)).join('');
+}
+
+function renderFeed() {
+  const grid = document.getElementById('feedGrid');
+  if (!allItems.length) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon">🍞</div><div class="empty-state-title">The bakery is quiet</div><div class="empty-state-text">No reviews yet — be the first!</div></div>`;
+    return;
+  }
+  grid.innerHTML = allItems.map(item => cardHTML(item)).join('');
+}
+
+function cardHTML(item) {
+  const emoji = CATEGORIES[item.category] || '✦';
+  const score = item.communityAvg ? item.communityAvg.toFixed(1) : (item.overallRating ? item.overallRating.toFixed(1) : '–');
+  const ratingCount = item.ratingCount || 1;
+  const price = item.price ? `£${parseFloat(item.price).toFixed(2)}` : '';
+  const imageTag = item.photoURL
+    ? `<img src="${item.photoURL}" alt="${item.name}" loading="lazy">`
+    : `<div class="card-image-placeholder">${emoji}</div>`;
+  const catLabel = item.category ? item.category.charAt(0).toUpperCase() + item.category.slice(1) : 'Other';
+  return `
+    <div class="card" onclick="openDetail('${item.id}')">
+      <div class="card-image">
+        ${imageTag}
+        <div class="card-badge">${catLabel}</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span>${item.userName || 'Anonymous'}</span>
+          ${item.createdAt ? `<span>·</span><span>${timeAgo(item.createdAt.toDate ? item.createdAt.toDate() : new Date(item.createdAt))}</span>` : ''}
+        </div>
+        <div class="card-name">${item.name || 'Unknown bake'}</div>
+        <div class="card-bakery">📍 ${item.bakeryName || 'Unknown bakery'}</div>
+        <div class="card-footer">
+          <div class="rating-display">
+            <div class="rating-circle">${score}</div>
+            <div class="rating-label">Community<br><span class="rating-count">${ratingCount} review${ratingCount !== 1 ? 's' : ''}</span></div>
+          </div>
+          ${price ? `<div class="card-price">${price}</div>` : ''}
+        </div>
+      </div>
+    </div>`;
+}
+
+// ─── LEADERBOARD ──────────────────────────────────────────────────────────────
+function switchLbTab(btn, tab) {
+  document.querySelectorAll('.lb-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  lbCurrentTab = tab;
+  renderLeaderboard(tab);
+}
+
+function renderLeaderboard(tab) {
+  let items = [...allItems];
+  if (tab === 'value') {
+    items = items.filter(i => i.price && i.communityAvg).sort((a, b) => {
+      const aVal = (a.communityAvg || 0) / parseFloat(a.price);
+      const bVal = (b.communityAvg || 0) / parseFloat(b.price);
+      return bVal - aVal;
+    });
+  } else if (tab !== 'all') {
+    items = items.filter(i => i.category === tab);
+    items.sort((a, b) => (b.communityAvg || b.overallRating || 0) - (a.communityAvg || a.overallRating || 0));
+  } else {
+    items.sort((a, b) => (b.communityAvg || b.overallRating || 0) - (a.communityAvg || a.overallRating || 0));
+  }
+  items = items.slice(0, 20);
+
+  const list = document.getElementById('lbList');
+  if (!items.length) {
+    list.innerHTML = `<div class="empty-state" style="color:var(--honey-light)"><div class="empty-state-icon">🥐</div><div class="empty-state-title" style="color:var(--honey)">No rankings yet</div><div class="empty-state-text">Start logging pastries to build the leaderboard.</div></div>`;
+    return;
+  }
+
+  list.innerHTML = items.map((item, i) => {
+    const rank = i + 1;
+    const rankClass = rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : '';
+    const emoji = CATEGORIES[item.category] || '✦';
+    const score = item.communityAvg ? item.communityAvg.toFixed(1) : (item.overallRating ? item.overallRating.toFixed(1) : '–');
+    const ratingCount = item.ratingCount || 1;
+    const imageContent = item.photoURL
+      ? `<img src="${item.photoURL}" style="width:52px;height:52px;border-radius:8px;object-fit:cover;" alt="">`
+      : `<div class="lb-image">${emoji}</div>`;
+    return `
+      <div class="lb-item" onclick="openDetail('${item.id}')">
+        <div class="lb-rank ${rankClass}">${rank}</div>
+        ${imageContent}
+        <div class="lb-info">
+          <div class="lb-name">${item.name || 'Unknown bake'}</div>
+          <div class="lb-bakery">📍 ${item.bakeryName || 'Unknown'}</div>
+        </div>
+        <div class="lb-right">
+          <div class="lb-score">${score}</div>
+          <div class="lb-reviews">${ratingCount} review${ratingCount !== 1 ? 's' : ''}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ─── ITEM DETAIL ──────────────────────────────────────────────────────────────
+async function openDetail(id) {
+  const item = allItems.find(i => i.id === id);
+  if (!item) return;
+  document.getElementById('detailModal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+
+  const emoji = CATEGORIES[item.category] || '✦';
+  const catLabel = item.category ? item.category.charAt(0).toUpperCase() + item.category.slice(1) : 'Other';
+  const communityScore = item.communityAvg ? item.communityAvg.toFixed(1) : (item.overallRating ? item.overallRating.toFixed(1) : '–');
+  const userScore = item.overallRating ? item.overallRating.toFixed(1) : '–';
+  const dimsHTML = TASTING_DIMS.map(dim => {
+    const key = 'dim_' + dim.toLowerCase();
+    const val = item[key] || 0;
+    const pct = (val / 5) * 100;
+    return `<div class="detail-dim">
+      <div class="detail-dim-name">${dim}</div>
+      <div class="detail-dim-bar-wrap"><div class="detail-dim-bar" style="width:${pct}%"></div></div>
+      <div class="detail-dim-val">${val ? val.toFixed(1) : '–'}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('detailContent').innerHTML = `
+    <div class="detail-hero">
+      ${item.photoURL ? `<img src="${item.photoURL}" alt="${item.name}">` : `<div class="detail-hero-placeholder">${emoji}</div>`}
+      <div class="detail-hero-badge">${catLabel}</div>
+    </div>
+    <div class="detail-body">
+      <div class="detail-name">${item.name || 'Unknown bake'}</div>
+      <div class="detail-bakery">${item.bakeryName || 'Unknown bakery'}</div>
+      ${item.bakeryAddress ? `<div class="detail-address">📍 ${item.bakeryAddress}</div>` : ''}
+      ${item.price ? `<div style="font-size:0.85rem; color:var(--sage); font-weight:600; margin-bottom:16px;">£${parseFloat(item.price).toFixed(2)}</div>` : ''}
+      <div class="detail-scores">
+        <div class="detail-score-box">
+          <div class="detail-score-label">Community</div>
+          <div class="detail-score-num">${communityScore}<span>/5</span></div>
+          <div style="font-size:0.72rem; color:var(--text-muted); margin-top:2px;">${item.ratingCount || 1} review${(item.ratingCount || 1) !== 1 ? 's' : ''}</div>
+        </div>
+        <div class="detail-score-box">
+          <div class="detail-score-label">First review</div>
+          <div class="detail-score-num">${userScore}<span>/5</span></div>
+          <div style="font-size:0.72rem; color:var(--text-muted); margin-top:2px;">${item.userName || 'Anonymous'}</div>
+        </div>
+      </div>
+      <div class="detail-dims">${dimsHTML}</div>
+      ${item.notes ? `<div class="detail-notes-section"><div class="detail-notes-title">Tasting notes</div><div class="detail-notes-text">${item.notes}</div></div>` : ''}
+      <div class="detail-reviews">
+        <div class="detail-reviews-title">Reviews</div>
+        <div class="review-item">
+          <div class="review-avatar">${(item.userName || 'A').charAt(0).toUpperCase()}</div>
+          <div class="review-content">
+            <div class="review-header">
+              <div class="review-name">${item.userName || 'Anonymous'}</div>
+              <div class="review-score">${userScore}</div>
+            </div>
+            ${item.notes ? `<div class="review-text">${item.notes}</div>` : '<div class="review-text" style="color:var(--text-muted);font-style:italic;">No notes added.</div>'}
+            ${item.createdAt ? `<div class="review-date">${new Date(item.createdAt.toDate ? item.createdAt.toDate() : item.createdAt).toLocaleDateString('en-GB', {day:'numeric',month:'long',year:'numeric'})}</div>` : ''}
+          </div>
+        </div>
+        ${currentUser && currentUser.uid !== item.userId ? `<div style="margin-top:16px;"><button class="btn-espresso" onclick="closeDetailModal(); openAddModal('${id}');" style="font-size:0.85rem; padding:10px 18px;">Add your own rating →</button></div>` : ''}
+      </div>
+    </div>`;
+}
+
+function closeDetailModal() {
+  document.getElementById('detailModal').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// ─── ADD ITEM MODAL ───────────────────────────────────────────────────────────
+function openAddModal() {
+  if (!currentUser) { openAuthModal(); return; }
+  resetAddModal();
+  document.getElementById('addModal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeAddModal() {
+  document.getElementById('addModal').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function resetAddModal() {
+  currentStep = 1;
+  selectedCategory = '';
+  selectedBakery = null;
+  photoFile = null;
+  photoDataURL = null;
+  document.getElementById('itemName').value = '';
+  document.getElementById('bakerySearch').value = '';
+  document.getElementById('itemPrice').value = '';
+  document.getElementById('itemNotes').value = '';
+  document.getElementById('overallRating').value = 0;
+  document.getElementById('overallRatingDisplay').textContent = '–';
+  document.getElementById('aiResult').classList.remove('visible');
+  document.getElementById('locationSelected').classList.remove('visible');
+  document.getElementById('bakeryResults').innerHTML = '';
+  document.getElementById('photoInput').value = '';
+  document.getElementById('photoUploadWrap').innerHTML = `
+    <div class="photo-upload" id="photoUploadArea">
+      <input type="file" accept="image/*" capture="environment" id="photoInput" onchange="handlePhotoChange(this)">
+      <div class="photo-upload-icon">📷</div>
+      <div class="photo-upload-text">Tap to take a photo or <strong>upload from your camera roll</strong></div>
+    </div>`;
+  document.querySelectorAll('.category-chip').forEach(c => c.classList.remove('selected'));
+  buildTastingDims();
+  goToStep(1);
+}
+
+function buildTastingDims() {
+  const wrap = document.getElementById('tastingDims');
+  wrap.innerHTML = TASTING_DIMS.map(dim => `
+    <div>
+      <div class="tasting-dim-label">
+        <span class="tasting-dim-name">${dim}</span>
+        <span class="tasting-dim-val" id="dim_display_${dim.toLowerCase()}">–</span>
+      </div>
+      <input type="range" class="rating-slider" id="dim_${dim.toLowerCase()}" min="0" max="5" step="0.1" value="0"
+        oninput="document.getElementById('dim_display_${dim.toLowerCase()}').textContent=parseFloat(this.value).toFixed(1)">
+    </div>`).join('');
+}
+
+async function handlePhotoChange(input) {
+  if (!input.files[0]) return;
+  photoFile = input.files[0];
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    photoDataURL = e.target.result;
+    document.getElementById('photoUploadWrap').innerHTML = `
+      <div class="photo-preview">
+        <img src="${photoDataURL}" alt="Preview">
+        <button class="photo-preview-remove" onclick="removePhoto()">✕</button>
+      </div>`;
+    identifyWithAI(photoDataURL);
+  };
+  reader.readAsDataURL(photoFile);
+}
+
+function removePhoto() {
+  photoFile = null; photoDataURL = null;
+  document.getElementById('photoUploadWrap').innerHTML = `
+    <div class="photo-upload" id="photoUploadArea">
+      <input type="file" accept="image/*" capture="environment" id="photoInput" onchange="handlePhotoChange(this)">
+      <div class="photo-upload-icon">📷</div>
+      <div class="photo-upload-text">Tap to take a photo or <strong>upload from your camera roll</strong></div>
+    </div>`;
+  document.getElementById('aiResult').classList.remove('visible');
+}
+
+async function identifyWithAI(dataURL) {
+  if (!ANTHROPIC_KEY || ANTHROPIC_KEY === 'YOUR_ANTHROPIC_API_KEY') {
+    document.getElementById('aiResult').classList.add('visible');
+    document.getElementById('aiResultText').textContent = 'AI identification requires an Anthropic API key.';
+    return;
+  }
+  document.getElementById('aiLoading').classList.add('visible');
+  document.getElementById('aiResult').classList.remove('visible');
+  try {
+    const base64 = dataURL.split(',')[1];
+    const mediaType = dataURL.split(';')[0].split(':')[1];
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 150,
+        messages: [{
+          role: 'user',
+          content: [{
+            type: 'image',
+            source: { type: 'base64', media_type: mediaType, data: base64 }
+          }, {
+            type: 'text',
+            text: 'You are a knowledgeable baker. Look at this image and identify the baked good. Reply with ONLY a short phrase, like "almond croissant", "pain au chocolat", "lemon tart", "sourdough loaf", "cinnamon bun". No preamble, no punctuation at the end, just the name of the bake. If you cannot identify it, say "a delicious bake".'
+          }]
+        }]
+      })
+    });
+    const data = await res.json();
+    const identified = data.content?.[0]?.text?.trim() || 'a delicious bake';
+    document.getElementById('aiResultText').textContent = identified.charAt(0).toUpperCase() + identified.slice(1);
+    document.getElementById('aiResult').classList.add('visible');
+    if (!document.getElementById('itemName').value) {
+      document.getElementById('itemName').value = identified.charAt(0).toUpperCase() + identified.slice(1);
+    }
+    // Auto-select category from AI result
+    const lower = identified.toLowerCase();
+    for (const cat of Object.keys(CATEGORIES)) {
+      if (lower.includes(cat)) {
+        const chip = document.querySelector(`.category-chip[onclick*="'${cat}'"]`);
+        if (chip) selectCategory(chip, cat);
+        break;
+      }
+    }
+  } catch (err) {
+    document.getElementById('aiResultText').textContent = 'Could not identify — fill in manually.';
+    document.getElementById('aiResult').classList.add('visible');
+  } finally {
+    document.getElementById('aiLoading').classList.remove('visible');
+  }
+}
+
+function selectCategory(el, cat) {
+  document.querySelectorAll('.category-chip').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedCategory = cat;
+}
+
+// ─── BAKERY SEARCH ────────────────────────────────────────────────────────────
+let searchTimeout;
+function searchBakery(val) {
+  clearTimeout(searchTimeout);
+  if (val.length < 2) { document.getElementById('bakeryResults').innerHTML = ''; return; }
+  searchTimeout = setTimeout(() => fetchBakeryPlaces(val), 400);
+}
+
+async function fetchBakeryPlaces(query) {
+  if (!GOOGLE_MAPS_KEY || GOOGLE_MAPS_KEY === 'YOUR_GOOGLE_MAPS_API_KEY') {
+    // Fallback: manual entry
+    document.getElementById('bakeryResults').innerHTML = `
+      <div style="font-size:0.8rem; color:var(--text-muted); padding:8px; background:var(--parchment); border-radius:var(--radius-sm);">
+        Google Maps API key required for search. <strong><span style="cursor:pointer; color:var(--caramel);" onclick="selectManualBakery('${query}')">Use "${query}" as entered →</span></strong>
+      </div>`;
+    return;
+  }
+  // Use Places API (requires backend proxy to avoid exposing key in production)
+  try {
+    const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query + ' bakery')}&key=${GOOGLE_MAPS_KEY}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const results = document.getElementById('bakeryResults');
+    if (!data.results?.length) {
+      results.innerHTML = `<div style="font-size:0.82rem; color:var(--text-muted); padding:8px;">No bakeries found — <span style="color:var(--caramel); cursor:pointer;" onclick="selectManualBakery('${query}')">use this name anyway</span></div>`;
+      return;
+    }
+    results.innerHTML = data.results.slice(0, 5).map(p => `
+      <div onclick="selectBakery('${p.place_id}','${escJS(p.name)}','${escJS(p.formatted_address)}')"
+        style="padding:10px 12px; background:var(--parchment); border-radius:var(--radius-sm); cursor:pointer; border:1.5px solid var(--border); transition:border-color 0.2s;"
+        onmouseover="this.style.borderColor='var(--honey)'" onmouseout="this.style.borderColor='var(--border)'">
+        <div style="font-size:0.88rem; font-weight:600; color:var(--espresso);">${p.name}</div>
+        <div style="font-size:0.75rem; color:var(--text-muted);">${p.formatted_address}</div>
+      </div>`).join('');
+  } catch {
+    document.getElementById('bakeryResults').innerHTML = `<div style="font-size:0.82rem; color:var(--text-muted); padding:8px;">Search unavailable — <span style="color:var(--caramel); cursor:pointer;" onclick="selectManualBakery('${query}')">use this name anyway</span></div>`;
+  }
+}
+
+function selectBakery(placeId, name, address) {
+  selectedBakery = { placeId, name, address };
+  document.getElementById('bakerySearch').value = name;
+  document.getElementById('bakeryResults').innerHTML = '';
+  document.getElementById('selectedBakeryName').textContent = name;
+  document.getElementById('selectedBakeryAddress').textContent = address;
+  document.getElementById('locationSelected').classList.add('visible');
+  if (GOOGLE_MAPS_KEY !== 'YOUR_GOOGLE_MAPS_API_KEY') {
+    document.getElementById('mapContainer').innerHTML = `
+      <iframe width="100%" height="180" style="border:0;border-radius:var(--radius);"
+        src="https://www.google.com/maps/embed/v1/place?key=${GOOGLE_MAPS_KEY}&q=place_id:${placeId}" allowfullscreen></iframe>`;
+  }
+}
+
+function selectManualBakery(name) {
+  selectedBakery = { placeId: null, name, address: '' };
+  document.getElementById('bakerySearch').value = name;
+  document.getElementById('bakeryResults').innerHTML = '';
+  document.getElementById('selectedBakeryName').textContent = name;
+  document.getElementById('selectedBakeryAddress').textContent = 'Entered manually';
+  document.getElementById('locationSelected').classList.add('visible');
+}
+
+function clearBakery() {
+  selectedBakery = null;
+  document.getElementById('bakerySearch').value = '';
+  document.getElementById('locationSelected').classList.remove('visible');
+  document.getElementById('mapContainer').innerHTML = `<div class="map-placeholder"><div class="map-placeholder-icon">🗺️</div><div>Map will appear here once you select a bakery</div></div>`;
+}
+
+// ─── RATING ───────────────────────────────────────────────────────────────────
+function updateOverallRating(val) {
+  document.getElementById('overallRatingDisplay').textContent = parseFloat(val).toFixed(1);
+}
+
+// ─── MODAL STEPS ──────────────────────────────────────────────────────────────
+function goToStep(step) {
+  currentStep = step;
+  document.querySelectorAll('.modal-step').forEach(s => s.classList.remove('active'));
+  document.getElementById('step' + step).classList.add('active');
+  // Dots
+  for (let i = 1; i <= totalSteps; i++) {
+    const dot = document.getElementById('dot' + i);
+    dot.classList.remove('active', 'done');
+    if (i < step) dot.classList.add('done');
+    else if (i === step) dot.classList.add('active');
+  }
+  document.getElementById('backBtn').style.display = step > 1 ? 'block' : 'none';
+  const nextBtn = document.getElementById('nextBtn');
+  if (step === totalSteps) {
+    nextBtn.textContent = 'Save review ✓';
+    nextBtn.className = 'btn-caramel';
+    buildSummary();
+  } else {
+    nextBtn.textContent = 'Next →';
+    nextBtn.className = 'btn-espresso';
+  }
+  document.getElementById('addModalTitle').textContent = ['Log a pastry', 'Where did you find it?', 'Rate it', 'Final notes'][step - 1];
+}
+
+function modalNext() {
+  if (currentStep < totalSteps) {
+    goToStep(currentStep + 1);
+  } else {
+    saveReview();
+  }
+}
+
+function modalBack() {
+  if (currentStep > 1) goToStep(currentStep - 1);
+}
+
+function buildSummary() {
+  const name = document.getElementById('itemName').value || 'Unknown bake';
+  const bakery = selectedBakery?.name || 'Unknown bakery';
+  const price = document.getElementById('itemPrice').value;
+  const overall = parseFloat(document.getElementById('overallRating').value).toFixed(1);
+  document.getElementById('reviewSummary').innerHTML = `
+    <strong>${name}</strong> from <strong>${bakery}</strong>${price ? ` · <strong>£${parseFloat(price).toFixed(2)}</strong>` : ''}<br>
+    Overall: <strong>${overall}/5</strong>${selectedCategory ? ` · ${selectedCategory.charAt(0).toUpperCase() + selectedCategory.slice(1)}` : ''}`;
+}
+
+// ─── SAVE ─────────────────────────────────────────────────────────────────────
+async function saveReview() {
+  if (!currentUser) { openAuthModal(); return; }
+  const nextBtn = document.getElementById('nextBtn');
+  nextBtn.disabled = true;
+  nextBtn.textContent = 'Saving…';
+
+  try {
+    const { db, storage, collection, addDoc, serverTimestamp, ref, uploadBytes, getDownloadURL } = fb;
+
+    let photoURL = null;
+    if (photoFile) {
+      const storageRef = ref(storage, `items/${currentUser.uid}/${Date.now()}_${photoFile.name}`);
+      const snap = await uploadBytes(storageRef, photoFile);
+      photoURL = await getDownloadURL(snap.ref);
+    }
+
+    const dimData = {};
+    TASTING_DIMS.forEach(dim => {
+      dimData['dim_' + dim.toLowerCase()] = parseFloat(document.getElementById('dim_' + dim.toLowerCase()).value);
+    });
+
+    const item = {
+      name: document.getElementById('itemName').value,
+      category: selectedCategory || 'other',
+      bakeryName: selectedBakery?.name || '',
+      bakeryAddress: selectedBakery?.address || '',
+      bakeryPlaceId: selectedBakery?.placeId || null,
+      price: document.getElementById('itemPrice').value ? parseFloat(document.getElementById('itemPrice').value) : null,
+      overallRating: parseFloat(document.getElementById('overallRating').value),
+      communityAvg: parseFloat(document.getElementById('overallRating').value),
+      ratingCount: 1,
+      notes: document.getElementById('itemNotes').value,
+      photoURL,
+      userId: currentUser.uid,
+      userName: currentUser.displayName || currentUser.email?.split('@')[0] || 'Anonymous',
+      userPhoto: currentUser.photoURL || null,
+      createdAt: serverTimestamp(),
+      ...dimData
+    };
+
+    await addDoc(collection(db, 'items'), item);
+    closeAddModal();
+    showToast('🥐 Review saved!');
+    await loadData();
+    renderLeaderboard(lbCurrentTab);
+  } catch (err) {
+    showToast('Error saving — check your config');
+    console.error(err);
+    nextBtn.disabled = false;
+    nextBtn.textContent = 'Save review ✓';
+  }
+}
+
+// ─── AUTH ─────────────────────────────────────────────────────────────────────
+function openAuthModal() {
+  document.getElementById('authModal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeAuthModal() {
+  document.getElementById('authModal').classList.remove('open');
+  document.body.style.overflow = '';
+}
+function switchAuthTab(tab) {
+  document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.auth-tab')[tab === 'signin' ? 0 : 1].classList.add('active');
+  document.getElementById('signinForm').style.display = tab === 'signin' ? 'block' : 'none';
+  document.getElementById('signupForm').style.display = tab === 'signup' ? 'block' : 'none';
+  document.getElementById('authError').style.display = 'none';
+}
+
+async function signInGoogle() {
+  try {
+    await fb.signInWithPopup(fb.auth, fb.googleProvider);
+    closeAuthModal();
+    showToast('Welcome to Crumb! 🥐');
+  } catch (err) {
+    showAuthError(err.message);
+  }
+}
+
+async function signInEmail() {
+  const email = document.getElementById('authEmail').value;
+  const pw = document.getElementById('authPassword').value;
+  try {
+    await fb.signInWithEmailAndPassword(fb.auth, email, pw);
+    closeAuthModal();
+    showToast('Welcome back!');
+  } catch (err) {
+    showAuthError(friendlyAuthError(err.code));
+  }
+}
+
+async function signUpEmail() {
+  const name = document.getElementById('authName').value;
+  const email = document.getElementById('authEmailSignup').value;
+  const pw = document.getElementById('authPasswordSignup').value;
+  try {
+    const cred = await fb.createUserWithEmailAndPassword(fb.auth, email, pw);
+    if (name) await fb.updateProfile(cred.user, { displayName: name });
+    closeAuthModal();
+    showToast('Welcome to Crumb! 🥐');
+  } catch (err) {
+    showAuthError(friendlyAuthError(err.code));
+  }
+}
+
+function showAuthError(msg) {
+  const el = document.getElementById('authError');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+function friendlyAuthError(code) {
+  const map = { 'auth/wrong-password': 'Incorrect password.', 'auth/user-not-found': 'No account with that email.', 'auth/email-already-in-use': 'That email is already registered.', 'auth/weak-password': 'Password must be at least 6 characters.', 'auth/invalid-email': 'Please enter a valid email.' };
+  return map[code] || 'Something went wrong. Please try again.';
+}
+
+// ─── UTILS ────────────────────────────────────────────────────────────────────
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+function timeAgo(date) {
+  const s = Math.round((Date.now() - date) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.round(s / 60) + 'm ago';
+  if (s < 86400) return Math.round(s / 3600) + 'h ago';
+  if (s < 604800) return Math.round(s / 86400) + 'd ago';
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
+function escJS(str) {
+  return (str || '').replace(/'/g, "\\'").replace(/"/g, '\\"');
+}
+
+// Close modals on overlay click
+document.getElementById('addModal').addEventListener('click', e => { if (e.target === document.getElementById('addModal')) closeAddModal(); });
+document.getElementById('authModal').addEventListener('click', e => { if (e.target === document.getElementById('authModal')) closeAuthModal(); });
+document.getElementById('detailModal').addEventListener('click', e => { if (e.target === document.getElementById('detailModal')) closeDetailModal(); });
+
+// Keyboard close
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeAddModal(); closeAuthModal(); closeDetailModal(); } });
+
+// Init tasting dims
+buildTastingDims();
+</script>
+</body>
+</html>
