@@ -740,6 +740,60 @@ nav {
 .bakery-item-meta { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
 .bakery-item-score { font-family: 'Playfair Display', serif; font-size: 1.1rem; font-weight: 700; color: var(--caramel); flex-shrink: 0; }
 
+/* ─── PEOPLE & PROFILES ──────────────────────────────────────────────────────── */
+.member-card {
+  background: var(--cream-white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: var(--shadow);
+}
+.member-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+.member-avatar-lg {
+  width: 52px; height: 52px; border-radius: 50%;
+  background: var(--caramel);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.3rem; font-weight: 700; color: white;
+  flex-shrink: 0; overflow: hidden; border: 2px solid var(--honey);
+}
+.member-avatar-lg img { width: 100%; height: 100%; object-fit: cover; }
+.member-info { flex: 1; min-width: 0; }
+.member-name { font-family: 'Playfair Display', serif; font-size: 1rem; font-weight: 600; color: var(--espresso); }
+.member-location { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+.member-stats { font-size: 0.75rem; color: var(--caramel); font-weight: 500; margin-top: 4px; }
+
+.profile-hero {
+  background: var(--espresso);
+  padding: 28px 24px 24px;
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+}
+.profile-hero-avatar {
+  width: 72px; height: 72px; border-radius: 50%;
+  background: var(--caramel);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.8rem; font-weight: 700; color: white;
+  flex-shrink: 0; overflow: hidden;
+  border: 3px solid var(--honey);
+}
+.profile-hero-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.profile-hero-info { flex: 1; }
+.profile-hero-name { font-family: 'Playfair Display', serif; font-size: 1.4rem; font-weight: 700; color: var(--cream-white); margin-bottom: 2px; }
+.profile-hero-location { font-size: 0.82rem; color: var(--honey-light); margin-bottom: 10px; }
+.profile-hero-stats { display: flex; gap: 20px; flex-wrap: wrap; }
+.profile-stat { text-align: center; }
+.profile-stat-num { font-family: 'Playfair Display', serif; font-size: 1.4rem; font-weight: 700; color: var(--honey); }
+.profile-stat-label { font-size: 0.68rem; letter-spacing: 1.5px; text-transform: uppercase; color: var(--honey-light); margin-top: 1px; }
+.profile-body { padding: 20px 24px 32px; }
+.profile-bio { font-size: 0.88rem; color: var(--text-body); line-height: 1.65; font-style: italic; margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+.profile-reviews-title { font-family: 'Playfair Display', serif; font-size: 1.1rem; color: var(--espresso); margin-bottom: 14px; }
+
 /* ─── SPINNER ────────────────────────────────────────────────────────────────── */
 @keyframes spin { to { transform: rotate(360deg); } }
 .spinner { width: 20px; height: 20px; border: 2.5px solid rgba(139,94,60,0.2); border-top-color: var(--caramel); border-radius: 50%; animation: spin 0.8s linear infinite; }
@@ -784,6 +838,7 @@ nav {
     <button class="nav-btn active" onclick="showPage('home')">Discover</button>
     <button class="nav-btn" onclick="showPage('leaderboard')">Top Picks</button>
     <button class="nav-btn" onclick="showPage('bakeries')">Bakeries</button>
+    <button class="nav-btn" id="peopleNavBtn" onclick="showPage('people')" style="display:none">People</button>
     <button class="nav-btn" id="feedNavBtn" onclick="showPage('feed')" style="display:none">Feed</button>
     <button class="nav-btn-primary nav-btn" onclick="openAddModal()" id="addBtn">+ Add</button>
     <div class="nav-avatar" id="navAvatar" onclick="toggleUserMenu()" style="display:none">?</div>
@@ -1098,6 +1153,75 @@ nav {
   </div>
 </div>
 
+<!-- ─── PEOPLE PAGE ──────────────────────────────────────────────────────────── -->
+<div class="page" id="page-people">
+  <div class="section">
+    <div class="section-header">
+      <div class="section-eyebrow">The community</div>
+      <h2 class="section-title">Members</h2>
+    </div>
+    <div id="peopleGrid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:16px;">
+      <div class="empty-state" style="grid-column:1/-1">
+        <div class="empty-state-icon">👤</div>
+        <div class="empty-state-title">No members yet</div>
+        <div class="empty-state-text">Sign in and start reviewing to join the community.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── USER PROFILE MODAL ───────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="profileModal">
+  <div class="modal" style="max-width:600px;" role="dialog" aria-label="User profile">
+    <div class="modal-header">
+      <div class="modal-title" id="profileModalTitle">Profile</div>
+      <button class="modal-close" onclick="closeProfileModal()">✕</button>
+    </div>
+    <div id="profileModalContent"></div>
+  </div>
+</div>
+
+<!-- ─── MY PROFILE EDIT MODAL ────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="myProfileModal">
+  <div class="modal" style="max-width:520px;" role="dialog" aria-label="Edit profile">
+    <div class="modal-header">
+      <div class="modal-title">My profile</div>
+      <button class="modal-close" onclick="closeMyProfileModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Display name</label>
+        <input type="text" class="form-input" id="profileName" placeholder="Your name">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Location <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">(optional)</span></label>
+        <input type="text" class="form-input" id="profileLocation" placeholder="e.g. York, UK">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Bio <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">(optional)</span></label>
+        <textarea class="form-textarea" id="profileBio" placeholder="A few words about you and your love of baked goods…" style="min-height:90px;"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Avatar</label>
+        <div style="display:flex; align-items:center; gap:14px;">
+          <div id="profileAvatarPreview" style="width:56px;height:56px;border-radius:50%;background:var(--caramel);display:flex;align-items:center;justify-content:center;font-size:1.4rem;font-weight:700;color:white;overflow:hidden;flex-shrink:0;"></div>
+          <div>
+            <label style="cursor:pointer; display:inline-block; padding:8px 14px; border:1.5px solid var(--border); border-radius:var(--radius-sm); font-size:0.82rem; color:var(--caramel); font-weight:500; background:var(--parchment);">
+              📷 Upload photo
+              <input type="file" accept="image/*" style="display:none;" id="profilePhotoInput" onchange="handleProfilePhoto(this)">
+            </label>
+            <div style="font-size:0.72rem; color:var(--text-muted); margin-top:6px;">Or your Google avatar will be used if signed in with Google.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeMyProfileModal()">Cancel</button>
+      <button class="btn-espresso" onclick="saveMyProfile()">Save profile</button>
+    </div>
+  </div>
+</div>
+
 <!-- ─── EDIT REVIEW MODAL ────────────────────────────────────────────────────── -->
 <div class="modal-overlay" id="editModal">
   <div class="modal" style="max-width:560px;" role="dialog" aria-label="Edit review">
@@ -1265,6 +1389,7 @@ window.addEventListener('crumb-firebase-ready', () => {
     currentUser = user;
     updateNav();
     loadData();
+    loadProfiles();
   });
   document.getElementById('configBanner').classList.add('show');
 });
@@ -1277,19 +1402,24 @@ function showPage(name) {
   if (name === 'leaderboard') renderLeaderboard(lbCurrentTab);
   if (name === 'feed') renderFeed();
   if (name === 'bakeries') renderBakeries();
+  if (name === 'people') renderPeople();
 }
 
 function updateNav() {
   const avatar = document.getElementById('navAvatar');
   const signIn = document.getElementById('signInBtn');
   const feedBtn = document.getElementById('feedNavBtn');
+  const peopleBtn = document.getElementById('peopleNavBtn');
   if (currentUser) {
     avatar.style.display = 'flex';
     signIn.style.display = 'none';
     feedBtn.style.display = 'block';
+    if (peopleBtn) peopleBtn.style.display = 'block';
+    const profile = allProfiles[currentUser.uid];
+    const photo = profile?.photoURL || currentUser.photoURL;
     const initials = (currentUser.displayName || currentUser.email || '?').charAt(0).toUpperCase();
-    if (currentUser.photoURL) {
-      avatar.innerHTML = `<img src="${currentUser.photoURL}" alt="avatar">`;
+    if (photo) {
+      avatar.innerHTML = `<img src="${photo}" alt="avatar">`;
     } else {
       avatar.textContent = initials;
     }
@@ -1297,14 +1427,19 @@ function updateNav() {
     avatar.style.display = 'none';
     signIn.style.display = 'block';
     feedBtn.style.display = 'none';
+    if (peopleBtn) peopleBtn.style.display = 'none';
   }
 }
 
 function toggleUserMenu() {
-  // Simple sign-out on click for now
-  if (confirm('Sign out of Crumb?')) {
-    fb.signOut(fb.auth);
-    showToast('Signed out');
+  const choice = confirm('View your profile or sign out?\n\nOK = View profile\nCancel = Sign out');
+  if (choice) {
+    openProfileModal(currentUser.uid);
+  } else {
+    if (confirm('Sign out of Crumb?')) {
+      fb.signOut(fb.auth);
+      showToast('Signed out');
+    }
   }
 }
 
@@ -1367,7 +1502,7 @@ function cardHTML(item) {
       </div>
       <div class="card-body">
         <div class="card-meta">
-          <span>${item.userName || 'Anonymous'}</span>
+          <span style="cursor:pointer;color:var(--caramel);" onclick="event.stopPropagation(); if(currentUser) openProfileModal('${item.userId}')">${item.userName || 'Anonymous'}</span>
           ${item.createdAt ? `<span>·</span><span>${timeAgo(item.createdAt.toDate ? item.createdAt.toDate() : new Date(item.createdAt))}</span>` : ''}
         </div>
         <div class="card-name">${item.name || 'Unknown bake'}</div>
@@ -1646,7 +1781,7 @@ async function openDetail(id) {
           <div class="review-avatar">${(item.userName || 'A').charAt(0).toUpperCase()}</div>
           <div class="review-content">
             <div class="review-header">
-              <div class="review-name">${item.userName || 'Anonymous'}</div>
+              <div class="review-name" style="cursor:pointer;" onclick="closeDetailModal(); if(currentUser) openProfileModal('${item.userId}')">${item.userName || 'Anonymous'}</div>
               <div class="review-score">${userScore}</div>
             </div>
             ${item.notes ? `<div class="review-text">${item.notes}</div>` : '<div class="review-text" style="color:var(--text-muted);font-style:italic;">No notes added.</div>'}
@@ -2023,6 +2158,221 @@ async function saveReview() {
 }
 
 
+
+// ─── USER PROFILES ────────────────────────────────────────────────────────────
+let profilePhotoFile = null;
+let allProfiles = {}; // uid -> profile data
+
+async function loadProfiles() {
+  if (!fb) return;
+  const { db, collection, getDocs } = fb;
+  try {
+    const snap = await getDocs(collection(db, 'profiles'));
+    snap.docs.forEach(d => { allProfiles[d.id] = d.data(); });
+  } catch(e) { console.log('Profiles load error:', e.message); }
+}
+
+function renderPeople() {
+  const grid = document.getElementById('peopleGrid');
+  // Build member list from items + profiles
+  const members = {};
+  allItems.forEach(item => {
+    if (!item.userId) return;
+    if (!members[item.userId]) {
+      members[item.userId] = {
+        uid: item.userId,
+        name: item.userName || 'Anonymous',
+        photo: item.userPhoto || null,
+        reviews: 0, totalRating: 0
+      };
+    }
+    members[item.userId].reviews++;
+    members[item.userId].totalRating += (item.overallRating || 0);
+  });
+  // Merge in profile data
+  Object.keys(members).forEach(uid => {
+    if (allProfiles[uid]) {
+      members[uid] = { ...members[uid], ...allProfiles[uid], uid };
+    }
+  });
+
+  const list = Object.values(members).sort((a,b) => b.reviews - a.reviews);
+  if (!list.length) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon">👤</div><div class="empty-state-title">No members yet</div><div class="empty-state-text">Sign in and start reviewing to join the community.</div></div>`;
+    return;
+  }
+  grid.innerHTML = list.map(m => {
+    const initials = (m.name || '?').charAt(0).toUpperCase();
+    const avatarInner = m.photo ? `<img src="${m.photo}" alt="${m.name}">` : initials;
+    const avg = m.reviews ? (m.totalRating / m.reviews).toFixed(1) : '–';
+    return `
+      <div class="member-card" onclick="openProfileModal('${m.uid}')">
+        <div class="member-avatar-lg">${avatarInner}</div>
+        <div class="member-info">
+          <div class="member-name">${m.name || 'Anonymous'}</div>
+          ${m.location ? `<div class="member-location">📍 ${m.location}</div>` : ''}
+          <div class="member-stats">${m.reviews} review${m.reviews !== 1 ? 's' : ''} · avg ${avg}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+async function openProfileModal(uid) {
+  if (!currentUser) { openAuthModal(); return; }
+  document.getElementById('profileModal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  document.getElementById('profileModalContent').innerHTML = `<div style="padding:40px; text-align:center;"><div class="spinner" style="margin:0 auto;"></div></div>`;
+
+  // Get profile data
+  let profile = allProfiles[uid] || {};
+  try {
+    const { db, doc, getDoc } = fb;
+    const snap = await getDoc(doc(db, 'profiles', uid));
+    if (snap.exists()) { profile = snap.data(); allProfiles[uid] = profile; }
+  } catch(e) {}
+
+  const userItems = allItems.filter(i => i.userId === uid);
+  const name = profile.displayName || profile.name || (userItems[0]?.userName) || 'Anonymous';
+  const photo = profile.photoURL || userItems[0]?.userPhoto || null;
+  const initials = name.charAt(0).toUpperCase();
+  const avgRating = userItems.length ? (userItems.reduce((s,i) => s + (i.overallRating||0), 0) / userItems.length).toFixed(1) : '–';
+
+  // Top category
+  const catCounts = {};
+  userItems.forEach(i => { const c = i.category || 'other'; catCounts[c] = (catCounts[c]||0)+1; });
+  const topCat = Object.entries(catCounts).sort((a,b)=>b[1]-a[1])[0];
+  const topCatLabel = topCat ? (CATEGORY_TREE[topCat[0]]?.label || topCat[0]) : '–';
+
+  const isOwnProfile = currentUser && currentUser.uid === uid;
+
+  document.getElementById('profileModalTitle').textContent = isOwnProfile ? 'Your profile' : name;
+
+  const reviewsHTML = userItems.sort((a,b)=>(b.communityAvg||b.overallRating||0)-(a.communityAvg||a.overallRating||0)).map(item => {
+    const catDisp = getCategoryDisplay(item);
+    const score = item.communityAvg ? item.communityAvg.toFixed(1) : (item.overallRating ? item.overallRating.toFixed(1) : '–');
+    const thumb = item.photoURL
+      ? `<div class="bakery-item-thumb"><img src="${item.photoURL}" alt="${item.name}"></div>`
+      : `<div class="bakery-item-thumb">${catDisp.emoji}</div>`;
+    return `
+      <div class="bakery-item-row" onclick="closeProfileModal(); openDetail('${item.id}')">
+        ${thumb}
+        <div class="bakery-item-info">
+          <div class="bakery-item-name">${item.name || 'Unknown bake'}</div>
+          <div class="bakery-item-meta">${item.bakeryName || ''} · ${catDisp.sub || catDisp.main}</div>
+        </div>
+        <div class="bakery-item-score">${score}</div>
+      </div>`;
+  }).join('');
+
+  document.getElementById('profileModalContent').innerHTML = `
+    <div class="profile-hero">
+      <div class="profile-hero-avatar">${photo ? `<img src="${photo}" alt="${name}">` : initials}</div>
+      <div class="profile-hero-info">
+        <div class="profile-hero-name">${name}</div>
+        ${profile.location ? `<div class="profile-hero-location">📍 ${profile.location}</div>` : ''}
+        <div class="profile-hero-stats">
+          <div class="profile-stat"><div class="profile-stat-num">${userItems.length}</div><div class="profile-stat-label">Reviews</div></div>
+          <div class="profile-stat"><div class="profile-stat-num">${avgRating}</div><div class="profile-stat-label">Avg score</div></div>
+          <div class="profile-stat"><div class="profile-stat-num" style="font-size:0.9rem;">${topCatLabel}</div><div class="profile-stat-label">Fave type</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="profile-body">
+      ${profile.bio ? `<div class="profile-bio">"${profile.bio}"</div>` : ''}
+      ${isOwnProfile ? `<div style="margin-bottom:20px;"><button class="btn-caramel" style="font-size:0.82rem; padding:8px 16px;" onclick="closeProfileModal(); openMyProfileModal();">✏️ Edit your profile</button></div>` : ''}
+      ${userItems.length ? `<div class="profile-reviews-title">Reviews (${userItems.length})</div><div>${reviewsHTML}</div>` : `<div class="empty-state"><div class="empty-state-icon">🥐</div><div class="empty-state-title">No reviews yet</div></div>`}
+    </div>`;
+}
+
+function closeProfileModal() {
+  document.getElementById('profileModal').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// ─── MY PROFILE EDIT ──────────────────────────────────────────────────────────
+async function openMyProfileModal() {
+  if (!currentUser) { openAuthModal(); return; }
+  let profile = allProfiles[currentUser.uid] || {};
+  try {
+    const { db, doc, getDoc } = fb;
+    const snap = await getDoc(doc(db, 'profiles', currentUser.uid));
+    if (snap.exists()) profile = snap.data();
+  } catch(e) {}
+
+  const name = profile.displayName || currentUser.displayName || '';
+  const photo = profile.photoURL || currentUser.photoURL || null;
+  document.getElementById('profileName').value = name;
+  document.getElementById('profileLocation').value = profile.location || '';
+  document.getElementById('profileBio').value = profile.bio || '';
+  profilePhotoFile = null;
+
+  const prev = document.getElementById('profileAvatarPreview');
+  if (photo) {
+    prev.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+  } else {
+    prev.textContent = name.charAt(0).toUpperCase() || '?';
+  }
+
+  document.getElementById('myProfileModal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function handleProfilePhoto(input) {
+  if (!input.files[0]) return;
+  profilePhotoFile = input.files[0];
+  const reader = new FileReader();
+  reader.onload = e => {
+    const prev = document.getElementById('profileAvatarPreview');
+    prev.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+  };
+  reader.readAsDataURL(profilePhotoFile);
+}
+
+async function saveMyProfile() {
+  if (!currentUser) return;
+  const btn = document.querySelector('#myProfileModal .btn-espresso');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  try {
+    const { db, storage, doc, setDoc, updateProfile, ref, uploadBytes, getDownloadURL } = fb;
+    let photoURL = allProfiles[currentUser.uid]?.photoURL || currentUser.photoURL || null;
+
+    if (profilePhotoFile) {
+      const storageRef = ref(storage, `avatars/${currentUser.uid}`);
+      const snap = await uploadBytes(storageRef, profilePhotoFile);
+      photoURL = await getDownloadURL(snap.ref);
+    }
+
+    const displayName = document.getElementById('profileName').value.trim() || currentUser.displayName || 'Anonymous';
+    await updateProfile(currentUser, { displayName, ...(photoURL ? { photoURL } : {}) });
+
+    const profileData = {
+      displayName,
+      location: document.getElementById('profileLocation').value.trim(),
+      bio: document.getElementById('profileBio').value.trim(),
+      photoURL,
+      uid: currentUser.uid,
+      updatedAt: new Date().toISOString()
+    };
+
+    await setDoc(doc(db, 'profiles', currentUser.uid), profileData, { merge: true });
+    allProfiles[currentUser.uid] = profileData;
+    updateNav();
+    closeMyProfileModal();
+    showToast('Profile saved ✓');
+  } catch(e) {
+    showToast('Could not save — try again');
+    console.error(e);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save profile';
+  }
+}
+
+function closeMyProfileModal() {
+  document.getElementById('myProfileModal').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
 // ─── EDIT REVIEW ──────────────────────────────────────────────────────────────
 let editingItemId = null;
 let editPhotoFile = null;
@@ -2321,7 +2671,9 @@ document.getElementById('bakeryModal').addEventListener('click', e => { if (e.ta
 
 // Keyboard close
 document.getElementById('editModal').addEventListener('click', e => { if (e.target === document.getElementById('editModal')) closeEditModal(); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeAddModal(); closeAuthModal(); closeDetailModal(); closeBakeryModal(); closeEditModal(); } });
+document.getElementById('profileModal').addEventListener('click', e => { if (e.target === document.getElementById('profileModal')) closeProfileModal(); });
+document.getElementById('myProfileModal').addEventListener('click', e => { if (e.target === document.getElementById('myProfileModal')) closeMyProfileModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeAddModal(); closeAuthModal(); closeDetailModal(); closeBakeryModal(); closeEditModal(); closeProfileModal(); closeMyProfileModal(); } });
 
 // Init tasting dims and category chips
 buildTastingDims();
