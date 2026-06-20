@@ -1249,15 +1249,15 @@ nav {
 <div class="mobile-menu-backdrop" id="mobileBackdrop" onclick="closeMobileMenu()"></div>
 <div id="mobileMenu" class="mobile-menu">
   <div class="mobile-menu-section-label">Explore</div>
-  <button class="mobile-menu-item active" onclick="showPage('home'); closeMobileMenu()">🏠 Discover</button>
-  <button class="mobile-menu-item" onclick="showPage('leaderboard'); closeMobileMenu()">🏆 Top Picks</button>
-  <button class="mobile-menu-item" onclick="showPage('bakeries'); closeMobileMenu()">🏪 Bakeries</button>
-  <button class="mobile-menu-item" id="peopleNavBtn" onclick="showPage('people'); closeMobileMenu()" style="display:none">👥 People</button>
-  <button class="mobile-menu-item" id="feedNavBtn" onclick="showPage('feed'); closeMobileMenu()" style="display:none">📋 Feed</button>
+  <button class="mobile-menu-item active" onclick="closeMobileMenu(); setTimeout(()=>showPage('home'),50)">🏠 Discover</button>
+  <button class="mobile-menu-item" onclick="closeMobileMenu(); setTimeout(()=>showPage('leaderboard'),50)">🏆 Top Picks</button>
+  <button class="mobile-menu-item" onclick="closeMobileMenu(); setTimeout(()=>showPage('bakeries'),50)">🏪 Bakeries</button>
+  <button class="mobile-menu-item" id="peopleNavBtn" onclick="closeMobileMenu(); setTimeout(()=>showPage('people'),50)" style="display:none">👥 People</button>
+  <button class="mobile-menu-item" id="feedNavBtn" onclick="closeMobileMenu(); setTimeout(()=>showPage('feed'),50)" style="display:none">📋 Feed</button>
   <div class="mobile-menu-divider" id="mobileMenuDivider" style="display:none;"></div>
   <div class="mobile-menu-section-label" id="mobileAccountLabel" style="display:none;">Account</div>
-  <button class="mobile-menu-item" id="mobileProfileBtn" onclick="if(currentUser){openProfileModal(currentUser.uid);} closeMobileMenu();" style="display:none">👤 My profile</button>
-  <button class="mobile-menu-item" id="mobileEditProfileBtn" onclick="openSettingsModal(); closeMobileMenu();" style="display:none">⚙️ Settings</button>
+  <button class="mobile-menu-item" id="mobileProfileBtn" onclick="closeMobileMenu(); setTimeout(()=>{if(currentUser)openProfileModal(currentUser.uid);},50);" style="display:none">👤 My profile</button>
+  <button class="mobile-menu-item" id="mobileEditProfileBtn" onclick="closeMobileMenu(); setTimeout(()=>showPage('settings'),50);" style="display:none">⚙️ Settings</button>
   <button class="mobile-menu-item" id="mobileSignOutBtn" onclick="fb.signOut(fb.auth); showToast('Signed out'); closeMobileMenu();" style="display:none; color:#e07070;">→ Sign out</button>
   <div class="mobile-menu-divider" id="mobileSignInDivider"></div>
   <button class="mobile-menu-item" id="mobileSignInBtn" onclick="openAuthModal(); closeMobileMenu();">→ Sign in</button>
