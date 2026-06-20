@@ -1928,7 +1928,6 @@ let allUsers = []; // admin only
 let flaggedReviews = []; // admin only
 
 // Hardcoded admin user IDs — add yours here after first sign-in
-const ADMIN_USER_IDS = ['REPLACE_WITH_YOUR_USER_ID'];
 let currentStep = 1;
 let totalSteps = 4;
 let selectedCategory = '';
@@ -3504,38 +3503,9 @@ async function saveReview() {
 
 
 
-// ─── ROLES & PERMISSIONS ───────────────────────────────────────────────────────
-async function loadUserRole(uid) {
-  if (!fb || !uid) return;
-  // Check hardcoded admin list first
-  if (ADMIN_USER_IDS.includes(uid)) {
-    currentRole = 'admin';
-    currentUserBakeries = Object.keys(allBakeries || {});
-    return;
-  }
-  try {
-    const { db, doc, getDoc } = fb;
-    const snap = await getDoc(doc(db, 'roles', uid));
-    if (snap.exists()) {
-      const data = snap.data();
-      currentRole = data.role || 'user';
-      currentUserBakeries = data.bakeries || [];
-    } else {
-      currentRole = 'user';
-      currentUserBakeries = [];
-    }
-  } catch(e) {
-    currentRole = 'user';
-    currentUserBakeries = [];
-  }
-}
 
-function isAdmin() { return currentRole === 'admin' || (currentUser && ADMIN_USER_IDS.includes(currentUser.uid)); }
-function isBusiness() { return currentRole === 'business' || isAdmin(); }
-function ownsBakery(bakeryName) {
-  if (isAdmin()) return true;
-  return currentUserBakeries.some(b => b.toLowerCase() === (bakeryName || '').toLowerCase());
-}
+
+
 
 // ─── SETTINGS PAGE ────────────────────────────────────────────────────────────
 let settingsPhotoFile = null;
