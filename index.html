@@ -1125,6 +1125,94 @@ nav {
 .settings-row-label { font-size: 0.9rem; color: var(--text-body); }
 .settings-row-sub { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
 
+/* ─── EXPLORE PAGE ───────────────────────────────────────────────────────────── */
+.city-chip {
+  padding: 9px 18px;
+  border-radius: 100px;
+  border: 1.5px solid rgba(255,255,255,0.2);
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--parchment);
+  cursor: pointer;
+  transition: all 0.18s;
+  background: transparent;
+}
+.city-chip:hover { background: rgba(255,255,255,0.1); border-color: var(--honey); color: var(--honey); }
+.city-chip.active { background: var(--honey); border-color: var(--honey); color: var(--espresso); font-weight: 700; }
+.city-chip.has-crumb { border-color: var(--honey); color: var(--honey); }
+.city-chip.has-crumb::after { content: ' 🥐'; font-size: 0.75rem; }
+
+.explore-bakery-card {
+  background: var(--cream-white);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.explore-bakery-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+.explore-bakery-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px 18px;
+}
+.explore-rank {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--honey);
+  background: var(--espresso);
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  font-size: 1rem;
+}
+.explore-rank.gold { background: #B8860B; }
+.explore-rank.silver { background: #666; }
+.explore-rank.bronze { background: var(--caramel); }
+.explore-bakery-info { flex: 1; min-width: 0; }
+.explore-bakery-name { font-family: 'Playfair Display', serif; font-size: 1.05rem; font-weight: 600; color: var(--espresso); margin-bottom: 3px; }
+.explore-bakery-address { font-size: 0.78rem; color: var(--text-muted); margin-bottom: 6px; }
+.explore-bakery-meta { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.explore-score-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 0.78rem; font-weight: 600;
+  padding: 3px 10px; border-radius: 100px;
+}
+.explore-score-badge.google { background: #e8f4fc; color: #1a73e8; }
+.explore-score-badge.crumb { background: var(--espresso); color: var(--honey); }
+.explore-score-badge.crumb-small { background: rgba(44,24,16,0.08); color: var(--espresso); }
+.explore-top-item {
+  background: var(--parchment);
+  border-top: 1px solid var(--border);
+  padding: 10px 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.explore-top-item:hover { background: var(--parchment-dark); }
+.explore-top-item-label { font-size: 0.72rem; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 1px; }
+.explore-top-item-name { font-size: 0.88rem; font-weight: 600; color: var(--espresso); }
+.explore-top-item-score { font-family: 'Playfair Display', serif; font-size: 1rem; font-weight: 700; color: var(--caramel); margin-left: auto; flex-shrink: 0; }
+.explore-google-items {
+  border-top: 1px solid var(--border);
+  padding: 12px 18px;
+}
+.explore-google-item { font-size: 0.82rem; color: var(--text-muted); padding: 3px 0; }
+.explore-no-crumb {
+  border-top: 1px solid var(--border);
+  padding: 10px 18px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
 /* ─── SPINNER ────────────────────────────────────────────────────────────────── */
 @keyframes spin { to { transform: rotate(360deg); } }
 .spinner { width: 20px; height: 20px; border: 2.5px solid rgba(139,94,60,0.2); border-top-color: var(--caramel); border-radius: 50%; animation: spin 0.8s linear infinite; }
@@ -1232,6 +1320,7 @@ nav {
     <button class="nav-btn" onclick="showPage('home')">Discover</button>
     <button class="nav-btn" onclick="showPage('leaderboard')">Top Picks</button>
     <button class="nav-btn" onclick="showPage('bakeries')">Bakeries</button>
+    <button class="nav-btn" onclick="showPage('explore')">🗺️ Explore</button>
     <button class="nav-btn" id="desktopPeopleBtn" onclick="showPage('people')" style="display:none">People</button>
     <button class="nav-btn" id="desktopFeedBtn" onclick="showPage('feed')" style="display:none">Feed</button>
   </div>
@@ -1252,6 +1341,7 @@ nav {
   <button class="mobile-menu-item active" onclick="closeMobileMenu(); setTimeout(()=>showPage('home'),50)">🏠 Discover</button>
   <button class="mobile-menu-item" onclick="closeMobileMenu(); setTimeout(()=>showPage('leaderboard'),50)">🏆 Top Picks</button>
   <button class="mobile-menu-item" onclick="closeMobileMenu(); setTimeout(()=>showPage('bakeries'),50)">🏪 Bakeries</button>
+  <button class="mobile-menu-item" onclick="closeMobileMenu(); setTimeout(()=>showPage('explore'),50)">🗺️ Explore</button>
   <button class="mobile-menu-item" id="peopleNavBtn" onclick="closeMobileMenu(); setTimeout(()=>showPage('people'),50)" style="display:none">👥 People</button>
   <button class="mobile-menu-item" id="feedNavBtn" onclick="closeMobileMenu(); setTimeout(()=>showPage('feed'),50)" style="display:none">📋 Feed</button>
   <div class="mobile-menu-divider" id="mobileMenuDivider" style="display:none;"></div>
@@ -1583,6 +1673,45 @@ nav {
     </div>
     <div id="detailContent"></div>
   </div>
+</div>
+
+<!-- ─── EXPLORE PAGE ─────────────────────────────────────────────────────────── -->
+<div class="page" id="page-explore">
+
+  <!-- Hero -->
+  <div style="background:var(--espresso); padding:56px 24px 48px; text-align:center;">
+    <div style="font-size:0.72rem; letter-spacing:4px; text-transform:uppercase; color:var(--honey); font-weight:600; margin-bottom:12px;">Discover</div>
+    <h1 style="font-family:'Playfair Display',serif; font-size:clamp(2rem,5vw,3rem); color:var(--cream-white); font-weight:700; margin-bottom:12px;">Find great bakeries<br><em style="color:var(--honey); font-style:italic;">wherever you go</em></h1>
+    <p style="color:var(--honey-light); font-size:1rem; max-width:480px; margin:0 auto 32px; line-height:1.6; font-weight:300;">Pick a city and discover the top-rated bakeries. Where Crumb community reviews exist, they take priority.</p>
+
+    <!-- City grid -->
+    <div id="cityGrid" style="display:flex; flex-wrap:wrap; gap:8px; justify-content:center; max-width:720px; margin:0 auto;"></div>
+  </div>
+
+  <div class="torn" style="margin-bottom:0;"></div>
+
+  <!-- Results -->
+  <div class="section" id="exploreResults" style="display:none;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; flex-wrap:wrap; gap:12px;">
+      <div>
+        <div class="section-eyebrow" id="exploreEyebrow">Top bakeries</div>
+        <h2 class="section-title" id="exploreTitle">Loading…</h2>
+      </div>
+      <button class="btn-ghost" onclick="document.getElementById('exploreResults').style.display='none'; document.getElementById('exploreResultsSection').style.display='none';" style="font-size:0.85rem; color:var(--caramel);">← All cities</button>
+    </div>
+
+    <!-- Crumb reviews banner (shown if city has Crumb data) -->
+    <div id="exploreCrumbBanner" style="display:none; background:linear-gradient(135deg,var(--espresso),var(--espresso-mid)); border-radius:var(--radius); padding:14px 18px; margin-bottom:24px; display:flex; align-items:center; gap:12px; color:var(--parchment);">
+      <span style="font-size:1.4rem;">🥐</span>
+      <div>
+        <div style="font-size:0.82rem; font-weight:600; color:var(--honey);" id="exploreCrumbBannerText"></div>
+        <div style="font-size:0.75rem; color:var(--honey-light);">Crumb community reviews shown first</div>
+      </div>
+    </div>
+
+    <div id="exploreBakeryList" style="display:flex; flex-direction:column; gap:16px;"></div>
+  </div>
+
 </div>
 
 <!-- ─── PEOPLE PAGE ──────────────────────────────────────────────────────────── -->
@@ -2126,6 +2255,7 @@ function showPage(name) {
   if (name === 'leaderboard') { if (lbCurrentMode === 'bakeries') renderBakeryLeaderboard(); else renderLeaderboard(lbCurrentTab); }
   if (name === 'feed') renderFeed();
   if (name === 'bakeries') renderBakeries();
+  if (name === 'explore') initExplorePage();
   if (name === 'people') renderPeople();
   if (name === 'settings') openSettingsPage();
 }
@@ -4119,6 +4249,279 @@ function renderAdminBakeriesHTML() {
         </div>
       </div>`;
   }).join('');
+}
+
+// ─── EXPLORE PAGE ─────────────────────────────────────────────────────────────
+const UK_CITIES = [
+  { name: 'London',      lat: 51.5074, lng: -0.1278 },
+  { name: 'Manchester',  lat: 53.4808, lng: -2.2426 },
+  { name: 'Birmingham',  lat: 52.4862, lng: -1.8904 },
+  { name: 'Edinburgh',   lat: 55.9533, lng: -3.1883 },
+  { name: 'Bristol',     lat: 51.4545, lng: -2.5879 },
+  { name: 'Leeds',       lat: 53.8008, lng: -1.5491 },
+  { name: 'Liverpool',   lat: 53.4084, lng: -2.9916 },
+  { name: 'Glasgow',     lat: 55.8642, lng: -4.2518 },
+  { name: 'Brighton',    lat: 50.8225, lng: -0.1372 },
+  { name: 'Oxford',      lat: 51.7520, lng: -1.2577 },
+  { name: 'Cambridge',   lat: 52.2053, lng: 0.1218  },
+  { name: 'Bath',        lat: 51.3781, lng: -2.3597 },
+  { name: 'York',        lat: 53.9600, lng: -1.0873 },
+  { name: 'Newcastle',   lat: 54.9783, lng: -1.6178 },
+  { name: 'Nottingham',  lat: 52.9548, lng: -1.1581 },
+  { name: 'Sheffield',   lat: 53.3811, lng: -1.4701 },
+  { name: 'Cardiff',     lat: 51.4816, lng: -3.1791 },
+  { name: 'Belfast',     lat: 54.5973, lng: -5.9301 },
+  { name: 'Norwich',     lat: 52.6309, lng: 1.2974  },
+  { name: 'Exeter',      lat: 50.7184, lng: -3.5339 },
+  { name: 'Chester',     lat: 53.1905, lng: -2.8910 },
+  { name: 'Cheltenham',  lat: 51.8994, lng: -2.0783 },
+  { name: 'Harrogate',   lat: 53.9921, lng: -1.5413 },
+  { name: 'Margate',     lat: 51.3813, lng: 1.3862  },
+  { name: 'Whitby',      lat: 54.4858, lng: -0.6206 },
+];
+
+let exploreCache = {}; // city name -> results
+let exploreActiveCity = null;
+
+function getCrumbBakeriesNearCity(city) {
+  // Find bakeries within ~20km of city centre
+  const results = {};
+  allItems.forEach(item => {
+    if (!item.bakeryName || !item.bakeryLat) return;
+    const dist = distKm(city.lat, city.lng, item.bakeryLat, item.bakeryLng);
+    if (dist > 20) return;
+    const key = item.bakeryName;
+    if (!results[key]) results[key] = { name: key, address: item.bakeryAddress || '', lat: item.bakeryLat, lng: item.bakeryLng, items: [], totalScore: 0, dist };
+    results[key].items.push(item);
+    results[key].totalScore += (item.communityAvg || item.overallRating || 0);
+  });
+
+  // Also include bakeries whose name fuzzy-matches city (manual entry without lat/lng)
+  const cityLower = city.name.toLowerCase();
+  allItems.forEach(item => {
+    if (!item.bakeryName || item.bakeryLat) return; // skip if already has coords
+    const addr = (item.bakeryAddress || '').toLowerCase();
+    if (!addr.includes(cityLower)) return;
+    const key = item.bakeryName;
+    if (!results[key]) results[key] = { name: key, address: item.bakeryAddress || '', items: [], totalScore: 0, dist: 0 };
+    results[key].items.push(item);
+    results[key].totalScore += (item.communityAvg || item.overallRating || 0);
+  });
+
+  return Object.values(results)
+    .map(b => ({
+      ...b,
+      communityAvg: b.items.length ? (b.totalScore / b.items.length) : 0,
+      topItem: [...b.items].sort((a,b) => (b.communityAvg||b.overallRating||0) - (a.communityAvg||a.overallRating||0))[0]
+    }))
+    .sort((a,b) => b.communityAvg - a.communityAvg);
+}
+
+function initExplorePage() {
+  const grid = document.getElementById('cityGrid');
+  if (!grid) return;
+
+  // Figure out which cities have Crumb reviews
+  const citiesWithCrumb = new Set();
+  UK_CITIES.forEach(city => {
+    const crumb = getCrumbBakeriesNearCity(city);
+    if (crumb.length > 0) citiesWithCrumb.add(city.name);
+  });
+
+  grid.innerHTML = UK_CITIES.map(city => {
+    const hasCrumb = citiesWithCrumb.has(city.name);
+    return `<button class="city-chip${hasCrumb ? ' has-crumb' : ''}${exploreActiveCity === city.name ? ' active' : ''}"
+      onclick="selectExploreCity('${city.name}')">${city.name}</button>`;
+  }).join('');
+
+  // If a city was previously selected, re-show it
+  if (exploreActiveCity) {
+    document.getElementById('exploreResults').style.display = 'block';
+  }
+}
+
+async function selectExploreCity(cityName) {
+  exploreActiveCity = cityName;
+  const city = UK_CITIES.find(c => c.name === cityName);
+  if (!city) return;
+
+  // Update active chip
+  document.querySelectorAll('.city-chip').forEach(c => {
+    c.classList.toggle('active', c.textContent.replace(' 🥐','').trim() === cityName);
+  });
+
+  // Show results section
+  const resultsEl = document.getElementById('exploreResults');
+  resultsEl.style.display = 'block';
+  document.getElementById('exploreEyebrow').textContent = 'Top bakeries in';
+  document.getElementById('exploreTitle').textContent = cityName;
+  document.getElementById('exploreBakeryList').innerHTML = '<div style="text-align:center;padding:40px;"><div class="spinner" style="margin:0 auto;"></div></div>';
+
+  // Scroll to results
+  resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  // Check Crumb data first
+  const crumbBakeries = getCrumbBakeriesNearCity(city);
+  const crumbBanner = document.getElementById('exploreCrumbBanner');
+  const crumbBannerText = document.getElementById('exploreCrumbBannerText');
+
+  if (crumbBakeries.length > 0) {
+    crumbBanner.style.display = 'flex';
+    crumbBannerText.textContent = `${crumbBakeries.length} bakeri${crumbBakeries.length !== 1 ? 'es' : 'y'} reviewed by the Crumb community in ${cityName}`;
+  } else {
+    crumbBanner.style.display = 'none';
+  }
+
+  // Fetch Google Places data (with cache)
+  let googleResults = [];
+  if (exploreCache[cityName]) {
+    googleResults = exploreCache[cityName];
+    renderExploreResults(city, crumbBakeries, googleResults);
+  } else {
+    try {
+      googleResults = await fetchGoogleBakeries(city);
+      exploreCache[cityName] = googleResults;
+    } catch(e) {
+      console.log('Google Places error:', e);
+    }
+    renderExploreResults(city, crumbBakeries, googleResults);
+  }
+}
+
+async function fetchGoogleBakeries(city) {
+  if (!GOOGLE_MAPS_KEY) return [];
+  const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': GOOGLE_MAPS_KEY,
+      'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.location,places.websiteUri,places.regularOpeningHours'
+    },
+    body: JSON.stringify({
+      textQuery: `bakery cafe patisserie in ${city.name} UK`,
+      locationBias: {
+        circle: { center: { latitude: city.lat, longitude: city.lng }, radius: 8000 }
+      },
+      maxResultCount: 20
+    })
+  });
+  const data = await res.json();
+  return (data.places || [])
+    .filter(p => p.rating && p.rating >= 4.0)
+    .sort((a, b) => {
+      // Score = rating * log(reviews) to balance quality and popularity
+      const scoreA = (a.rating || 0) * Math.log10((a.userRatingCount || 1) + 1);
+      const scoreB = (b.rating || 0) * Math.log10((b.userRatingCount || 1) + 1);
+      return scoreB - scoreA;
+    })
+    .slice(0, 10);
+}
+
+function renderExploreResults(city, crumbBakeries, googleResults) {
+  const list = document.getElementById('exploreBakeryList');
+
+  // Merge: Crumb bakeries take priority, then Google fills the rest
+  const combined = [];
+  const crumbNames = new Set(crumbBakeries.map(b => b.name.toLowerCase()));
+
+  // Add Crumb bakeries first
+  crumbBakeries.forEach(b => combined.push({ ...b, source: 'crumb' }));
+
+  // Add Google results that aren't already in Crumb
+  googleResults.forEach(p => {
+    const pName = (p.displayName?.text || '').toLowerCase();
+    const alreadyInCrumb = [...crumbNames].some(cn => pName.includes(cn) || cn.includes(pName));
+    if (!alreadyInCrumb) {
+      combined.push({
+        source: 'google',
+        name: p.displayName?.text || 'Unknown',
+        address: p.formattedAddress || '',
+        googleRating: p.rating,
+        googleReviews: p.userRatingCount,
+        website: p.websiteUri || null,
+        placeId: p.id,
+        lat: p.location?.latitude,
+        lng: p.location?.longitude,
+      });
+    }
+  });
+
+  if (!combined.length) {
+    list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🏪</div><div class="empty-state-title">No bakeries found yet</div><div class="empty-state-text">Be the first to review a bakery in ${city.name} on Crumb!</div></div>`;
+    return;
+  }
+
+  list.innerHTML = combined.slice(0, 10).map((b, i) => {
+    const rank = i + 1;
+    const rankClass = rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : '';
+
+    if (b.source === 'crumb') {
+      // Crumb-reviewed bakery
+      const avg = b.communityAvg.toFixed(1);
+      const topItem = b.topItem;
+      const topItemHTML = topItem ? `
+        <div class="explore-top-item" onclick="closeMobileMenu(); openBakeryProfile('${escJS(b.name)}')">
+          ${topItem.photoURL ? `<img src="${topItem.photoURL}" style="width:36px;height:36px;border-radius:6px;object-fit:cover;flex-shrink:0;" alt="">` : `<span style="font-size:1.2rem;">${getCategoryDisplay(topItem).emoji}</span>`}
+          <div>
+            <div class="explore-top-item-label">Best rated item</div>
+            <div class="explore-top-item-name">${topItem.name || 'Unknown'}</div>
+          </div>
+          <div class="explore-top-item-score">${(topItem.communityAvg || topItem.overallRating || 0).toFixed(1)}</div>
+        </div>` : '';
+      return `
+        <div class="explore-bakery-card">
+          <div class="explore-bakery-header">
+            <div class="explore-rank ${rankClass}">${rank}</div>
+            <div class="explore-bakery-info">
+              <div class="explore-bakery-name">${b.name}</div>
+              <div class="explore-bakery-address">📍 ${b.address}</div>
+              <div class="explore-bakery-meta">
+                <span class="explore-score-badge crumb">🥐 ${avg} Crumb</span>
+                <span style="font-size:0.75rem;color:var(--text-muted);">${b.items.length} review${b.items.length !== 1 ? 's' : ''}</span>
+              </div>
+            </div>
+            <button class="admin-btn primary" onclick="openBakeryProfile('${escJS(b.name)}')" style="flex-shrink:0;font-size:0.78rem;">View →</button>
+          </div>
+          ${topItemHTML}
+        </div>`;
+    } else {
+      // Google-sourced bakery
+      const stars = '★'.repeat(Math.round(b.googleRating || 0));
+      const mapsUrl = `https://www.google.com/maps/place/?q=place_id:${b.placeId}`;
+      return `
+        <div class="explore-bakery-card">
+          <div class="explore-bakery-header">
+            <div class="explore-rank ${rankClass}">${rank}</div>
+            <div class="explore-bakery-info">
+              <div class="explore-bakery-name">${b.name}</div>
+              <div class="explore-bakery-address">📍 ${b.address}</div>
+              <div class="explore-bakery-meta">
+                <span class="explore-score-badge google">★ ${b.googleRating} Google</span>
+                <span style="font-size:0.75rem;color:var(--text-muted);">${b.googleReviews?.toLocaleString() || '?'} reviews</span>
+              </div>
+            </div>
+            <a href="${mapsUrl}" target="_blank" rel="noopener" class="admin-btn" style="flex-shrink:0;font-size:0.78rem;text-decoration:none;">Maps ↗</a>
+          </div>
+          <div class="explore-no-crumb">
+            <span>Not yet reviewed on Crumb</span>
+            <button class="admin-btn primary" style="font-size:0.75rem;" onclick="openAddModalForBakery('${escJS(b.name)}','${escJS(b.address)}','${b.placeId||''}','${b.lat||''}','${b.lng||''}')">+ Be first to review</button>
+          </div>
+        </div>`;
+    }
+  }).join('');
+}
+
+function openAddModalForBakery(name, address, placeId, lat, lng) {
+  openAddModal();
+  setTimeout(() => {
+    // Pre-fill bakery on step 1
+    selectedBakery = { name, address, placeId: placeId || null, lat: lat ? parseFloat(lat) : null, lng: lng ? parseFloat(lng) : null };
+    document.getElementById('bakerySearch').value = name;
+    document.getElementById('selectedBakeryName').textContent = name;
+    document.getElementById('selectedBakeryAddress').textContent = address;
+    document.getElementById('locationSelected').classList.add('visible');
+    showKnownBakeries();
+  }, 100);
 }
 
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
