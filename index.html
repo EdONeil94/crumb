@@ -1308,7 +1308,6 @@ function closeDetailModal() {
 // ─── ADD ITEM MODAL ───────────────────────────────────────────────────────────
 function openAddModal() {
   if (!currentUser) { openAuthModal(); return; }
-  loadGoogleMaps();
   resetAddModal();
   document.getElementById('addModal').classList.add('open');
   document.body.style.overflow = 'hidden';
@@ -1453,22 +1452,6 @@ function searchBakery(val) {
   searchTimeout = setTimeout(() => fetchBakeryPlaces(val), 400);
 }
 
-// Load Google Maps JS API dynamically
-let mapsLoaded = false;
-let placesService = null;
-function loadGoogleMaps() {
-  if (mapsLoaded || !GOOGLE_MAPS_KEY) return;
-  mapsLoaded = true;
-  const script = document.createElement('script');
-  script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_KEY}&libraries=places&callback=initPlaces`;
-  script.async = true;
-  document.head.appendChild(script);
-}
-window.initPlaces = function() {
-  const dummy = document.createElement('div');
-  placesService = new google.maps.places.PlacesService(dummy);
-};
-
 async function fetchBakeryPlaces(query) {
   if (!GOOGLE_MAPS_KEY) {
     document.getElementById('bakeryResults').innerHTML = `
@@ -1477,35 +1460,32 @@ async function fetchBakeryPlaces(query) {
       </div>`;
     return;
   }
-  loadGoogleMaps();
-  // Wait for Maps to load if needed
-  let attempts = 0;
-  while (!placesService && attempts < 20) {
-    await new Promise(r => setTimeout(r, 250));
-    attempts++;
-  }
-  if (!placesService) {
-    document.getElementById('bakeryResults').innerHTML = `<div style="font-size:0.82rem; color:var(--text-muted); padding:8px;">Search unavailable — <span style="color:var(--caramel); cursor:pointer;" onclick="selectManualBakery('${query}')">use this name anyway</span></div>`;
-    return;
-  }
-  const request = {
-    query: query + ' bakery',
-    fields: ['place_id', 'name', 'formatted_address']
-  };
-  placesService.textSearch(request, (results, status) => {
+  try {
+    const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': GOOGLE_MAPS_KEY,
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress'
+      },
+      body: JSON.stringify({ textQuery: query + ' bakery' })
+    });
+    const data = await res.json();
     const el = document.getElementById('bakeryResults');
-    if (status !== google.maps.places.PlacesServiceStatus.OK || !results?.length) {
+    if (!data.places?.length) {
       el.innerHTML = `<div style="font-size:0.82rem; color:var(--text-muted); padding:8px;">No bakeries found — <span style="color:var(--caramel); cursor:pointer;" onclick="selectManualBakery('${query}')">use this name anyway</span></div>`;
       return;
     }
-    el.innerHTML = results.slice(0, 5).map(p => `
-      <div onclick="selectBakery('${p.place_id}','${escJS(p.name)}','${escJS(p.formatted_address)}')"
+    el.innerHTML = data.places.slice(0, 5).map(p => `
+      <div onclick="selectBakery('${p.id}','${escJS(p.displayName?.text || '')}','${escJS(p.formattedAddress || '')}')"
         style="padding:10px 12px; background:var(--parchment); border-radius:var(--radius-sm); cursor:pointer; border:1.5px solid var(--border); transition:border-color 0.2s;"
         onmouseover="this.style.borderColor='var(--honey)'" onmouseout="this.style.borderColor='var(--border)'">
-        <div style="font-size:0.88rem; font-weight:600; color:var(--espresso);">${p.name}</div>
-        <div style="font-size:0.75rem; color:var(--text-muted);">${p.formatted_address}</div>
+        <div style="font-size:0.88rem; font-weight:600; color:var(--espresso);">${p.displayName?.text || ''}</div>
+        <div style="font-size:0.75rem; color:var(--text-muted);">${p.formattedAddress || ''}</div>
       </div>`).join('');
-  });
+  } catch(e) {
+    document.getElementById('bakeryResults').innerHTML = `<div style="font-size:0.82rem; color:var(--text-muted); padding:8px;">Search unavailable — <span style="color:var(--caramel); cursor:pointer;" onclick="selectManualBakery('${query}')">use this name anyway</span></div>`;
+  }
 }
 
 function selectBakery(placeId, name, address) {
