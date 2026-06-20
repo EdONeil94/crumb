@@ -1932,12 +1932,6 @@ async function loadAllUserRoles() {
 // ─── STATE ────────────────────────────────────────────────────────────────────
 let currentUser = null;
 let fb = null;
-let currentRole = 'user'; // 'user' | 'business' | 'admin'
-let currentUserBakeries = []; // bakeries owned by this user
-let allUsers = []; // admin only
-let flaggedReviews = []; // admin only
-
-// Hardcoded admin user IDs — add yours here after first sign-in
 let currentStep = 1;
 let totalSteps = 4;
 let selectedCategory = '';
@@ -2224,7 +2218,7 @@ function toggleUserMenu() {
     min-width:180px; overflow:hidden;`;
   const profile = allProfiles[currentUser.uid];
   const name = profile?.displayName || currentUser.displayName || currentUser.email?.split('@')[0] || 'My profile';
-  const roleBadgeHtml = currentRole === 'admin' ? '<span class="role-badge admin">Admin</span>' : currentRole === 'business' ? '<span class="role-badge business">Business</span>' : '';
+  const roleBadgeHtml = isAdmin() ? '<span class="role-badge admin">Admin</span>' : isBusiness() ? '<span class="role-badge business">Business</span>' : '';
   dropdown.innerHTML = `
     <div style="padding:12px 16px; border-bottom:1px solid var(--border);">
       <div style="font-size:0.82rem; font-weight:600; color:var(--espresso); display:flex; align-items:center; gap:8px;">${name} ${roleBadgeHtml}</div>
@@ -3623,7 +3617,7 @@ function renderBusinessSection() {
   const body = document.getElementById('settingsBusinessBody');
   const myBakeries = isAdmin()
     ? Object.keys(allBakeries || {})
-    : currentUserBakeries;
+    : (currentUserBakery ? [currentUserBakery] : []);
 
   if (!myBakeries.length) {
     body.innerHTML = `<div class="empty-state" style="padding:20px 0;"><div class="empty-state-icon">🏪</div><div class="empty-state-title">No bakeries assigned yet</div><div class="empty-state-text">Ask an admin to assign your bakery to your account.</div></div>`;
