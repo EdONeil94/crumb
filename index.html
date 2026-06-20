@@ -954,16 +954,9 @@ nav {
 
         <div class="form-group">
           <label class="form-label">Category</label>
-          <div class="category-chips" id="categoryChips">
-            <div class="category-chip" onclick="selectCategory(this,'croissant')">🥐 Croissant</div>
-            <div class="category-chip" onclick="selectCategory(this,'sourdough')">🍞 Sourdough</div>
-            <div class="category-chip" onclick="selectCategory(this,'tart')">🥧 Tart</div>
-            <div class="category-chip" onclick="selectCategory(this,'cake')">🎂 Cake</div>
-            <div class="category-chip" onclick="selectCategory(this,'pastry')">🫓 Pastry</div>
-            <div class="category-chip" onclick="selectCategory(this,'bun')">🫓 Bun</div>
-            <div class="category-chip" onclick="selectCategory(this,'cookie')">🍪 Cookie</div>
-            <div class="category-chip" onclick="selectCategory(this,'bread')">🥖 Bread</div>
-            <div class="category-chip" onclick="selectCategory(this,'other')">✦ Other</div>
+          <div id="categoryChips">
+            <div id="categoryParentChips" class="category-chips" style="margin-bottom:10px;"></div>
+            <div id="categorySubChips" class="category-chips" style="display:none;"></div>
           </div>
         </div>
       </div>
@@ -1105,6 +1098,21 @@ nav {
   </div>
 </div>
 
+<!-- ─── EDIT REVIEW MODAL ────────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal" style="max-width:560px;" role="dialog" aria-label="Edit review">
+    <div class="modal-header">
+      <div class="modal-title">Edit your review</div>
+      <button class="modal-close" onclick="closeEditModal()">✕</button>
+    </div>
+    <div class="modal-body" id="editModalBody" style="padding-bottom:0;"></div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeEditModal()">Cancel</button>
+      <button class="btn-caramel" id="editSaveBtn" onclick="saveEdit()">Save changes</button>
+    </div>
+  </div>
+</div>
+
 <!-- ─── TOAST ─────────────────────────────────────────────────────────────────── -->
 <div id="toast"></div>
 
@@ -1121,10 +1129,126 @@ let photoDataURL = null;
 let lbCurrentTab = 'all';
 let allItems = [];
 
-const CATEGORIES = {
-  croissant: '🥐', sourdough: '🍞', tart: '🥧', cake: '🎂',
-  pastry: '🫓', bun: '🫓', cookie: '🍪', bread: '🥖', other: '✦'
+const CATEGORY_TREE = {
+  bread: {
+    label: 'Bread', emoji: '🍞',
+    subs: {
+      sourdough: 'Sourdough', baguette: 'Baguette', rye: 'Rye', focaccia: 'Focaccia',
+      ciabatta: 'Ciabatta', wholemeal: 'Wholemeal', soda_bread: 'Soda Bread',
+      brioche_loaf: 'Brioche Loaf', spelt: 'Spelt', flatbread: 'Flatbread'
+    }
+  },
+  pastry: {
+    label: 'Pastry', emoji: '🥐',
+    subs: {
+      croissant: 'Croissant', pain_au_chocolat: 'Pain au Chocolat',
+      danish: 'Danish', almond_croissant: 'Almond Croissant',
+      pain_aux_raisins: 'Pain aux Raisins', kouign_amann: 'Kouign-Amann',
+      eclair: 'Éclair', profiterole: 'Profiterole', mille_feuille: 'Mille-feuille',
+      vol_au_vent: 'Vol-au-vent'
+    }
+  },
+  cake: {
+    label: 'Cake', emoji: '🎂',
+    subs: {
+      victoria_sponge: 'Victoria Sponge', carrot_cake: 'Carrot Cake',
+      lemon_drizzle: 'Lemon Drizzle', chocolate_cake: 'Chocolate Cake',
+      cheesecake: 'Cheesecake', banana_bread: 'Banana Bread',
+      coffee_cake: 'Coffee & Walnut', red_velvet: 'Red Velvet',
+      fruit_cake: 'Fruit Cake', opera: 'Opera Cake'
+    }
+  },
+  tart: {
+    label: 'Tart & Pie', emoji: '🥧',
+    subs: {
+      lemon_tart: 'Lemon Tart', custard_tart: 'Custard Tart',
+      fruit_tart: 'Fruit Tart', egg_tart: 'Egg Tart',
+      treacle_tart: 'Treacle Tart', bakewell: 'Bakewell Tart',
+      quiche: 'Quiche', pithivier: 'Pithivier',
+      portuguese_tart: 'Pastel de Nata', pecan_pie: 'Pecan Pie'
+    }
+  },
+  bun: {
+    label: 'Buns & Rolls', emoji: '🫓',
+    subs: {
+      cinnamon_bun: 'Cinnamon Bun', chelsea_bun: 'Chelsea Bun',
+      hot_cross_bun: 'Hot Cross Bun', sticky_bun: 'Sticky Bun',
+      dinner_roll: 'Dinner Roll', brioche_bun: 'Brioche Bun',
+      bath_oliver: 'Bath Oliver', iced_bun: 'Iced Bun',
+      devonshire_split: 'Devonshire Split', cardamom_bun: 'Cardamom Bun'
+    }
+  },
+  cookie: {
+    label: 'Biscuits & Cookies', emoji: '🍪',
+    subs: {
+      chocolate_chip: 'Chocolate Chip Cookie', shortbread: 'Shortbread',
+      brownie: 'Brownie', blondie: 'Blondie',
+      macaroon: 'Macaroon', florentine: 'Florentine',
+      flapjack: 'Flapjack', millionaire: "Millionaire's Shortbread",
+      digestive: 'Digestive', gingerbread: 'Gingerbread'
+    }
+  },
+  sandwich: {
+    label: 'Sandwiches & Savoury', emoji: '🥪',
+    subs: {
+      sandwich: 'Sandwich', sausage_roll: 'Sausage Roll',
+      pasty: 'Pasty', pie_slice: 'Pie Slice',
+      cheese_scone: 'Cheese Scone', savoury_tart: 'Savoury Tart',
+      flatbread_wrap: 'Flatbread Wrap', toastie: 'Toastie',
+      scotch_egg: 'Scotch Egg', empanada: 'Empanada'
+    }
+  },
+  scone: {
+    label: 'Scones & Tea Cakes', emoji: '🫖',
+    subs: {
+      plain_scone: 'Plain Scone', fruit_scone: 'Fruit Scone',
+      cream_scone: 'Cream Scone', welsh_cake: 'Welsh Cake',
+      crumpet: 'Crumpet', teacake: 'Teacake',
+      muffin_english: 'English Muffin', pikelet: 'Pikelet',
+      lardy_cake: 'Lardy Cake', bara_brith: 'Bara Brith'
+    }
+  },
+  sweet_treat: {
+    label: 'Sweet Treats', emoji: '🍬',
+    subs: {
+      doughnut: 'Doughnut', churro: 'Churro',
+      waffle: 'Waffle', crepe: 'Crêpe',
+      cannoli: 'Cannoli', baklava: 'Baklava',
+      meringue: 'Meringue', macaron: 'Macaron',
+      madeleine: 'Madeleine', chouquette: 'Chouquette'
+    }
+  },
+  other: {
+    label: 'Other', emoji: '✦',
+    subs: { other: 'Other / Not listed' }
+  }
 };
+
+// Flat lookup helpers
+const CATEGORIES = {}; // subKey -> emoji (for backward compat)
+const SUB_TO_PARENT = {}; // subKey -> parentKey
+const SUB_LABEL = {}; // subKey -> label
+Object.entries(CATEGORY_TREE).forEach(([parentKey, parent]) => {
+  CATEGORIES[parentKey] = parent.emoji;
+  Object.entries(parent.subs).forEach(([subKey, subLabel]) => {
+    CATEGORIES[subKey] = parent.emoji;
+    SUB_TO_PARENT[subKey] = parentKey;
+    SUB_LABEL[subKey] = subLabel;
+  });
+});
+
+function getCategoryDisplay(item) {
+  const sub = item.subCategory;
+  const cat = item.category;
+  if (sub && SUB_LABEL[sub]) {
+    const parent = CATEGORY_TREE[SUB_TO_PARENT[sub] || cat];
+    return { main: parent?.label || cat, sub: SUB_LABEL[sub], emoji: parent?.emoji || '✦' };
+  }
+  if (cat && CATEGORY_TREE[cat]) {
+    return { main: CATEGORY_TREE[cat].label, sub: null, emoji: CATEGORY_TREE[cat].emoji };
+  }
+  return { main: 'Other', sub: null, emoji: '✦' };
+}
 
 const TASTING_DIMS = ['Texture', 'Flavour', 'Sweetness', 'Appearance', 'Value'];
 // Google Maps API key - replace with yours
@@ -1226,14 +1350,15 @@ function renderFeed() {
 }
 
 function cardHTML(item) {
-  const emoji = CATEGORIES[item.category] || '✦';
+  const catDisp = getCategoryDisplay(item);
+  const emoji = catDisp.emoji;
   const score = item.communityAvg ? item.communityAvg.toFixed(1) : (item.overallRating ? item.overallRating.toFixed(1) : '–');
   const ratingCount = item.ratingCount || 1;
   const price = item.price ? `£${parseFloat(item.price).toFixed(2)}` : '';
   const imageTag = item.photoURL
     ? `<img src="${item.photoURL}" alt="${item.name}" loading="lazy">`
     : `<div class="card-image-placeholder">${emoji}</div>`;
-  const catLabel = item.category ? item.category.charAt(0).toUpperCase() + item.category.slice(1) : 'Other';
+  const catLabel = catDisp.sub ? `${catDisp.main} · ${catDisp.sub}` : catDisp.main;
   return `
     <div class="card" onclick="openDetail('${item.id}')">
       <div class="card-image">
@@ -1337,7 +1462,8 @@ async function openBakeryProfile(bakeryName) {
   const canEdit = !!currentUser;
 
   const itemsHTML = sortedItems.map(item => {
-    const emoji = CATEGORIES[item.category] || '✦';
+    const catDisp = getCategoryDisplay(item);
+    const emoji = catDisp.emoji;
     const score = item.communityAvg ? item.communityAvg.toFixed(1) : (item.overallRating ? item.overallRating.toFixed(1) : '–');
     const thumb = item.photoURL
       ? `<div class="bakery-item-thumb"><img src="${item.photoURL}" alt="${item.name}"></div>`
@@ -1474,8 +1600,9 @@ async function openDetail(id) {
   document.getElementById('detailModal').classList.add('open');
   document.body.style.overflow = 'hidden';
 
-  const emoji = CATEGORIES[item.category] || '✦';
-  const catLabel = item.category ? item.category.charAt(0).toUpperCase() + item.category.slice(1) : 'Other';
+  const catDisp = getCategoryDisplay(item);
+  const emoji = catDisp.emoji;
+  const catLabel = catDisp.sub ? `${catDisp.main} · ${catDisp.sub}` : catDisp.main;
   const communityScore = item.communityAvg ? item.communityAvg.toFixed(1) : (item.overallRating ? item.overallRating.toFixed(1) : '–');
   const userScore = item.overallRating ? item.overallRating.toFixed(1) : '–';
   const dimsHTML = TASTING_DIMS.map(dim => {
@@ -1527,6 +1654,7 @@ async function openDetail(id) {
           </div>
         </div>
         ${currentUser && currentUser.uid !== item.userId ? `<div style="margin-top:16px;"><button class="btn-espresso" onclick="closeDetailModal(); openAddModal('${id}');" style="font-size:0.85rem; padding:10px 18px;">Add your own rating →</button></div>` : ''}
+        ${currentUser && currentUser.uid === item.userId ? `<div style="margin-top:16px;"><button class="btn-caramel" onclick="closeDetailModal(); openEditModal('${id}');" style="font-size:0.85rem; padding:10px 18px;">✏️ Edit your review</button></div>` : ''}
       </div>
     </div>`;
 }
@@ -1573,6 +1701,8 @@ function resetAddModal() {
     </div>`;
   document.querySelectorAll('.category-chip').forEach(c => c.classList.remove('selected'));
   buildTastingDims();
+  buildCategoryChips();
+  selectedSubCategory = '';
   goToStep(1);
 }
 
@@ -1669,10 +1799,46 @@ async function identifyWithAI(dataURL) {
   }
 }
 
-function selectCategory(el, cat) {
-  document.querySelectorAll('.category-chip').forEach(c => c.classList.remove('selected'));
+let selectedSubCategory = '';
+
+function buildCategoryChips() {
+  const parentWrap = document.getElementById('categoryParentChips');
+  const subWrap = document.getElementById('categorySubChips');
+  if (!parentWrap) return;
+  parentWrap.innerHTML = Object.entries(CATEGORY_TREE).map(([key, cat]) =>
+    `<div class="category-chip" onclick="selectParentCategory(this,'${key}')">${cat.emoji} ${cat.label}</div>`
+  ).join('');
+  subWrap.innerHTML = '';
+  subWrap.style.display = 'none';
+}
+
+function selectParentCategory(el, parentKey) {
+  document.querySelectorAll('#categoryParentChips .category-chip').forEach(c => c.classList.remove('selected'));
   el.classList.add('selected');
-  selectedCategory = cat;
+  selectedCategory = parentKey;
+  selectedSubCategory = '';
+  // Show sub-categories
+  const subWrap = document.getElementById('categorySubChips');
+  const subs = CATEGORY_TREE[parentKey]?.subs || {};
+  subWrap.innerHTML = Object.entries(subs).map(([key, label]) =>
+    `<div class="category-chip" onclick="selectSubCategory(this,'${key}')">${label}</div>`
+  ).join('');
+  subWrap.style.display = 'flex';
+  subWrap.style.flexWrap = 'wrap';
+  subWrap.style.gap = '8px';
+}
+
+function selectSubCategory(el, subKey) {
+  document.querySelectorAll('#categorySubChips .category-chip').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedSubCategory = subKey;
+  selectedCategory = SUB_TO_PARENT[subKey] || selectedCategory;
+}
+
+function selectCategory(el, cat) {
+  // legacy shim for AI auto-select
+  const parentEl = document.querySelector(`#categoryParentChips .category-chip[onclick*="'${cat}'"]`);
+  if (parentEl) selectParentCategory(parentEl, cat);
 }
 
 // ─── BAKERY SEARCH ────────────────────────────────────────────────────────────
@@ -1826,6 +1992,7 @@ async function saveReview() {
     const item = {
       name: document.getElementById('itemName').value,
       category: selectedCategory || 'other',
+      subCategory: selectedSubCategory || '',
       bakeryName: selectedBakery?.name || '',
       bakeryAddress: selectedBakery?.address || '',
       bakeryPlaceId: selectedBakery?.placeId || null,
@@ -1853,6 +2020,213 @@ async function saveReview() {
     nextBtn.disabled = false;
     nextBtn.textContent = 'Save review ✓';
   }
+}
+
+
+// ─── EDIT REVIEW ──────────────────────────────────────────────────────────────
+let editingItemId = null;
+let editPhotoFile = null;
+let editPhotoDataURL = null;
+
+function openEditModal(id) {
+  const item = allItems.find(i => i.id === id);
+  if (!item || !currentUser || currentUser.uid !== item.userId) return;
+  editingItemId = id;
+  editPhotoFile = null;
+  editPhotoDataURL = item.photoURL || null;
+
+  const catDisp = getCategoryDisplay(item);
+  const dimsHTML = TASTING_DIMS.map(dim => {
+    const key = 'dim_' + dim.toLowerCase();
+    const val = item[key] || 0;
+    return `
+      <div>
+        <div class="tasting-dim-label">
+          <span class="tasting-dim-name">${dim}</span>
+          <span class="tasting-dim-val" id="edit_dim_display_${dim.toLowerCase()}">${parseFloat(val).toFixed(1)}</span>
+        </div>
+        <input type="range" class="rating-slider" id="edit_dim_${dim.toLowerCase()}"
+          min="0" max="5" step="0.1" value="${val}"
+          oninput="document.getElementById('edit_dim_display_${dim.toLowerCase()}').textContent=parseFloat(this.value).toFixed(1)">
+      </div>`;
+  }).join('');
+
+  const photoSection = item.photoURL
+    ? `<div class="photo-preview" id="editPhotoWrap">
+        <img src="${item.photoURL}" alt="Current photo" style="max-height:180px; width:100%; object-fit:cover; border-radius:var(--radius);">
+        <button class="photo-preview-remove" onclick="clearEditPhoto()">✕</button>
+       </div>`
+    : `<div class="photo-upload" id="editPhotoWrap">
+        <input type="file" accept="image/*" capture="environment" id="editPhotoInput" onchange="handleEditPhoto(this)">
+        <div class="photo-upload-icon">📷</div>
+        <div class="photo-upload-text">Tap to add a photo</div>
+       </div>`;
+
+  document.getElementById('editModalBody').innerHTML = `
+    <div style="padding:0 24px 24px; display:flex; flex-direction:column; gap:20px;">
+
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Photo</label>
+        ${photoSection}
+        <div style="margin-top:8px;">
+          <label class="form-label" style="font-size:0.72rem; cursor:pointer; color:var(--caramel);">
+            <input type="file" accept="image/*" capture="environment" style="display:none;" onchange="handleEditPhoto(this)"> 🔄 Replace photo
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Name</label>
+        <input type="text" class="form-input" id="editName" value="${item.name || ''}">
+      </div>
+
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Category</label>
+        <div style="margin-bottom:8px;">
+          <div class="category-chips" id="editParentChips">
+            ${Object.entries(CATEGORY_TREE).map(([key, cat]) =>
+              `<div class="category-chip${item.category === key ? ' selected' : ''}" onclick="selectEditParent(this,'${key}')">${cat.emoji} ${cat.label}</div>`
+            ).join('')}
+          </div>
+        </div>
+        <div class="category-chips" id="editSubChips" style="${item.category && CATEGORY_TREE[item.category] ? 'display:flex; flex-wrap:wrap; gap:8px;' : 'display:none;'}">
+          ${item.category && CATEGORY_TREE[item.category] ? Object.entries(CATEGORY_TREE[item.category].subs).map(([key, label]) =>
+            `<div class="category-chip${item.subCategory === key ? ' selected' : ''}" onclick="selectEditSub(this,'${key}')">${label}</div>`
+          ).join('') : ''}
+        </div>
+      </div>
+
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Price paid</label>
+        <div style="position:relative;">
+          <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-weight:600;">£</span>
+          <input type="number" class="form-input" id="editPrice" value="${item.price || ''}" step="0.01" min="0" style="padding-left:30px;">
+        </div>
+      </div>
+
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Overall rating</label>
+        <div class="rating-value-display" id="editOverallDisplay">${parseFloat(item.overallRating || 0).toFixed(1)}</div>
+        <input type="range" class="rating-slider" id="editOverallRating" min="0" max="5" step="0.1" value="${item.overallRating || 0}"
+          oninput="document.getElementById('editOverallDisplay').textContent=parseFloat(this.value).toFixed(1)">
+        <div class="rating-scale-labels"><span>0 — Stale</span><span>2.5 — Decent</span><span>5 — Legendary</span></div>
+      </div>
+
+      <div class="form-group" style="margin:0;">
+        <label class="form-label" style="margin-bottom:16px;">Tasting dimensions</label>
+        <div class="tasting-dims">${dimsHTML}</div>
+      </div>
+
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Notes</label>
+        <textarea class="form-textarea" id="editNotes" style="min-height:100px;">${item.notes || ''}</textarea>
+      </div>
+
+    </div>`;
+
+  // Store working category values
+  document.getElementById('editModal')._editCategory = item.category || '';
+  document.getElementById('editModal')._editSubCategory = item.subCategory || '';
+
+  document.getElementById('editModal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function selectEditParent(el, parentKey) {
+  document.querySelectorAll('#editParentChips .category-chip').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  document.getElementById('editModal')._editCategory = parentKey;
+  document.getElementById('editModal')._editSubCategory = '';
+  const subWrap = document.getElementById('editSubChips');
+  const subs = CATEGORY_TREE[parentKey]?.subs || {};
+  subWrap.innerHTML = Object.entries(subs).map(([key, label]) =>
+    `<div class="category-chip" onclick="selectEditSub(this,'${key}')">${label}</div>`
+  ).join('');
+  subWrap.style.display = 'flex';
+  subWrap.style.flexWrap = 'wrap';
+  subWrap.style.gap = '8px';
+}
+
+function selectEditSub(el, subKey) {
+  document.querySelectorAll('#editSubChips .category-chip').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  document.getElementById('editModal')._editSubCategory = subKey;
+  document.getElementById('editModal')._editCategory = SUB_TO_PARENT[subKey] || document.getElementById('editModal')._editCategory;
+}
+
+function handleEditPhoto(input) {
+  if (!input.files[0]) return;
+  editPhotoFile = input.files[0];
+  const reader = new FileReader();
+  reader.onload = e => {
+    editPhotoDataURL = e.target.result;
+    const wrap = document.getElementById('editPhotoWrap');
+    if (wrap) wrap.innerHTML = `<img src="${e.target.result}" style="max-height:180px; width:100%; object-fit:cover; border-radius:var(--radius);">`;
+  };
+  reader.readAsDataURL(editPhotoFile);
+}
+
+function clearEditPhoto() {
+  editPhotoFile = null;
+  editPhotoDataURL = null;
+  const wrap = document.getElementById('editPhotoWrap');
+  if (wrap) wrap.innerHTML = `<div style="background:var(--parchment-dark); border-radius:var(--radius); height:80px; display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:0.85rem;">No photo</div>`;
+}
+
+async function saveEdit() {
+  if (!editingItemId || !currentUser) return;
+  const btn = document.getElementById('editSaveBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  try {
+    const { db, storage, doc, updateDoc, ref, uploadBytes, getDownloadURL } = fb;
+    let photoURL = editPhotoDataURL && !editPhotoFile ? editPhotoDataURL : null;
+    if (editPhotoFile) {
+      const storageRef = ref(storage, `items/${currentUser.uid}/${Date.now()}_edit`);
+      const snap = await uploadBytes(storageRef, editPhotoFile);
+      photoURL = await getDownloadURL(snap.ref);
+    }
+
+    const modal = document.getElementById('editModal');
+    const category = modal._editCategory || 'other';
+    const subCategory = modal._editSubCategory || '';
+    const overallRating = parseFloat(document.getElementById('editOverallRating').value);
+
+    const dimData = {};
+    TASTING_DIMS.forEach(dim => {
+      dimData['dim_' + dim.toLowerCase()] = parseFloat(document.getElementById('edit_dim_' + dim.toLowerCase()).value);
+    });
+
+    const updates = {
+      name: document.getElementById('editName').value,
+      category,
+      subCategory,
+      price: document.getElementById('editPrice').value ? parseFloat(document.getElementById('editPrice').value) : null,
+      overallRating,
+      communityAvg: overallRating,
+      notes: document.getElementById('editNotes').value,
+      ...dimData,
+      ...(photoURL !== null ? { photoURL } : {})
+    };
+
+    await updateDoc(doc(db, 'items', editingItemId), updates);
+    closeEditModal();
+    showToast('Review updated ✓');
+    await loadData();
+  } catch(e) {
+    showToast('Could not save — check your connection');
+    console.error(e);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save changes';
+  }
+}
+
+function closeEditModal() {
+  document.getElementById('editModal').classList.remove('open');
+  document.body.style.overflow = '';
+  editingItemId = null;
 }
 
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
@@ -1946,10 +2320,12 @@ document.getElementById('detailModal').addEventListener('click', e => { if (e.ta
 document.getElementById('bakeryModal').addEventListener('click', e => { if (e.target === document.getElementById('bakeryModal')) closeBakeryModal(); });
 
 // Keyboard close
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeAddModal(); closeAuthModal(); closeDetailModal(); closeBakeryModal(); } });
+document.getElementById('editModal').addEventListener('click', e => { if (e.target === document.getElementById('editModal')) closeEditModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeAddModal(); closeAuthModal(); closeDetailModal(); closeBakeryModal(); closeEditModal(); } });
 
-// Init tasting dims
+// Init tasting dims and category chips
 buildTastingDims();
+buildCategoryChips();
 </script>
 </body>
 </html>
