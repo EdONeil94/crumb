@@ -164,6 +164,8 @@ nav {
   cursor: pointer;
   background: transparent;
   flex-shrink: 0;
+  position: relative;
+  z-index: 201;
 }
 .nav-hamburger span {
   display: block; height: 2px; width: 100%;
@@ -174,32 +176,63 @@ nav {
 .nav-hamburger.open span:nth-child(2) { opacity: 0; }
 .nav-hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
 
-/* Mobile slide-down menu */
+/* Mobile popout panel */
 .mobile-menu {
   display: none;
   flex-direction: column;
-  background: var(--espresso-mid);
-  position: sticky;
-  top: 60px;
-  z-index: 99;
-  box-shadow: 0 4px 12px rgba(44,24,16,0.3);
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  z-index: 200;
+  background: var(--espresso);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  min-width: 220px;
   overflow: hidden;
-  max-height: 0;
-  transition: max-height 0.3s ease;
+  opacity: 0;
+  transform: scale(0.9) translateY(-8px);
+  transform-origin: top right;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  pointer-events: none;
 }
-.mobile-menu.open { max-height: 400px; }
+.mobile-menu.open {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  pointer-events: all;
+}
+.mobile-menu-section-label {
+  padding: 10px 16px 4px;
+  font-size: 0.65rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.35);
+  font-weight: 600;
+}
 .mobile-menu-item {
-  padding: 14px 20px;
+  padding: 12px 16px;
   text-align: left;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 500;
   color: var(--parchment);
-  border-bottom: 1px solid rgba(255,255,255,0.06);
-  transition: background 0.15s;
+  transition: background 0.12s;
   width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 .mobile-menu-item:hover { background: rgba(255,255,255,0.08); }
 .mobile-menu-item.active { color: var(--honey); }
+.mobile-menu-divider { height: 1px; background: rgba(255,255,255,0.1); margin: 4px 0; }
+
+/* Backdrop */
+.mobile-menu-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 199;
+}
+.mobile-menu-backdrop.open { display: block; }
 
 @media (max-width: 700px) {
   .nav-hamburger { display: flex; }
@@ -858,6 +891,51 @@ nav {
 .profile-bio { font-size: 0.88rem; color: var(--text-body); line-height: 1.65; font-style: italic; margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
 .profile-reviews-title { font-family: 'Playfair Display', serif; font-size: 1.1rem; color: var(--espresso); margin-bottom: 14px; }
 
+/* ─── ITEM MATCH RESULTS ─────────────────────────────────────────────────────── */
+.item-match-result {
+  padding: 10px 12px;
+  background: var(--parchment);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.item-match-result:hover { border-color: var(--honey); background: var(--parchment-dark); }
+.item-match-thumb {
+  width: 40px; height: 40px;
+  border-radius: 6px;
+  background: var(--parchment-dark);
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.1rem;
+  overflow: hidden;
+}
+.item-match-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.item-match-info { flex: 1; min-width: 0; }
+.item-match-name { font-size: 0.88rem; font-weight: 600; color: var(--espresso); }
+.item-match-meta { font-size: 0.72rem; color: var(--text-muted); margin-top: 1px; }
+.item-match-score {
+  font-family: 'Playfair Display', serif;
+  font-size: 1rem; font-weight: 700; color: var(--caramel);
+  flex-shrink: 0;
+}
+.item-match-new {
+  padding: 10px 12px;
+  background: transparent;
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--caramel);
+  font-weight: 500;
+  text-align: left;
+  transition: border-color 0.15s;
+}
+.item-match-new:hover { border-color: var(--caramel); }
+
 /* ─── SPINNER ────────────────────────────────────────────────────────────────── */
 @keyframes spin { to { transform: rotate(360deg); } }
 .spinner { width: 20px; height: 20px; border: 2.5px solid rgba(139,94,60,0.2); border-top-color: var(--caramel); border-radius: 50%; animation: spin 0.8s linear infinite; }
@@ -972,12 +1050,21 @@ nav {
 </nav>
 
 <!-- Mobile menu -->
+<div class="mobile-menu-backdrop" id="mobileBackdrop" onclick="closeMobileMenu()"></div>
 <div id="mobileMenu" class="mobile-menu">
-  <button class="mobile-menu-item active" onclick="showPage('home'); closeMobileMenu()">Discover</button>
-  <button class="mobile-menu-item" onclick="showPage('leaderboard'); closeMobileMenu()">Top Picks</button>
-  <button class="mobile-menu-item" onclick="showPage('bakeries'); closeMobileMenu()">Bakeries</button>
-  <button class="mobile-menu-item" id="peopleNavBtn" onclick="showPage('people'); closeMobileMenu()" style="display:none">People</button>
-  <button class="mobile-menu-item" id="feedNavBtn" onclick="showPage('feed'); closeMobileMenu()" style="display:none">Feed</button>
+  <div class="mobile-menu-section-label">Explore</div>
+  <button class="mobile-menu-item active" onclick="showPage('home'); closeMobileMenu()">🏠 Discover</button>
+  <button class="mobile-menu-item" onclick="showPage('leaderboard'); closeMobileMenu()">🏆 Top Picks</button>
+  <button class="mobile-menu-item" onclick="showPage('bakeries'); closeMobileMenu()">🏪 Bakeries</button>
+  <button class="mobile-menu-item" id="peopleNavBtn" onclick="showPage('people'); closeMobileMenu()" style="display:none">👥 People</button>
+  <button class="mobile-menu-item" id="feedNavBtn" onclick="showPage('feed'); closeMobileMenu()" style="display:none">📋 Feed</button>
+  <div class="mobile-menu-divider" id="mobileMenuDivider" style="display:none;"></div>
+  <div class="mobile-menu-section-label" id="mobileAccountLabel" style="display:none;">Account</div>
+  <button class="mobile-menu-item" id="mobileProfileBtn" onclick="if(currentUser){openProfileModal(currentUser.uid);} closeMobileMenu();" style="display:none">👤 My profile</button>
+  <button class="mobile-menu-item" id="mobileEditProfileBtn" onclick="openMyProfileModal(); closeMobileMenu();" style="display:none">✏️ Edit profile</button>
+  <button class="mobile-menu-item" id="mobileSignOutBtn" onclick="fb.signOut(fb.auth); showToast('Signed out'); closeMobileMenu();" style="display:none; color:#e07070;">→ Sign out</button>
+  <div class="mobile-menu-divider" id="mobileSignInDivider"></div>
+  <button class="mobile-menu-item" id="mobileSignInBtn" onclick="openAuthModal(); closeMobileMenu();">→ Sign in</button>
 </div>
 
 <!-- ─── HOME PAGE ─────────────────────────────────────────────────────────────── -->
@@ -1138,10 +1225,23 @@ nav {
 
         <div class="form-group">
           <label class="form-label">Name your bake</label>
-          <input type="text" class="form-input" id="itemName" placeholder="e.g. Almond croissant, pain au chocolat…">
+          <input type="text" class="form-input" id="itemName"
+            placeholder="e.g. Almond croissant, pain au chocolat…"
+            oninput="searchExistingItems(this.value)" autocomplete="off">
+          <div id="itemMatchResults" style="margin-top:6px; display:flex; flex-direction:column; gap:6px;"></div>
+          <div id="itemMatchSelected" style="display:none; margin-top:8px; background:var(--parchment); border:1.5px solid var(--sage); border-radius:var(--radius); padding:10px 14px;">
+            <div style="display:flex; align-items:center; justify-content:space-between;">
+              <div>
+                <div style="font-size:0.7rem; font-weight:600; letter-spacing:1.5px; text-transform:uppercase; color:var(--sage); margin-bottom:2px;">Existing item matched</div>
+                <div style="font-size:0.9rem; font-weight:600; color:var(--espresso);" id="matchedItemName"></div>
+                <div style="font-size:0.75rem; color:var(--text-muted);" id="matchedItemMeta"></div>
+              </div>
+              <button class="btn-ghost" style="font-size:0.78rem; color:var(--caramel);" onclick="clearItemMatch()">✕ New item</button>
+            </div>
+          </div>
         </div>
 
-        <div class="form-group">
+        <div class="form-group" id="categoryGroup">
           <label class="form-label">Category</label>
           <div id="categoryChips">
             <div id="categoryParentChips" class="category-chips" style="margin-bottom:10px;"></div>
@@ -1533,6 +1633,7 @@ window.addEventListener('crumb-firebase-ready', () => {
     updateNav();
     loadData();
     loadProfiles();
+    loadItemRecords();
   });
 
 });
@@ -1553,6 +1654,12 @@ function updateNav() {
   const signIn = document.getElementById('signInBtn');
   const feedBtn = document.getElementById('feedNavBtn');
   const peopleBtn = document.getElementById('peopleNavBtn');
+  const mobileProfileBtn = document.getElementById('mobileProfileBtn');
+  const mobileEditProfileBtn = document.getElementById('mobileEditProfileBtn');
+  const mobileSignOutBtn = document.getElementById('mobileSignOutBtn');
+  const mobileSignInBtn = document.getElementById('mobileSignInBtn');
+  const mobileMenuDivider = document.getElementById('mobileMenuDivider');
+
   if (currentUser) {
     avatar.style.display = 'flex';
     if (signIn) signIn.style.display = 'none';
@@ -1566,32 +1673,51 @@ function updateNav() {
     } else {
       avatar.textContent = initials;
     }
+    if (mobileProfileBtn) mobileProfileBtn.style.display = 'block';
+    if (mobileEditProfileBtn) mobileEditProfileBtn.style.display = 'block';
+    if (mobileSignOutBtn) mobileSignOutBtn.style.display = 'block';
+    if (mobileSignInBtn) mobileSignInBtn.style.display = 'none';
+    if (mobileMenuDivider) mobileMenuDivider.style.display = 'block';
+    const accLabel = document.getElementById('mobileAccountLabel');
+    const signInDivider = document.getElementById('mobileSignInDivider');
+    if (accLabel) accLabel.style.display = 'block';
+    if (signInDivider) signInDivider.style.display = 'none';
   } else {
     avatar.style.display = 'none';
     if (signIn) signIn.style.display = 'block';
     if (feedBtn) feedBtn.style.display = 'none';
     if (peopleBtn) peopleBtn.style.display = 'none';
+    if (mobileProfileBtn) mobileProfileBtn.style.display = 'none';
+    if (mobileEditProfileBtn) mobileEditProfileBtn.style.display = 'none';
+    if (mobileSignOutBtn) mobileSignOutBtn.style.display = 'none';
+    if (mobileSignInBtn) mobileSignInBtn.style.display = 'block';
+    if (mobileMenuDivider) mobileMenuDivider.style.display = 'none';
+    const accLabel = document.getElementById('mobileAccountLabel');
+    if (accLabel) accLabel.style.display = 'none';
   }
 }
 
 function toggleMobileMenu() {
   const menu = document.getElementById('mobileMenu');
   const btn = document.getElementById('hamburgerBtn');
+  const backdrop = document.getElementById('mobileBackdrop');
   const isOpen = menu.classList.contains('open');
   if (isOpen) {
-    menu.classList.remove('open');
-    btn.classList.remove('open');
+    closeMobileMenu();
   } else {
     menu.classList.add('open');
     btn.classList.add('open');
+    if (backdrop) backdrop.classList.add('open');
   }
 }
 
 function closeMobileMenu() {
   const menu = document.getElementById('mobileMenu');
   const btn = document.getElementById('hamburgerBtn');
+  const backdrop = document.getElementById('mobileBackdrop');
   menu.classList.remove('open');
   btn.classList.remove('open');
+  if (backdrop) backdrop.classList.remove('open');
 }
 
 function toggleUserMenu() {
@@ -1599,8 +1725,9 @@ function toggleUserMenu() {
   if (existing) { existing.remove(); return; }
   const dropdown = document.createElement('div');
   dropdown.id = 'avatarDropdown';
+  const navH = document.querySelector('nav')?.offsetHeight || 56;
   dropdown.style.cssText = `
-    position:fixed; top:64px; right:16px; z-index:300;
+    position:fixed; top:${navH}px; right:16px; z-index:300;
     background:var(--cream-white); border:1.5px solid var(--border);
     border-radius:var(--radius); box-shadow:var(--shadow-lg);
     min-width:180px; overflow:hidden;`;
@@ -1688,8 +1815,10 @@ function renderFeed() {
 function cardHTML(item) {
   const catDisp = getCategoryDisplay(item);
   const emoji = catDisp.emoji;
-  const score = item.communityAvg ? item.communityAvg.toFixed(1) : (item.overallRating ? item.overallRating.toFixed(1) : '–');
-  const ratingCount = item.ratingCount || 1;
+  // Use itemRecord community avg if available
+  const record = item.itemRecordId ? allItemRecords.find(r => r.id === item.itemRecordId) : null;
+  const score = record ? record.communityAvg.toFixed(1) : (item.communityAvg ? item.communityAvg.toFixed(1) : (item.overallRating ? item.overallRating.toFixed(1) : '–'));
+  const ratingCount = record ? (record.reviewCount || 1) : (item.ratingCount || 1);
   const price = item.price ? `£${parseFloat(item.price).toFixed(2)}` : '';
   const imageTag = item.photoURL
     ? `<img src="${item.photoURL}" alt="${item.name}" loading="lazy">`
@@ -1939,7 +2068,9 @@ async function openDetail(id) {
   const catDisp = getCategoryDisplay(item);
   const emoji = catDisp.emoji;
   const catLabel = catDisp.sub ? `${catDisp.main} · ${catDisp.sub}` : catDisp.main;
-  const communityScore = item.communityAvg ? item.communityAvg.toFixed(1) : (item.overallRating ? item.overallRating.toFixed(1) : '–');
+  const record = item.itemRecordId ? allItemRecords.find(r => r.id === item.itemRecordId) : null;
+  const communityScore = record ? record.communityAvg.toFixed(1) : (item.communityAvg ? item.communityAvg.toFixed(1) : (item.overallRating ? item.overallRating.toFixed(1) : '–'));
+  const communityCount = record ? (record.reviewCount || 1) : (item.ratingCount || 1);
   const userScore = item.overallRating ? item.overallRating.toFixed(1) : '–';
   const dimsHTML = TASTING_DIMS.map(dim => {
     const key = 'dim_' + dim.toLowerCase();
@@ -1966,7 +2097,7 @@ async function openDetail(id) {
         <div class="detail-score-box">
           <div class="detail-score-label">Community</div>
           <div class="detail-score-num">${communityScore}<span>/5</span></div>
-          <div style="font-size:0.72rem; color:var(--text-muted); margin-top:2px;">${item.ratingCount || 1} review${(item.ratingCount || 1) !== 1 ? 's' : ''}</div>
+          <div style="font-size:0.72rem; color:var(--text-muted); margin-top:2px;">${communityCount} review${communityCount !== 1 ? 's' : ''}</div>
         </div>
         <div class="detail-score-box">
           <div class="detail-score-label">First review</div>
@@ -1977,20 +2108,34 @@ async function openDetail(id) {
       <div class="detail-dims">${dimsHTML}</div>
       ${item.notes ? `<div class="detail-notes-section"><div class="detail-notes-title">Tasting notes</div><div class="detail-notes-text">${item.notes}</div></div>` : ''}
       <div class="detail-reviews">
-        <div class="detail-reviews-title">Reviews</div>
-        <div class="review-item">
-          <div class="review-avatar">${(item.userName || 'A').charAt(0).toUpperCase()}</div>
-          <div class="review-content">
-            <div class="review-header">
-              <div class="review-name" style="cursor:pointer;" onclick="closeDetailModal(); if(currentUser) openProfileModal('${item.userId}')">${item.userName || 'Anonymous'}</div>
-              <div class="review-score">${userScore}</div>
-            </div>
-            ${item.notes ? `<div class="review-text">${item.notes}</div>` : '<div class="review-text" style="color:var(--text-muted);font-style:italic;">No notes added.</div>'}
-            ${item.createdAt ? `<div class="review-date">${new Date(item.createdAt.toDate ? item.createdAt.toDate() : item.createdAt).toLocaleDateString('en-GB', {day:'numeric',month:'long',year:'numeric'})}</div>` : ''}
-          </div>
-        </div>
-        ${currentUser && currentUser.uid !== item.userId ? `<div style="margin-top:16px;"><button class="btn-espresso" onclick="closeDetailModal(); openAddModal('${id}');" style="font-size:0.85rem; padding:10px 18px;">Add your own rating →</button></div>` : ''}
-        ${currentUser && currentUser.uid === item.userId ? `<div style="margin-top:16px;"><button class="btn-caramel" onclick="closeDetailModal(); openEditModal('${id}');" style="font-size:0.85rem; padding:10px 18px;">✏️ Edit your review</button></div>` : ''}
+        <div class="detail-reviews-title">Reviews (${communityCount})</div>
+        ${(() => {
+          // Show all reviews for this item record
+          const relatedReviews = record
+            ? allItems.filter(i => i.itemRecordId === record.id).sort((a,b) => (b.overallRating||0)-(a.overallRating||0))
+            : [item];
+          return relatedReviews.map(rev => {
+            const revScore = rev.overallRating ? rev.overallRating.toFixed(1) : '–';
+            const revDate = rev.createdAt ? new Date(rev.createdAt.toDate ? rev.createdAt.toDate() : rev.createdAt).toLocaleDateString('en-GB', {day:'numeric',month:'long',year:'numeric'}) : '';
+            const isOwn = currentUser && currentUser.uid === rev.userId;
+            return `<div class="review-item">
+              <div class="review-avatar">${(rev.userName || 'A').charAt(0).toUpperCase()}</div>
+              <div class="review-content">
+                <div class="review-header">
+                  <div class="review-name" style="cursor:pointer;" onclick="closeDetailModal(); if(currentUser) openProfileModal('${rev.userId}')">${rev.userName || 'Anonymous'}</div>
+                  <div class="review-score">${revScore}</div>
+                </div>
+                ${rev.price ? `<div style="font-size:0.72rem; color:var(--sage); font-weight:600; margin-bottom:4px;">£${parseFloat(rev.price).toFixed(2)}</div>` : ''}
+                ${rev.notes ? `<div class="review-text">${rev.notes}</div>` : '<div class="review-text" style="color:var(--text-muted);font-style:italic;">No notes added.</div>'}
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-top:4px;">
+                  <div class="review-date">${revDate}</div>
+                  ${isOwn ? `<button class="btn-ghost" style="font-size:0.75rem; padding:4px 8px; color:var(--caramel);" onclick="closeDetailModal(); openEditModal('${rev.id}');">✏️ Edit</button>` : ''}
+                </div>
+              </div>
+            </div>`;
+          }).join('');
+        })()}
+        ${currentUser && !allItems.find(i => i.itemRecordId === (record?.id) && i.userId === currentUser.uid) ? `<div style="margin-top:16px;"><button class="btn-espresso" style="font-size:0.85rem; padding:10px 18px;" onclick="closeDetailModal(); prefillItemForReview('${record?.id || ''}');">+ Add your rating</button></div>` : ''}
       </div>
     </div>`;
 }
@@ -2019,6 +2164,7 @@ function resetAddModal() {
   selectedBakery = null;
   photoFile = null;
   photoDataURL = null;
+  matchedItemRecord = null;
   document.getElementById('itemName').value = '';
   document.getElementById('bakerySearch').value = '';
   document.getElementById('itemPrice').value = '';
@@ -2029,6 +2175,12 @@ function resetAddModal() {
   document.getElementById('locationSelected').classList.remove('visible');
   document.getElementById('bakeryResults').innerHTML = '';
   document.getElementById('photoInput').value = '';
+  const matchResults = document.getElementById('itemMatchResults');
+  const matchSelected = document.getElementById('itemMatchSelected');
+  const catGroup = document.getElementById('categoryGroup');
+  if (matchResults) matchResults.innerHTML = '';
+  if (matchSelected) matchSelected.style.display = 'none';
+  if (catGroup) catGroup.style.display = 'block';
   document.getElementById('photoUploadWrap').innerHTML = `
     <div class="photo-upload" id="photoUploadArea">
       <input type="file" accept="image/*" capture="environment" id="photoInput" onchange="handlePhotoChange(this)">
@@ -2228,6 +2380,9 @@ function selectBakery(placeId, name, address) {
   document.getElementById('selectedBakeryName').textContent = name;
   document.getElementById('selectedBakeryAddress').textContent = address;
   document.getElementById('locationSelected').classList.add('visible');
+  // Re-run item search now we know the bakery
+  const itemNameVal = document.getElementById('itemName')?.value;
+  if (itemNameVal && itemNameVal.length >= 2) searchExistingItems(itemNameVal);
   if (GOOGLE_MAPS_KEY) {
     document.getElementById('mapContainer').innerHTML = `
       <iframe width="100%" height="180" style="border:0;border-radius:var(--radius);"
@@ -2303,6 +2458,126 @@ function buildSummary() {
     Overall: <strong>${overall}/5</strong>${selectedCategory ? ` · ${selectedCategory.charAt(0).toUpperCase() + selectedCategory.slice(1)}` : ''}`;
 }
 
+// ─── ITEM MATCHING ────────────────────────────────────────────────────────────
+let matchedItemRecord = null; // existing itemRecord if user picks one
+let allItemRecords = []; // cached from Firestore
+
+async function loadItemRecords() {
+  if (!fb) return;
+  const { db, collection, getDocs } = fb;
+  try {
+    const snap = await getDocs(collection(db, 'itemRecords'));
+    allItemRecords = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch(e) { console.log('itemRecords load:', e.message); }
+}
+
+function searchExistingItems(query) {
+  matchedItemRecord = null;
+  document.getElementById('itemMatchSelected').style.display = 'none';
+  document.getElementById('categoryGroup').style.display = 'block';
+
+  const resultsEl = document.getElementById('itemMatchResults');
+  if (!query || query.length < 2) { resultsEl.innerHTML = ''; return; }
+
+  // Filter by bakery if already selected, otherwise search all
+  const bakeryName = selectedBakery?.name || null;
+  const q = query.toLowerCase();
+
+  let matches = allItemRecords.filter(r => {
+    const nameMatch = r.name?.toLowerCase().includes(q);
+    const bakeryMatch = !bakeryName || r.bakeryName?.toLowerCase() === bakeryName.toLowerCase();
+    return nameMatch && bakeryMatch;
+  }).slice(0, 5);
+
+  let html = matches.map(r => {
+    const catDisp = getCategoryDisplay(r);
+    const score = r.communityAvg ? r.communityAvg.toFixed(1) : '–';
+    const count = r.reviewCount || 0;
+    const thumb = r.photoURL
+      ? `<div class="item-match-thumb"><img src="${r.photoURL}" alt="${r.name}"></div>`
+      : `<div class="item-match-thumb">${catDisp.emoji}</div>`;
+    return `
+      <div class="item-match-result" onclick="selectItemMatch('${r.id}')">
+        ${thumb}
+        <div class="item-match-info">
+          <div class="item-match-name">${r.name}</div>
+          <div class="item-match-meta">📍 ${r.bakeryName} · ${count} review${count !== 1 ? 's' : ''}</div>
+        </div>
+        <div class="item-match-score">${score}</div>
+      </div>`;
+  }).join('');
+
+  // Always show "create new" option
+  html += `<button class="item-match-new" onclick="createNewItem()">✦ Add "${query}" as a new item</button>`;
+  resultsEl.innerHTML = html;
+}
+
+function selectItemMatch(recordId) {
+  const record = allItemRecords.find(r => r.id === recordId);
+  if (!record) return;
+  matchedItemRecord = record;
+
+  // Pre-fill fields from existing record
+  document.getElementById('itemName').value = record.name;
+  document.getElementById('itemMatchResults').innerHTML = '';
+  document.getElementById('itemMatchSelected').style.display = 'block';
+  document.getElementById('matchedItemName').textContent = record.name;
+  document.getElementById('matchedItemMeta').textContent =
+    `📍 ${record.bakeryName} · ${record.reviewCount || 0} review${(record.reviewCount||0) !== 1 ? 's' : ''} · avg ${record.communityAvg ? record.communityAvg.toFixed(1) : '–'}`;
+
+  // Auto-select bakery if not already selected
+  if (!selectedBakery && record.bakeryName) {
+    selectedBakery = { name: record.bakeryName, address: record.bakeryAddress || '', placeId: record.bakeryPlaceId || null };
+    document.getElementById('bakerySearch').value = record.bakeryName;
+    document.getElementById('selectedBakeryName').textContent = record.bakeryName;
+    document.getElementById('selectedBakeryAddress').textContent = record.bakeryAddress || '';
+    document.getElementById('locationSelected').classList.add('visible');
+  }
+
+  // Auto-select category
+  if (record.category) {
+    const chip = document.querySelector(`#categoryParentChips .category-chip[onclick*="'${record.category}'"]`);
+    if (chip) selectParentCategory(chip, record.category);
+    if (record.subCategory) {
+      setTimeout(() => {
+        const subChip = document.querySelector(`#categorySubChips .category-chip[onclick*="'${record.subCategory}'"]`);
+        if (subChip) selectSubCategory(subChip, record.subCategory);
+      }, 50);
+    }
+  }
+
+  // Hide category group — already set from record
+  document.getElementById('categoryGroup').style.display = 'none';
+}
+
+function createNewItem() {
+  matchedItemRecord = null;
+  document.getElementById('itemMatchResults').innerHTML = '';
+  document.getElementById('itemMatchSelected').style.display = 'none';
+  document.getElementById('categoryGroup').style.display = 'block';
+}
+
+function clearItemMatch() {
+  matchedItemRecord = null;
+  document.getElementById('itemMatchSelected').style.display = 'none';
+  document.getElementById('itemMatchResults').innerHTML = '';
+  document.getElementById('categoryGroup').style.display = 'block';
+  document.getElementById('itemName').value = '';
+  document.getElementById('itemName').focus();
+}
+
+function prefillItemForReview(recordId) {
+  openAddModal();
+  if (!recordId) return;
+  setTimeout(() => {
+    const record = allItemRecords.find(r => r.id === recordId);
+    if (record) {
+      document.getElementById('itemName').value = record.name;
+      selectItemMatch(recordId);
+    }
+  }, 100);
+}
+
 // ─── SAVE ─────────────────────────────────────────────────────────────────────
 async function saveReview() {
   if (!currentUser) { openAuthModal(); return; }
@@ -2311,7 +2586,7 @@ async function saveReview() {
   nextBtn.textContent = 'Saving…';
 
   try {
-    const { db, storage, collection, addDoc, serverTimestamp, ref, uploadBytes, getDownloadURL } = fb;
+    const { db, storage, collection, addDoc, doc, getDoc, setDoc, updateDoc, serverTimestamp, ref, uploadBytes, getDownloadURL } = fb;
 
     let photoURL = null;
     if (photoFile) {
@@ -2325,16 +2600,67 @@ async function saveReview() {
       dimData['dim_' + dim.toLowerCase()] = parseFloat(document.getElementById('dim_' + dim.toLowerCase()).value);
     });
 
-    const item = {
-      name: document.getElementById('itemName').value,
-      category: selectedCategory || 'other',
-      subCategory: selectedSubCategory || '',
-      bakeryName: selectedBakery?.name || '',
+    const overallRating = parseFloat(document.getElementById('overallRating').value);
+    const itemName = document.getElementById('itemName').value.trim();
+    const bakeryName = selectedBakery?.name || '';
+    const category = matchedItemRecord?.category || selectedCategory || 'other';
+    const subCategory = matchedItemRecord?.subCategory || selectedSubCategory || '';
+
+    // ── Step A: Upsert the itemRecord (shared item+bakery record) ────────────
+    let itemRecordId;
+    if (matchedItemRecord) {
+      // Linked to existing record — recalculate community avg
+      itemRecordId = matchedItemRecord.id;
+      const recSnap = await getDoc(doc(db, 'itemRecords', itemRecordId));
+      const rec = recSnap.data();
+      const newCount = (rec.reviewCount || 1) + 1;
+      const newAvg = ((rec.communityAvg || rec.overallRating || 0) * (newCount - 1) + overallRating) / newCount;
+      // Recalculate dim averages
+      const newDims = {};
+      TASTING_DIMS.forEach(dim => {
+        const key = 'dim_' + dim.toLowerCase();
+        const prev = rec[key] || 0;
+        newDims[key] = ((prev * (newCount - 1)) + dimData[key]) / newCount;
+      });
+      await updateDoc(doc(db, 'itemRecords', itemRecordId), {
+        communityAvg: Math.round(newAvg * 10) / 10,
+        reviewCount: newCount,
+        // Use new photo if provided and record has none
+        ...(photoURL && !rec.photoURL ? { photoURL } : {}),
+        ...newDims
+      });
+    } else {
+      // New item record
+      const newRecord = {
+        name: itemName,
+        category,
+        subCategory,
+        bakeryName,
+        bakeryAddress: selectedBakery?.address || '',
+        bakeryPlaceId: selectedBakery?.placeId || null,
+        communityAvg: overallRating,
+        reviewCount: 1,
+        photoURL: photoURL || null,
+        createdAt: serverTimestamp(),
+        ...dimData
+      };
+      const recRef = await addDoc(collection(db, 'itemRecords'), newRecord);
+      itemRecordId = recRef.id;
+      allItemRecords.push({ id: itemRecordId, ...newRecord });
+    }
+
+    // ── Step B: Save the individual user review ───────────────────────────────
+    const review = {
+      itemRecordId,
+      name: itemName,
+      category,
+      subCategory,
+      bakeryName,
       bakeryAddress: selectedBakery?.address || '',
       bakeryPlaceId: selectedBakery?.placeId || null,
       price: document.getElementById('itemPrice').value ? parseFloat(document.getElementById('itemPrice').value) : null,
-      overallRating: parseFloat(document.getElementById('overallRating').value),
-      communityAvg: parseFloat(document.getElementById('overallRating').value),
+      overallRating,
+      communityAvg: overallRating, // will be updated below
       ratingCount: 1,
       notes: document.getElementById('itemNotes').value,
       photoURL,
@@ -2345,10 +2671,11 @@ async function saveReview() {
       ...dimData
     };
 
-    await addDoc(collection(db, 'items'), item);
+    await addDoc(collection(db, 'items'), review);
     closeAddModal();
     showToast('🥐 Review saved!');
     await loadData();
+    await loadItemRecords();
     renderLeaderboard(lbCurrentTab);
   } catch (err) {
     showToast('Error saving — check your config');
