@@ -2711,7 +2711,7 @@ function feedCardHTML(item, reactionBarHTML) {
           ${priceLabel ? `<div class="card-price">${priceLabel}</div>` : ''}
         </div>
       </div>
-      ${reactionBarHTML}
+      <div onclick="event.stopPropagation()">${reactionBarHTML}</div>
     </div>`;
 }
 
@@ -3376,6 +3376,8 @@ let userLatLng = null; // cached geolocation
 function openAddModal() {
   if (!currentUser) { openAuthModal(); return; }
   resetAddModal();
+  // Always refresh item records so we see other users' recent additions
+  loadItemRecords();
   // Request location silently in background
   if (navigator.geolocation && !userLatLng) {
     navigator.geolocation.getCurrentPosition(
@@ -3857,9 +3859,12 @@ function searchExistingItems(query) {
 
   let matches = allItemRecords.filter(r => {
     const nameMatch = r.name?.toLowerCase().includes(q);
+    // If bakery selected, filter to that bakery first; otherwise show all matches
     const bakeryMatch = !bakeryName || r.bakeryName?.toLowerCase() === bakeryName.toLowerCase();
     return nameMatch && bakeryMatch;
   }).slice(0, 5);
+
+
 
   let html = matches.map(r => {
     const catDisp = getCategoryDisplay(r);
@@ -3873,7 +3878,7 @@ function searchExistingItems(query) {
         ${thumb}
         <div class="item-match-info">
           <div class="item-match-name">${r.name}</div>
-          <div class="item-match-meta">📍 ${r.bakeryName} · ${count} review${count !== 1 ? 's' : ''}</div>
+          <div class="item-match-meta">📍 ${r.bakeryName} · <strong>${count} community review${count !== 1 ? 's' : ''}</strong></div>
         </div>
         <div class="item-match-score">${score}</div>
       </div>`;
@@ -5154,7 +5159,7 @@ function buildReactionBarInner(itemId, reactions) {
   const reactionBtns = existingEmojis.map(emoji => {
     const reacted = !!userReacted[emoji];
     return `<button class="reaction-btn${reacted ? ' reacted' : ''}"
-      onclick="toggleReaction('${itemId}', '${emoji}')"
+      onclick="event.stopPropagation(); toggleReaction('${itemId}', '${emoji}')"
       title="${reacted ? 'Remove reaction' : 'React'}">
       <span class="emoji">${emoji}</span>
       <span class="count">${counts[emoji]}</span>
@@ -5164,8 +5169,8 @@ function buildReactionBarInner(itemId, reactions) {
   // Add button — only show if user hasn't used all 4 emojis
   const allReacted = REACTION_EMOJIS.every(e => userReacted[e]);
   const addBtn = currentUser && !allReacted ? `
-    <div style="position:relative;">
-      <button class="reaction-add" onclick="toggleReactionPicker(this, '${itemId}')" title="Add reaction">+</button>
+    <div style="position:relative;" onclick="event.stopPropagation()">
+      <button class="reaction-add" onclick="event.stopPropagation(); toggleReactionPicker(this, '${itemId}')" title="Add reaction">+</button>
     </div>` : '';
 
   return reactionBtns + addBtn;
@@ -5178,7 +5183,7 @@ function toggleReactionPicker(btn, itemId) {
   const picker = document.createElement('div');
   picker.className = 'reaction-picker';
   picker.innerHTML = REACTION_EMOJIS.map(emoji =>
-    `<button class="reaction-picker-btn" onclick="toggleReaction('${itemId}','${emoji}'); this.closest('.reaction-picker').remove();">${emoji}</button>`
+    `<button class="reaction-picker-btn" onclick="event.stopPropagation(); toggleReaction('${itemId}','${emoji}'); this.closest('.reaction-picker').remove();">${emoji}</button>`
   ).join('');
   btn.parentElement.appendChild(picker);
 
