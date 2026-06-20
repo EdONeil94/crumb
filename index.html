@@ -1468,7 +1468,7 @@ async function fetchBakeryPlaces(query) {
         'X-Goog-Api-Key': GOOGLE_MAPS_KEY,
         'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress'
       },
-      body: JSON.stringify({ textQuery: query + ' bakery' })
+      body: JSON.stringify({ textQuery: query })
     });
     const data = await res.json();
     const el = document.getElementById('bakeryResults');
@@ -1495,7 +1495,7 @@ function selectBakery(placeId, name, address) {
   document.getElementById('selectedBakeryName').textContent = name;
   document.getElementById('selectedBakeryAddress').textContent = address;
   document.getElementById('locationSelected').classList.add('visible');
-  if (GOOGLE_MAPS_KEY !== 'AIzaSyCQa9SwvrPmdnk5S2-q8Mem2ZP22GVB1Yo') {
+  if (GOOGLE_MAPS_KEY) {
     document.getElementById('mapContainer').innerHTML = `
       <iframe width="100%" height="180" style="border:0;border-radius:var(--radius);"
         src="https://www.google.com/maps/embed/v1/place?key=${GOOGLE_MAPS_KEY}&q=place_id:${placeId}" allowfullscreen></iframe>`;
