@@ -3215,41 +3215,66 @@ function renderLeaderboard(tab) {
   // If in bakery mode, delegate
   if (lbCurrentMode === 'bakeries') { renderBakeryLeaderboard(); return; }
 
-  // Always aggregate — prefer itemRecords (deduped), fall back to deduping allItems by name+bakery
-  let records;
-  if (allItemRecords.length > 0) {
-    records = allItemRecords;
-  } else {
-    // Dedupe allItems manually by name+bakery, averaging scores
-    const byKey = {};
-    allItems.forEach(item => {
-      const key = (item.name || '').toLowerCase() + '||' + (item.bakeryName || '').toLowerCase();
-      if (!byKey[key]) {
-        byKey[key] = { ...item, _scores: [item.overallRating || 0], _count: 1 };
-      } else {
-        byKey[key]._scores.push(item.overallRating || 0);
-        byKey[key]._count++;
-        if (!byKey[key].photoURL && item.photoURL) byKey[key].photoURL = item.photoURL;
-      }
-    });
-    records = Object.values(byKey).map(r => ({
+  // Merge itemRecords with any orphaned allItems that have no itemRecord
+  // This ensures reviews created before itemRecords existed still appear
+  const byKey = {};
+
+  // First pass — dedupe allItems by name+bakery
+  allItems.forEach(item => {
+    const key = (item.name || '').toLowerCase() + '||' + (item.bakeryName || '').toLowerCase();
+    if (!byKey[key]) {
+      byKey[key] = { ...item, _scores: [item.overallRating || 0], _count: 1 };
+    } else {
+      byKey[key]._scores.push(item.overallRating || 0);
+      byKey[key]._count++;
+      if (!byKey[key].photoURL && item.photoURL) byKey[key].photoURL = item.photoURL;
+    }
+  });
+
+  const orphanedRecords = Object.values(byKey)
+    .filter(r => {
+      // Only include if there's no matching itemRecord
+      const key = (r.name || '').toLowerCase() + '||' + (r.bakeryName || '').toLowerCase();
+      return !allItemRecords.some(ir =>
+        (ir.name || '').toLowerCase() === (r.name || '').toLowerCase() &&
+        (ir.bakeryName || '').toLowerCase() === (r.bakeryName || '').toLowerCase()
+      );
+    })
+    .map(r => ({
       ...r,
       communityAvg: r._scores.reduce((a,b) => a+b, 0) / r._scores.length,
       reviewCount: r._count
     }));
+
+  // Combine itemRecords + orphaned reviews
+  let records = [...allItemRecords, ...orphanedRecords];
+
+  // Bayesian weighted score — items with few reviews are pulled toward global avg
+  // until they have enough reviews to be trusted
+  const MINIMUM_REVIEWS = 3; // reviews needed for full confidence
+  const globalAvg = records.length
+    ? records.reduce((s, r) => s + (r.communityAvg || 0), 0) / records.length
+    : 3.0;
+
+  function weightedScore(r) {
+    const avg = r.communityAvg || r.overallRating || 0;
+    const n = r.reviewCount || r.ratingCount || 1;
+    return (n / (n + MINIMUM_REVIEWS)) * avg + (MINIMUM_REVIEWS / (n + MINIMUM_REVIEWS)) * globalAvg;
   }
 
   // Apply tab filter
   let filtered = [...records];
   if (tab === 'value') {
     filtered = filtered.filter(r => r.avgPrice && r.communityAvg).sort((a, b) => {
-      return (b.communityAvg / b.avgPrice) - (a.communityAvg / a.avgPrice);
+      const aVal = weightedScore(a) / parseFloat(a.avgPrice);
+      const bVal = weightedScore(b) / parseFloat(b.avgPrice);
+      return bVal - aVal;
     });
   } else if (tab !== 'all') {
     filtered = filtered.filter(r => r.category === tab);
-    filtered.sort((a, b) => (b.communityAvg || 0) - (a.communityAvg || 0));
+    filtered.sort((a, b) => weightedScore(b) - weightedScore(a));
   } else {
-    filtered.sort((a, b) => (b.communityAvg || 0) - (a.communityAvg || 0));
+    filtered.sort((a, b) => weightedScore(b) - weightedScore(a));
   }
   filtered = filtered.slice(0, 20);
 
@@ -3263,8 +3288,15 @@ function renderLeaderboard(tab) {
     const rank = i + 1;
     const rankClass = rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : '';
     const catDisp = getCategoryDisplay(record);
-    const score = record.communityAvg ? record.communityAvg.toFixed(1) : '–';
+    const rawAvg = record.communityAvg || record.overallRating || 0;
+    const reviewCount2 = record.reviewCount || record.ratingCount || 1;
+    const wScore = reviewCount2 >= MINIMUM_REVIEWS
+      ? rawAvg
+      : ((reviewCount2 / (reviewCount2 + MINIMUM_REVIEWS)) * rawAvg + (MINIMUM_REVIEWS / (reviewCount2 + MINIMUM_REVIEWS)) * globalAvg);
+    const score = rawAvg ? wScore.toFixed(1) : '–';
+    const isLowConfidence = reviewCount2 < MINIMUM_REVIEWS;
     const reviewCount = record.reviewCount || record.ratingCount || 1;
+    const ratingCount = reviewCount; // alias for template
     const avgPStr = record.avgPrice ? ' · £' + parseFloat(record.avgPrice).toFixed(2) + ' avg' : '';
     const imageContent = record.photoURL
       ? `<img src="${record.photoURL}" style="width:52px;height:52px;border-radius:8px;object-fit:cover;" alt="">`
@@ -3282,7 +3314,7 @@ function renderLeaderboard(tab) {
         </div>
         <div class="lb-right">
           <div class="lb-score">${score}</div>
-          <div class="lb-reviews">${reviewCount} review${reviewCount !== 1 ? 's' : ''}</div>
+          <div class="lb-reviews">${reviewCount} review${reviewCount !== 1 ? 's' : ''}${isLowConfidence ? ' · <span style="opacity:0.6;">building confidence</span>' : ''}</div>
         </div>
       </div>`;
   }).join('');
