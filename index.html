@@ -1547,7 +1547,8 @@ nav {
 }
 .product-card-image img { width: 100%; height: 100%; object-fit: cover; }
 .product-card-body { padding: 14px 16px; flex: 1; display: flex; flex-direction: column; }
-.product-card-bakery { font-size: 0.72rem; color: var(--caramel); font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px; }
+.product-card-bakery { font-size: 0.78rem; color: var(--caramel); font-weight: 700; letter-spacing: 0.3px; margin-bottom: 6px; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+.product-card-bakery:hover { text-decoration: underline; }
 .product-card-name { font-family: 'Playfair Display', serif; font-size: 1rem; font-weight: 600; color: var(--espresso); margin-bottom: 4px; }
 .product-card-desc { font-size: 0.8rem; color: var(--text-muted); line-height: 1.5; flex: 1; margin-bottom: 12px; }
 .product-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -2087,6 +2088,21 @@ nav {
   </div>
   <div class="torn"></div>
   <div class="section">
+    <!-- Filter bar -->
+    <div id="shopFilterBar" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:24px; padding-bottom:20px; border-bottom:1px solid var(--border);">
+      <select class="form-select" id="shopFilterBakery" onchange="applyShopFilters()" style="flex:1; min-width:160px; max-width:220px;">
+        <option value="">All bakeries</option>
+      </select>
+      <select class="form-select" id="shopFilterType" onchange="applyShopFilters()" style="flex:1; min-width:140px; max-width:180px;">
+        <option value="">All types</option>
+      </select>
+      <select class="form-select" id="shopSortPrice" onchange="applyShopFilters()" style="flex:1; min-width:140px; max-width:180px;">
+        <option value="">Sort: Featured</option>
+        <option value="asc">Price: Low to high</option>
+        <option value="desc">Price: High to low</option>
+      </select>
+      <div id="shopResultCount" style="font-size:0.82rem; color:var(--text-muted); white-space:nowrap;"></div>
+    </div>
     <div id="shopPageGrid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:20px;">
       <div class="empty-state" style="grid-column:1/-1">
         <div class="empty-state-icon">🛍️</div>
@@ -2127,6 +2143,19 @@ nav {
       <div class="form-group">
         <label class="form-label">Product name</label>
         <input type="text" class="form-input" id="productName" placeholder="e.g. Crumb Tote Bag, Gift Card, Enamel Pin…">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Product type <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">(helps with filtering)</span></label>
+        <select class="form-select" id="productType">
+          <option value="">— Select type —</option>
+          <option value="Clothing">Clothing</option>
+          <option value="Accessories">Accessories</option>
+          <option value="Homewares">Homewares</option>
+          <option value="Gift Card">Gift Card</option>
+          <option value="Stationery">Stationery</option>
+          <option value="Art & Print">Art & Print</option>
+          <option value="Other">Other</option>
+        </select>
       </div>
       <div class="form-group">
         <label class="form-label">Description</label>
@@ -5852,23 +5881,53 @@ async function renderShopPage() {
   if (!grid) return;
 
   const available = allProducts.filter(p => p.available !== false);
-  if (!available.length) {
+
+  // Populate bakery filter
+  const bakerySelect = document.getElementById('shopFilterBakery');
+  const typeSelect = document.getElementById('shopFilterType');
+  if (bakerySelect && typeSelect) {
+    const bakeries = [...new Set(available.map(p => p.bakeryName).filter(Boolean))].sort();
+    const types = [...new Set(available.map(p => p.productType).filter(Boolean))].sort();
+    const curBakery = bakerySelect.value;
+    const curType = typeSelect.value;
+    bakerySelect.innerHTML = '<option value="">All bakeries</option>' +
+      bakeries.map(b => `<option value="${escJS(b)}"${curBakery===b?' selected':''}>${b}</option>`).join('');
+    typeSelect.innerHTML = '<option value="">All types</option>' +
+      types.map(t => `<option value="${escJS(t)}"${curType===t?' selected':''}>${t}</option>`).join('');
+  }
+
+  applyShopFilters();
+}
+
+function applyShopFilters() {
+  const grid = document.getElementById('shopPageGrid');
+  const countEl = document.getElementById('shopResultCount');
+  if (!grid) return;
+
+  const bakeryFilter = document.getElementById('shopFilterBakery')?.value || '';
+  const typeFilter = document.getElementById('shopFilterType')?.value || '';
+  const sortPrice = document.getElementById('shopSortPrice')?.value || '';
+
+  let items = allProducts.filter(p => p.available !== false);
+
+  if (bakeryFilter) items = items.filter(p => p.bakeryName === bakeryFilter);
+  if (typeFilter) items = items.filter(p => p.productType === typeFilter);
+
+  if (sortPrice === 'asc') items.sort((a, b) => (a.price || 0) - (b.price || 0));
+  else if (sortPrice === 'desc') items.sort((a, b) => (b.price || 0) - (a.price || 0));
+
+  if (countEl) countEl.textContent = items.length ? `${items.length} item${items.length !== 1 ? 's' : ''}` : '';
+
+  if (!items.length) {
     grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
       <div class="empty-state-icon">🛍️</div>
-      <div class="empty-state-title">No shops open yet</div>
-      <div class="empty-state-text">Bakery owners can open their shop from their bakery page.</div>
+      <div class="empty-state-title">${allProducts.length ? 'No items match your filters' : 'No shops open yet'}</div>
+      <div class="empty-state-text">${allProducts.length ? 'Try removing some filters.' : 'Bakery owners can open their shop from their bakery page.'}</div>
     </div>`;
     return;
   }
 
-  // Group by bakery
-  const byBakery = {};
-  available.forEach(p => {
-    if (!byBakery[p.bakeryName]) byBakery[p.bakeryName] = [];
-    byBakery[p.bakeryName].push(p);
-  });
-
-  grid.innerHTML = available.map(p => productCardHTML(p, true)).join('');
+  grid.innerHTML = items.map(p => productCardHTML(p, true)).join('');
 }
 
 function productCardHTML(p, showBakery) {
@@ -5884,8 +5943,9 @@ function productCardHTML(p, showBakery) {
         ${isUnavailable ? '<div class="product-badge">Unavailable</div>' : ''}
       </div>
       <div class="product-card-body">
-        ${showBakery ? `<div class="product-card-bakery">📍 ${p.bakeryName}</div>` : ''}
+        ${showBakery ? `<div class="product-card-bakery" onclick="event.stopPropagation(); openBakeryProfile('${escJS(p.bakeryName || '')}')">📍 ${p.bakeryName}</div>` : ''}
         <div class="product-card-name">${p.name}</div>
+        ${p.productType ? `<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:4px;">${p.productType}</div>` : ''}
         <div class="product-card-desc">${p.description || ''}</div>
         <div class="product-card-footer">
           <div class="product-card-price">${priceStr}</div>
@@ -5986,6 +6046,7 @@ function openProductModal(productId, bakeryName) {
   const p = productId ? allProducts.find(x => x.id === productId) : null;
   document.getElementById('productModalTitle').textContent = p ? 'Edit product' : 'Add product';
   document.getElementById('productName').value = p?.name || '';
+  document.getElementById('productType').value = p?.productType || '';
   document.getElementById('productDescription').value = p?.description || '';
   document.getElementById('productPrice').value = p?.price || '';
   document.getElementById('productLink').value = p?.buyLink || '';
@@ -6030,6 +6091,7 @@ async function saveProduct() {
     const data = {
       bakeryName: editingProductBakery,
       name: document.getElementById('productName').value.trim(),
+      productType: document.getElementById('productType').value || '',
       description: document.getElementById('productDescription').value.trim(),
       price: document.getElementById('productPrice').value ? parseFloat(document.getElementById('productPrice').value) : null,
       buyLink: document.getElementById('productLink').value.trim() || null,
