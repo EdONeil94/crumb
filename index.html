@@ -837,6 +837,13 @@ nav {
 .bakery-card-blurb { font-size: 0.83rem; color: var(--text-body); line-height: 1.55; font-style: italic; border-top: 1px solid var(--border); padding-top: 10px; }
 
 /* ─── BAKERY PROFILE ──────────────────────────────────────────────────────────── */
+.bakery-profile-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+  margin-top: 4px;
+}
+
 .bakery-profile-header { background: var(--espresso); padding: 28px 24px 24px; color: var(--parchment); }
 .bakery-profile-name { font-family: 'Playfair Display', serif; font-size: 1.6rem; font-weight: 700; color: var(--cream-white); margin-bottom: 4px; }
 .bakery-profile-address { font-size: 0.85rem; color: var(--honey-light); margin-bottom: 16px; }
@@ -1437,6 +1444,162 @@ nav {
 }
 .reaction-picker-btn:hover { background: var(--parchment-dark); }
 
+/* ─── FOLLOWS ────────────────────────────────────────────────────────────────── */
+.follow-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border-radius: 100px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s;
+  border: 1.5px solid var(--honey);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.follow-btn.follow { background: var(--honey); color: var(--espresso); }
+.follow-btn.follow:hover { background: var(--honey-light); }
+.follow-btn.follow-back { background: transparent; color: var(--honey); }
+.follow-btn.follow-back:hover { background: rgba(212,165,116,0.15); }
+.follow-btn.following { background: transparent; color: var(--honey-light); border-color: rgba(255,255,255,0.2); }
+.follow-btn.following:hover { border-color: #e74c3c; color: #e74c3c; }
+
+.profile-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0;
+}
+.profile-tab {
+  flex: 1;
+  padding: 12px;
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+.profile-tab.active { color: var(--espresso); border-bottom-color: var(--honey); font-weight: 600; }
+.profile-tab-content { padding: 16px 24px 28px; }
+
+.follow-user-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.follow-user-row:last-child { border-bottom: none; }
+.follow-user-avatar {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  background: var(--caramel);
+  color: white;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.9rem; font-weight: 600;
+  flex-shrink: 0; overflow: hidden;
+  cursor: pointer;
+}
+.follow-user-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.follow-user-info { flex: 1; min-width: 0; cursor: pointer; }
+.follow-user-name { font-size: 0.9rem; font-weight: 600; color: var(--espresso); }
+.follow-user-meta { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+
+.people-follow-btn {
+  padding: 6px 14px;
+  border-radius: 100px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s;
+  border: 1.5px solid var(--caramel);
+  background: transparent;
+  color: var(--caramel);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.people-follow-btn.following { border-color: var(--border); color: var(--text-muted); }
+.people-follow-btn.follow-back { border-color: var(--honey); color: var(--honey); background: rgba(212,165,116,0.1); }
+
+/* ─── SHOP ────────────────────────────────────────────────────────────────────── */
+.product-card {
+  background: var(--cream-white);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  transition: transform 0.2s, box-shadow 0.2s;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+}
+.product-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
+.product-card-image {
+  height: 200px;
+  background: var(--parchment-dark);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 3.5rem;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.product-card-image img { width: 100%; height: 100%; object-fit: cover; }
+.product-card-body { padding: 14px 16px; flex: 1; display: flex; flex-direction: column; }
+.product-card-bakery { font-size: 0.72rem; color: var(--caramel); font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px; }
+.product-card-name { font-family: 'Playfair Display', serif; font-size: 1rem; font-weight: 600; color: var(--espresso); margin-bottom: 4px; }
+.product-card-desc { font-size: 0.8rem; color: var(--text-muted); line-height: 1.5; flex: 1; margin-bottom: 12px; }
+.product-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.product-card-price { font-family: 'Playfair Display', serif; font-size: 1.1rem; font-weight: 700; color: var(--espresso); }
+.product-buy-btn {
+  padding: 7px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--espresso);
+  color: var(--honey);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s;
+}
+.product-buy-btn:hover { background: var(--espresso-mid); }
+.product-unavailable { opacity: 0.55; pointer-events: none; }
+.product-badge {
+  position: absolute;
+  top: 8px; right: 8px;
+  background: var(--espresso);
+  color: var(--honey);
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 100px;
+}
+.shop-tab-bar { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
+.shop-manage-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: var(--parchment);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.shop-manage-row:hover { background: var(--parchment-dark); }
+.shop-manage-thumb {
+  width: 48px; height: 48px;
+  border-radius: 8px;
+  background: var(--parchment-dark);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.3rem;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.shop-manage-thumb img { width: 100%; height: 100%; object-fit: cover; }
+
 /* ─── SPINNER ────────────────────────────────────────────────────────────────── */
 @keyframes spin { to { transform: rotate(360deg); } }
 .spinner { width: 20px; height: 20px; border: 2.5px solid rgba(139,94,60,0.2); border-top-color: var(--caramel); border-radius: 50%; animation: spin 0.8s linear infinite; }
@@ -1545,6 +1708,7 @@ nav {
     <button class="nav-btn" onclick="showPage('leaderboard')">Top Picks</button>
     <button class="nav-btn" onclick="showPage('bakeries')">Bakeries</button>
     <button class="nav-btn" onclick="showPage('explore')">Explore</button>
+    <button class="nav-btn" onclick="showPage('shop')">Shop</button>
     <button class="nav-btn" id="desktopPeopleBtn" onclick="showPage('people')" style="display:none">People</button>
     <button class="nav-btn" id="desktopFeedBtn" onclick="showPage('feed')" style="display:none">Feed</button>
   </div>
@@ -1566,6 +1730,7 @@ nav {
   <button class="mobile-menu-item" onclick="closeMobileMenu(); setTimeout(()=>showPage('leaderboard'),50)">🏆 Top Picks</button>
   <button class="mobile-menu-item" onclick="closeMobileMenu(); setTimeout(()=>showPage('bakeries'),50)">🏪 Bakeries</button>
   <button class="mobile-menu-item" onclick="closeMobileMenu(); setTimeout(()=>showPage('explore'),50)">🗺️ Explore</button>
+  <button class="mobile-menu-item" onclick="closeMobileMenu(); setTimeout(()=>showPage('shop'),50)">🛍️ Shop</button>
   <button class="mobile-menu-item" id="peopleNavBtn" onclick="closeMobileMenu(); setTimeout(()=>showPage('people'),50)" style="display:none">👥 People</button>
   <button class="mobile-menu-item" id="feedNavBtn" onclick="closeMobileMenu(); setTimeout(()=>showPage('feed'),50)" style="display:none">📋 Feed</button>
   <div class="mobile-menu-divider" id="mobileMenuDivider" style="display:none;"></div>
@@ -1661,9 +1826,15 @@ nav {
 <!-- ─── FEED PAGE ──────────────────────────────────────────────────────────────── -->
 <div class="page" id="page-feed">
   <div class="section">
-    <div class="section-header">
-      <div class="section-eyebrow">Community</div>
-      <h2 class="section-title">Latest reviews</h2>
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; flex-wrap:wrap; gap:12px;">
+      <div>
+        <div class="section-eyebrow" id="feedEyebrow">Community</div>
+        <h2 class="section-title" id="feedTitle">Latest reviews</h2>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button class="filter-chip active" id="feedTabAll" onclick="switchFeedTab('all')">All</button>
+        <button class="filter-chip" id="feedTabFollowing" onclick="switchFeedTab('following')" style="display:none;">Following</button>
+      </div>
     </div>
     <div class="feed-grid" id="feedGrid">
       <div class="empty-state" style="grid-column:1/-1">
@@ -1904,6 +2075,103 @@ nav {
       <button class="modal-close" onclick="closeDetailModal()">✕</button>
     </div>
     <div id="detailContent"></div>
+  </div>
+</div>
+
+<!-- ─── SHOP PAGE ────────────────────────────────────────────────────────────── -->
+<div class="page" id="page-shop">
+  <div style="background:var(--espresso); padding:56px 24px 48px; text-align:center;">
+    <div style="font-size:0.72rem; letter-spacing:4px; text-transform:uppercase; color:var(--honey); font-weight:600; margin-bottom:12px;">Marketplace</div>
+    <h1 style="font-family:'Playfair Display',serif; font-size:clamp(2rem,5vw,3rem); color:var(--cream-white); font-weight:700; margin-bottom:12px;">The Crumb <em style="color:var(--honey); font-style:italic;">Shop</em></h1>
+    <p style="color:var(--honey-light); font-size:1rem; max-width:480px; margin:0 auto; line-height:1.6; font-weight:300;">Merchandise and keepsakes from your favourite local bakeries.</p>
+  </div>
+  <div class="torn"></div>
+  <div class="section">
+    <div id="shopPageGrid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:20px;">
+      <div class="empty-state" style="grid-column:1/-1">
+        <div class="empty-state-icon">🛍️</div>
+        <div class="empty-state-title">No shops open yet</div>
+        <div class="empty-state-text">Bakery owners can open their shop from their bakery page.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── MANAGE SHOP MODAL ─────────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="manageShopModal">
+  <div class="modal" style="max-width:560px;" role="dialog" aria-label="Manage shop">
+    <div class="modal-header">
+      <div class="modal-title" id="manageShopTitle">Manage shop</div>
+      <button class="modal-close" onclick="closeManageShopModal()">✕</button>
+    </div>
+    <div class="modal-body" id="manageShopBody"></div>
+  </div>
+</div>
+
+<!-- ─── ADD/EDIT PRODUCT MODAL ────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="productModal">
+  <div class="modal" style="max-width:520px;" role="dialog" aria-label="Product">
+    <div class="modal-header">
+      <div class="modal-title" id="productModalTitle">Add product</div>
+      <button class="modal-close" onclick="closeProductModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Product photo</label>
+        <div id="productPhotoWrap" style="border-radius:var(--radius);overflow:hidden;margin-bottom:8px;max-height:180px;background:var(--parchment-dark);display:flex;align-items:center;justify-content:center;font-size:2rem;min-height:80px;">🛍️</div>
+        <label style="cursor:pointer;display:inline-block;padding:8px 14px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:0.82rem;color:var(--caramel);font-weight:500;background:var(--parchment);">
+          📷 Upload photo
+          <input type="file" accept="image/*" style="display:none;" id="productPhotoInput" onchange="handleProductPhoto(this)">
+        </label>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Product name</label>
+        <input type="text" class="form-input" id="productName" placeholder="e.g. Crumb Tote Bag, Gift Card, Enamel Pin…">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description</label>
+        <textarea class="form-textarea" id="productDescription" placeholder="What is it? Size, material, what's included…" style="min-height:80px;"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Price</label>
+        <div style="position:relative;">
+          <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-weight:600;">£</span>
+          <input type="number" class="form-input" id="productPrice" placeholder="0.00" step="0.01" min="0" style="padding-left:30px;">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Buy link <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">(optional — Etsy, Shopify, your website)</span></label>
+        <input type="url" class="form-input" id="productLink" placeholder="https://…">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Enquiry email <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">(fallback if no link)</span></label>
+        <input type="email" class="form-input" id="productEmail" placeholder="orders@yourbakery.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="productAvailable" checked style="width:16px;height:16px;">
+          Available for purchase
+        </label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" id="productDeleteBtn" style="color:#c0392b;display:none;" onclick="deleteProduct()">🗑 Delete</button>
+      <div style="display:flex;gap:10px;">
+        <button class="btn-ghost" onclick="closeProductModal()">Cancel</button>
+        <button class="btn-espresso" onclick="saveProduct()">Save product</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── PRODUCT DETAIL MODAL ──────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="productDetailModal">
+  <div class="modal" style="max-width:480px;" role="dialog" aria-label="Product detail">
+    <div class="modal-header">
+      <div class="modal-title" id="productDetailTitle">Product</div>
+      <button class="modal-close" onclick="closeProductDetailModal()">✕</button>
+    </div>
+    <div id="productDetailContent"></div>
   </div>
 </div>
 
@@ -2487,12 +2755,14 @@ window.addEventListener('crumb-firebase-ready', () => {
     currentUserBakery = null;
     if (user) {
       await loadUserRole();
+      await loadFollows();
     }
     updateNav();
     loadData();
     loadProfiles();
     loadItemRecords();
     loadBakeryProfiles();
+    loadProducts();
   });
 
 });
@@ -2506,6 +2776,7 @@ function showPage(name) {
   if (name === 'feed') renderFeed();
   if (name === 'bakeries') renderBakeries();
   if (name === 'explore') initExplorePage();
+  if (name === 'shop') renderShopPage();
   if (name === 'people') renderPeople();
   if (name === 'settings') openSettingsPage();
 }
@@ -2673,25 +2944,73 @@ function renderRecentGrid() {
   grid.innerHTML = allItems.slice(0, 9).map(item => cardHTML(item)).join('');
 }
 
+let feedCurrentTab = 'all';
+
+function switchFeedTab(tab) {
+  feedCurrentTab = tab;
+  document.getElementById('feedTabAll').classList.toggle('active', tab === 'all');
+  document.getElementById('feedTabFollowing').classList.toggle('active', tab === 'following');
+  document.getElementById('feedEyebrow').textContent = tab === 'following' ? 'People you follow' : 'Community';
+  document.getElementById('feedTitle').textContent = tab === 'following' ? 'Following' : 'Latest reviews';
+  renderFeed();
+}
+
 async function renderFeed() {
   const grid = document.getElementById('feedGrid');
-  if (!allItems.length) {
-    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon">🍞</div><div class="empty-state-title">The bakery is quiet</div><div class="empty-state-text">No reviews yet — be the first!</div></div>`;
-    return;
+
+  // Show/hide following tab based on login state
+  const followingTab = document.getElementById('feedTabFollowing');
+  if (followingTab) followingTab.style.display = currentUser ? 'block' : 'none';
+
+  let items = [...allItems];
+
+  if (feedCurrentTab === 'following') {
+    if (!currentUser || myFollowing.size === 0) {
+      grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+        <div class="empty-state-icon">👥</div>
+        <div class="empty-state-title">${!currentUser ? 'Sign in to see your following feed' : "You're not following anyone yet"}</div>
+        <div class="empty-state-text">${currentUser ? 'Head to the People page to find and follow other reviewers.' : ''}</div>
+      </div>`;
+      return;
+    }
+    items = items.filter(i => myFollowing.has(i.userId));
+    if (!items.length) {
+      grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon">🥐</div><div class="empty-state-title">No reviews from people you follow yet</div></div>`;
+      return;
+    }
+  } else {
+    // All feed — sort followed users' reviews first
+    if (currentUser && myFollowing.size > 0) {
+      items.sort((a, b) => {
+        const aFollowed = myFollowing.has(a.userId) ? 1 : 0;
+        const bFollowed = myFollowing.has(b.userId) ? 1 : 0;
+        if (bFollowed !== aFollowed) return bFollowed - aFollowed;
+        // Then by date
+        const aTime = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
+        const bTime = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
+        return bTime - aTime;
+      });
+    }
+    if (!items.length) {
+      grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon">🍞</div><div class="empty-state-title">The bakery is quiet</div><div class="empty-state-text">No reviews yet — be the first!</div></div>`;
+      return;
+    }
   }
 
   // Build feed cards with reaction bars
-  const itemIds = allItems.map(i => i.id);
+  const itemIds = items.map(i => i.id);
   const reactionsMap = await loadReactionsForItems(itemIds);
 
-  grid.innerHTML = allItems.map(item => {
+  grid.innerHTML = items.map(item => {
     const reactions = reactionsMap[item.id] || [];
+    const isFollowed = currentUser && myFollowing.has(item.userId);
+    const followedBadge = isFollowed ? `<span style="font-size:0.68rem;color:var(--sage);font-weight:600;letter-spacing:0.5px;">● Following</span>` : '';
     const reactionBarHTML = `<div class="reaction-bar" data-item-id="${item.id}">${buildReactionBarInner(item.id, reactions)}</div>`;
-    return feedCardHTML(item, reactionBarHTML);
+    return feedCardHTML(item, reactionBarHTML, followedBadge);
   }).join('');
 }
 
-function feedCardHTML(item, reactionBarHTML) {
+function feedCardHTML(item, reactionBarHTML, followedBadge) {
   const catDisp = getCategoryDisplay(item);
   const record = item.itemRecordId ? allItemRecords.find(r => r.id === item.itemRecordId) : null;
   const score = record ? record.communityAvg.toFixed(1) : (item.communityAvg ? item.communityAvg.toFixed(1) : (item.overallRating ? item.overallRating.toFixed(1) : '–'));
@@ -2713,6 +3032,7 @@ function feedCardHTML(item, reactionBarHTML) {
         <div class="card-meta">
           <span style="cursor:pointer;color:var(--caramel);" onclick="event.stopPropagation(); if(currentUser) openProfileModal('${item.userId}')">${item.userName || 'Anonymous'}</span>
           ${item.createdAt ? `<span>·</span><span>${timeAgo(item.createdAt.toDate ? item.createdAt.toDate() : new Date(item.createdAt))}</span>` : ''}
+          ${followedBadge || ''}
         </div>
         <div class="card-name">${item.name || 'Unknown bake'}</div>
         <div class="card-bakery" onclick="event.stopPropagation(); openBakeryProfile('${escJS(item.bakeryName || 'Unknown bakery')}')">📍 ${item.bakeryName || 'Unknown bakery'}</div>
@@ -2873,6 +3193,7 @@ function renderPeople() {
     const initials = (m.name || '?').charAt(0).toUpperCase();
     const avatarInner = m.photo ? `<img src="${m.photo}" alt="${m.name}">` : initials;
     const avg = m.reviews ? (m.totalRating / m.reviews).toFixed(1) : '–';
+    const followBtn = currentUser && m.uid !== currentUser.uid ? followBtnHTML(m.uid, false) : '';
     return `<div class="member-card" onclick="${currentUser ? `openProfileModal('${m.uid}')` : 'openAuthModal()'}">
       <div class="member-avatar-lg">${avatarInner}</div>
       <div class="member-info">
@@ -2880,6 +3201,7 @@ function renderPeople() {
         ${m.location ? `<div class="member-location">📍 ${m.location}</div>` : ''}
         <div class="member-stats">${m.reviews} review${m.reviews !== 1 ? 's' : ''} · avg ${avg}</div>
       </div>
+      ${followBtn}
     </div>`;
   }).join('');
 }
@@ -2948,21 +3270,44 @@ async function openProfileModal(uid, catFilter, locFilter) {
     </div>`;
   }).join('');
   const filterLabel = [profileActiveCatFilter ? CATEGORY_TREE[profileActiveCatFilter]?.label : '', profileActiveLocFilter ? `at ${profileActiveLocFilter}` : ''].filter(Boolean).join(' ') || 'All';
+  // Follow counts
+  let followerCount = 0; let followingCount = 0;
+  try {
+    const { db, collection, query, where, getDocs } = fb;
+    const [frs, fng] = await Promise.all([
+      getDocs(query(collection(db, 'follows'), where('followingId', '==', uid))),
+      getDocs(query(collection(db, 'follows'), where('followerId', '==', uid)))
+    ]);
+    followerCount = frs.size;
+    followingCount = fng.size;
+  } catch(e) {}
+
+  const followBtn = !isOwnProfile && currentUser ? followBtnHTML(uid, true) : '';
+
   document.getElementById('profileModalContent').innerHTML = `
     <div class="profile-hero">
       <div class="profile-hero-avatar">${photo ? `<img src="${photo}" alt="${name}">` : initials}</div>
       <div class="profile-hero-info">
-        <div class="profile-hero-name">${name}</div>
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:4px;">
+          <div class="profile-hero-name">${name}</div>
+          ${followBtn}
+        </div>
         ${profile.location ? `<div class="profile-hero-location">📍 ${profile.location}</div>` : ''}
+        ${profile.bio ? `<div style="font-size:0.8rem; color:var(--honey-light); margin:6px 0; font-style:italic; line-height:1.4;">"${profile.bio}"</div>` : ''}
         <div class="profile-hero-stats">
           <div class="profile-stat"><div class="profile-stat-num">${userItems.length}</div><div class="profile-stat-label">Reviews</div></div>
           <div class="profile-stat"><div class="profile-stat-num">${avgRating}</div><div class="profile-stat-label">Avg score</div></div>
-          <div class="profile-stat"><div class="profile-stat-num" style="font-size:0.85rem;line-height:1.2;">${faveCatLabel}</div><div class="profile-stat-label">Fave type</div></div>
+          <div class="profile-stat" style="cursor:pointer;" onclick="switchProfileTab('followers','${uid}')"><div class="profile-stat-num">${followerCount}</div><div class="profile-stat-label">Followers</div></div>
+          <div class="profile-stat" style="cursor:pointer;" onclick="switchProfileTab('following','${uid}')"><div class="profile-stat-num">${followingCount}</div><div class="profile-stat-label">Following</div></div>
         </div>
       </div>
     </div>
-    <div class="profile-body">
-      ${profile.bio ? `<div class="profile-bio">"${profile.bio}"</div>` : ''}
+    <div class="profile-tabs">
+      <div class="profile-tab active" onclick="switchProfileTab('reviews','${uid}')">Reviews</div>
+      <div class="profile-tab" onclick="switchProfileTab('followers','${uid}')">Followers</div>
+      <div class="profile-tab" onclick="switchProfileTab('following','${uid}')">Following</div>
+    </div>
+    <div class="profile-tab-content" id="profileTabContent">
       ${catFilterBar}${locFilterBar}
       ${userItems.length ? `<div class="profile-reviews-title">${filterLabel} reviews (${filtered.length})</div><div>${reviewsHTML || '<div class="empty-state" style="padding:20px 0;"><div class="empty-state-icon">🥐</div><div class="empty-state-title">No reviews match this filter</div></div>'}</div>`
         : `<div class="empty-state"><div class="empty-state-icon">🥐</div><div class="empty-state-title">No reviews yet</div></div>`}
@@ -2972,6 +3317,59 @@ async function openProfileModal(uid, catFilter, locFilter) {
 function closeProfileModal() {
   document.getElementById('profileModal').classList.remove('open');
   unlockScroll();
+}
+
+async function switchProfileTab(tab, uid) {
+  // Update active tab
+  document.querySelectorAll('.profile-tab').forEach(t => {
+    t.classList.toggle('active', t.textContent.toLowerCase() === tab);
+  });
+  const content = document.getElementById('profileTabContent');
+  if (!content) return;
+  content.innerHTML = '<div style="text-align:center;padding:32px;"><div class="spinner" style="margin:0 auto;"></div></div>';
+
+  if (tab === 'reviews') {
+    // Re-open profile in reviews tab
+    await openProfileModal(uid, '', '');
+    return;
+  }
+
+  try {
+    const follows = tab === 'followers'
+      ? await getFollowersForUser(uid)
+      : await getFollowingForUser(uid);
+
+    const ids = tab === 'followers'
+      ? follows.map(f => f.followerId)
+      : follows.map(f => f.followingId);
+
+    if (!ids.length) {
+      content.innerHTML = `<div class="empty-state" style="padding:32px 0;">
+        <div class="empty-state-icon">👤</div>
+        <div class="empty-state-title">${tab === 'followers' ? 'No followers yet' : 'Not following anyone yet'}</div>
+      </div>`;
+      return;
+    }
+
+    // Fetch profile data for each user
+    const rows = await Promise.all(ids.map(async fuid => {
+      let fName = 'Anonymous'; let fPhoto = null;
+      if (allProfiles[fuid]) {
+        fName = allProfiles[fuid].displayName || fName;
+        fPhoto = allProfiles[fuid].photoURL || null;
+      } else {
+        // Try to get from items
+        const item = allItems.find(i => i.userId === fuid);
+        if (item) { fName = item.userName || fName; fPhoto = item.userPhoto || null; }
+      }
+      return buildFollowUserRowHTML(fuid, fName, fPhoto, tab === 'following');
+    }));
+
+    content.innerHTML = `<div>${rows.join('')}</div>`;
+  } catch(e) {
+    content.innerHTML = '<div style="padding:16px;color:var(--text-muted);">Could not load.</div>';
+    console.error(e);
+  }
 }
 
 function buildCategoryFilterBar(items, activeCategory, fnName, fixedArgs) {
@@ -3104,15 +3502,60 @@ async function openBakeryProfile(bakeryName, catFilter) {
       </div>
     </div>
     <div class="bakery-profile-body">
+      <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+        ${canManage ? `<button class="btn-caramel" style="font-size:0.82rem;padding:8px 16px;" onclick="closeBakeryModal(); openManageBakeryModal('${escJS(bakeryName)}');">✏️ Edit page</button>` : ''}
+        ${canManage ? `<button class="btn-espresso" style="font-size:0.82rem;padding:8px 16px;" onclick="closeBakeryModal(); openManageShopModal('${escJS(bakeryName)}');">🛍️ Manage shop</button>` : ''}
+      </div>
       ${blurb ? `<div class="bakery-blurb-section"><div class="bakery-blurb-text">"${blurb}"</div></div>` : (!isOwner ? '' : `<div class="bakery-blurb-section"><div class="bakery-blurb-text" style="color:var(--text-muted);font-style:normal;">No description yet.</div></div>`)}
+      <div class="bakery-profile-tabs">
+        <div class="profile-tab active" onclick="switchBakeryTab('reviews','${escJS(bakeryName)}',this)">Reviews</div>
+        <div class="profile-tab" onclick="switchBakeryTab('shop','${escJS(bakeryName)}',this)">🛍️ Shop</div>
+      </div>
+      <div id="bakeryTabContent">
       ${catFilterBar}
       <div class="bakery-items-title">${bakeryActiveCatFilter ? CATEGORY_TREE[bakeryActiveCatFilter]?.label + ' reviews' : 'All reviews'} (${filtered.length})</div>
       <div>${itemsHTML || '<div class="empty-state" style="padding:24px 0;"><div class="empty-state-icon">🥐</div><div class="empty-state-title">No reviews in this category</div></div>'}</div>
+      </div>
     </div>`;
 }
 
 function closeBakeryModal() {
   document.getElementById('bakeryModal').classList.remove('open');
+  unlockScroll();
+}
+
+async function switchBakeryTab(tab, bakeryName, tabEl) {
+  document.querySelectorAll('.bakery-profile-tabs .profile-tab').forEach(t => t.classList.remove('active'));
+  if (tabEl) tabEl.classList.add('active');
+  const content = document.getElementById('bakeryTabContent');
+  if (!content) return;
+  if (tab === 'reviews') {
+    openBakeryProfile(bakeryName, bakeryActiveCatFilter);
+    return;
+  }
+  // Shop tab
+  content.innerHTML = '<div style="text-align:center;padding:32px;"><div class="spinner" style="margin:0 auto;"></div></div>';
+  await loadProducts();
+  const bakeryProducts = allProducts.filter(p => p.bakeryName === bakeryName && p.available !== false);
+  if (!bakeryProducts.length) {
+    content.innerHTML = '<div class="empty-state" style="padding:32px 0;"><div class="empty-state-icon">🛍️</div><div class="empty-state-title">No products yet</div><div class="empty-state-text">This bakery hasn\'t added any merchandise yet.</div></div>';
+    return;
+  }
+  content.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;padding-top:8px;">${bakeryProducts.map(p => productCardHTML(p, false)).join('')}</div>`;
+}
+
+function closeManageShopModal() {
+  document.getElementById('manageShopModal').classList.remove('open');
+  unlockScroll();
+}
+
+function closeProductModal() {
+  document.getElementById('productModal').classList.remove('open');
+  unlockScroll();
+}
+
+function closeProductDetailModal() {
+  document.getElementById('productDetailModal').classList.remove('open');
   unlockScroll();
 }
 
@@ -5270,6 +5713,349 @@ async function loadReactionsForItems(itemIds) {
     } catch(e) { console.log('Reactions load error:', e); }
   }
   return results;
+}
+
+// ─── FOLLOWS ──────────────────────────────────────────────────────────────────
+let myFollowing = new Set(); // UIDs I follow
+let myFollowers = new Set(); // UIDs that follow me
+
+async function loadFollows() {
+  if (!currentUser || !fb) return;
+  const { db, collection, query, where, getDocs } = fb;
+  try {
+    // Who I follow
+    const followingSnap = await getDocs(query(collection(db, 'follows'), where('followerId', '==', currentUser.uid)));
+    myFollowing = new Set(followingSnap.docs.map(d => d.data().followingId));
+    // Who follows me
+    const followersSnap = await getDocs(query(collection(db, 'follows'), where('followingId', '==', currentUser.uid)));
+    myFollowers = new Set(followersSnap.docs.map(d => d.data().followerId));
+  } catch(e) { console.log('Follows load error:', e.message); }
+}
+
+async function toggleFollow(targetUid) {
+  if (!currentUser || targetUid === currentUser.uid) return;
+  const { db, doc, setDoc, deleteDoc, serverTimestamp } = fb;
+  const followId = `${currentUser.uid}_${targetUid}`;
+  const followRef = doc(db, 'follows', followId);
+  try {
+    if (myFollowing.has(targetUid)) {
+      await deleteDoc(followRef);
+      myFollowing.delete(targetUid);
+      showToast('Unfollowed');
+    } else {
+      await setDoc(followRef, {
+        followerId: currentUser.uid,
+        followerName: currentUser.displayName || 'Anonymous',
+        followerPhoto: currentUser.photoURL || null,
+        followingId: targetUid,
+        createdAt: serverTimestamp()
+      });
+      myFollowing.add(targetUid);
+      showToast('Following!');
+    }
+    // Refresh any open profile
+    refreshFollowButtons(targetUid);
+  } catch(e) { showToast('Could not update follow'); console.error(e); }
+}
+
+function getFollowState(targetUid) {
+  if (!currentUser || targetUid === currentUser.uid) return 'self';
+  const iFollow = myFollowing.has(targetUid);
+  const theyFollow = myFollowers.has(targetUid);
+  if (iFollow) return 'following';
+  if (theyFollow) return 'follow-back';
+  return 'follow';
+}
+
+function followBtnHTML(targetUid, dark) {
+  const state = getFollowState(targetUid);
+  if (state === 'self') return '';
+  const labels = { follow: 'Follow', 'follow-back': 'Follow back', following: 'Following' };
+  if (dark) {
+    return `<button class="follow-btn ${state}" onclick="event.stopPropagation(); toggleFollow('${targetUid}').then(()=>refreshOpenProfile())">${labels[state]}</button>`;
+  }
+  return `<button class="people-follow-btn ${state}" onclick="event.stopPropagation(); toggleFollow('${targetUid}').then(()=>renderPeople())">${labels[state]}</button>`;
+}
+
+function refreshFollowButtons(uid) {
+  // Re-render people page if open
+  const peoplePage = document.getElementById('page-people');
+  if (peoplePage?.classList.contains('active')) renderPeople();
+}
+
+async function refreshOpenProfile() {
+  if (profileModalUid) await openProfileModal(profileModalUid, profileActiveCatFilter, profileActiveLocFilter);
+}
+
+async function getFollowersForUser(uid) {
+  const { db, collection, query, where, getDocs } = fb;
+  const snap = await getDocs(query(collection(db, 'follows'), where('followingId', '==', uid)));
+  return snap.docs.map(d => d.data());
+}
+
+async function getFollowingForUser(uid) {
+  const { db, collection, query, where, getDocs } = fb;
+  const snap = await getDocs(query(collection(db, 'follows'), where('followerId', '==', uid)));
+  return snap.docs.map(d => d.data());
+}
+
+function buildFollowUserRowHTML(followUid, followName, followPhoto, isFollowingPage) {
+  const initials = (followName || '?').charAt(0).toUpperCase();
+  const avatarInner = followPhoto ? `<img src="${followPhoto}" alt="${followName}">` : initials;
+  const state = getFollowState(followUid);
+  const btnLabel = state === 'following' ? 'Following' : state === 'follow-back' ? 'Follow back' : 'Follow';
+  const btnClass = state === 'following' ? 'following' : state === 'follow-back' ? 'follow-back' : '';
+  const userReviews = allItems.filter(i => i.userId === followUid).length;
+  return `
+    <div class="follow-user-row">
+      <div class="follow-user-avatar" onclick="closeProfileModal(); openProfileModal('${followUid}')">${avatarInner}</div>
+      <div class="follow-user-info" onclick="closeProfileModal(); openProfileModal('${followUid}')">
+        <div class="follow-user-name">${followName || 'Anonymous'}</div>
+        <div class="follow-user-meta">${userReviews} review${userReviews !== 1 ? 's' : ''}</div>
+      </div>
+      ${state !== 'self' ? `<button class="people-follow-btn ${btnClass}" onclick="event.stopPropagation(); toggleFollow('${followUid}').then(()=>refreshOpenProfile())">${btnLabel}</button>` : ''}
+    </div>`;
+}
+
+// ─── SHOP ─────────────────────────────────────────────────────────────────────
+let allProducts = []; // all shop products cached
+let editingProductId = null;
+let editingProductBakery = null;
+let productPhotoFile = null;
+
+async function loadProducts() {
+  if (!fb) return;
+  const { db, collection, getDocs, query, where, orderBy } = fb;
+  try {
+    const snap = await getDocs(collection(db, 'products'));
+    allProducts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch(e) { console.log('Products load:', e.message); }
+}
+
+async function renderShopPage() {
+  await loadProducts();
+  const grid = document.getElementById('shopPageGrid');
+  if (!grid) return;
+
+  const available = allProducts.filter(p => p.available !== false);
+  if (!available.length) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+      <div class="empty-state-icon">🛍️</div>
+      <div class="empty-state-title">No shops open yet</div>
+      <div class="empty-state-text">Bakery owners can open their shop from their bakery page.</div>
+    </div>`;
+    return;
+  }
+
+  // Group by bakery
+  const byBakery = {};
+  available.forEach(p => {
+    if (!byBakery[p.bakeryName]) byBakery[p.bakeryName] = [];
+    byBakery[p.bakeryName].push(p);
+  });
+
+  grid.innerHTML = available.map(p => productCardHTML(p, true)).join('');
+}
+
+function productCardHTML(p, showBakery) {
+  const thumb = p.photoURL
+    ? `<img src="${p.photoURL}" alt="${p.name}">`
+    : '🛍️';
+  const priceStr = p.price ? `£${parseFloat(p.price).toFixed(2)}` : 'POA';
+  const isUnavailable = p.available === false;
+  return `
+    <div class="product-card${isUnavailable ? ' product-unavailable' : ''}" onclick="openProductDetail('${p.id}')">
+      <div class="product-card-image" style="position:relative;">
+        ${thumb}
+        ${isUnavailable ? '<div class="product-badge">Unavailable</div>' : ''}
+      </div>
+      <div class="product-card-body">
+        ${showBakery ? `<div class="product-card-bakery">📍 ${p.bakeryName}</div>` : ''}
+        <div class="product-card-name">${p.name}</div>
+        <div class="product-card-desc">${p.description || ''}</div>
+        <div class="product-card-footer">
+          <div class="product-card-price">${priceStr}</div>
+          ${!isUnavailable ? `<button class="product-buy-btn" onclick="event.stopPropagation(); handleBuy('${p.id}')">Buy →</button>` : ''}
+        </div>
+      </div>
+    </div>`;
+}
+
+function openProductDetail(productId) {
+  const p = allProducts.find(x => x.id === productId);
+  if (!p) return;
+  document.getElementById('productDetailTitle').textContent = p.name;
+  const priceStr = p.price ? `£${parseFloat(p.price).toFixed(2)}` : 'Price on application';
+  const thumb = p.photoURL ? `<img src="${p.photoURL}" style="width:100%;max-height:280px;object-fit:cover;" alt="${p.name}">` : `<div style="height:160px;background:var(--parchment-dark);display:flex;align-items:center;justify-content:center;font-size:4rem;">🛍️</div>`;
+  document.getElementById('productDetailContent').innerHTML = `
+    ${thumb}
+    <div style="padding:20px 24px 28px;">
+      <div style="font-size:0.72rem;color:var(--caramel);font-weight:600;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">📍 ${p.bakeryName}</div>
+      <div style="font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:700;color:var(--espresso);margin-bottom:8px;">${p.name}</div>
+      <div style="font-size:0.9rem;color:var(--text-body);line-height:1.65;margin-bottom:16px;">${p.description || ''}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:16px;border-top:1px solid var(--border);">
+        <div style="font-family:'Playfair Display',serif;font-size:1.6rem;font-weight:700;color:var(--espresso);">${priceStr}</div>
+        <button class="product-buy-btn" style="padding:11px 24px;font-size:0.9rem;" onclick="handleBuy('${p.id}')">Buy now →</button>
+      </div>
+    </div>`;
+  document.getElementById('productDetailModal').classList.add('open');
+  lockScroll();
+}
+
+function closeProductDetailModal() {
+  document.getElementById('productDetailModal').classList.remove('open');
+  unlockScroll();
+}
+
+function handleBuy(productId) {
+  const p = allProducts.find(x => x.id === productId);
+  if (!p) return;
+  if (p.buyLink) {
+    window.open(p.buyLink, '_blank', 'noopener');
+  } else if (p.enquiryEmail) {
+    const subject = encodeURIComponent(`Enquiry: ${p.name} from ${p.bakeryName}`);
+    const body = encodeURIComponent(`Hi,
+
+I'm interested in purchasing "${p.name}" (£${p.price}) from your Crumb shop.
+
+Please let me know how to proceed.
+
+Thanks`);
+    window.location.href = `mailto:${p.enquiryEmail}?subject=${subject}&body=${body}`;
+  } else {
+    showToast('Contact the bakery directly to purchase');
+  }
+}
+
+// ─── SHOP MANAGEMENT (business users) ────────────────────────────────────────
+async function openManageShopModal(bakeryName) {
+  if (!ownsBakery(bakeryName)) return;
+  editingProductBakery = bakeryName;
+  document.getElementById('manageShopTitle').textContent = `${bakeryName} — Shop`;
+  document.getElementById('manageShopModal').classList.add('open');
+  lockScroll();
+  await renderManageShop(bakeryName);
+}
+
+async function renderManageShop(bakeryName) {
+  await loadProducts();
+  const body = document.getElementById('manageShopBody');
+  const myProducts = allProducts.filter(p => p.bakeryName === bakeryName);
+
+  body.innerHTML = `
+    <div style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-size:0.82rem;color:var(--text-muted);">${myProducts.length} product${myProducts.length !== 1 ? 's' : ''} listed</div>
+      <button class="btn-espresso" style="font-size:0.82rem;padding:8px 16px;" onclick="openProductModal(null,'${escJS(bakeryName)}')">+ Add product</button>
+    </div>
+    ${myProducts.length ? myProducts.map(p => `
+      <div class="shop-manage-row" onclick="openProductModal('${p.id}','${escJS(bakeryName)}')">
+        <div class="shop-manage-thumb">${p.photoURL ? `<img src="${p.photoURL}" alt="${p.name}">` : '🛍️'}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:0.9rem;font-weight:600;color:var(--espresso);">${p.name}</div>
+          <div style="font-size:0.75rem;color:var(--text-muted);">£${p.price ? parseFloat(p.price).toFixed(2) : '—'} · ${p.available !== false ? 'Available' : 'Unavailable'}</div>
+        </div>
+        <span style="font-size:0.78rem;color:var(--caramel);">Edit →</span>
+      </div>`).join('') : `<div class="empty-state" style="padding:24px 0;"><div class="empty-state-icon">🛍️</div><div class="empty-state-title">No products yet</div><div class="empty-state-text">Add your first product above.</div></div>`}`;
+}
+
+function closeManageShopModal() {
+  document.getElementById('manageShopModal').classList.remove('open');
+  unlockScroll();
+}
+
+// ─── ADD / EDIT PRODUCT ────────────────────────────────────────────────────────
+function openProductModal(productId, bakeryName) {
+  editingProductId = productId;
+  editingProductBakery = bakeryName;
+  productPhotoFile = null;
+
+  const p = productId ? allProducts.find(x => x.id === productId) : null;
+  document.getElementById('productModalTitle').textContent = p ? 'Edit product' : 'Add product';
+  document.getElementById('productName').value = p?.name || '';
+  document.getElementById('productDescription').value = p?.description || '';
+  document.getElementById('productPrice').value = p?.price || '';
+  document.getElementById('productLink').value = p?.buyLink || '';
+  document.getElementById('productEmail').value = p?.enquiryEmail || '';
+  document.getElementById('productAvailable').checked = p?.available !== false;
+
+  const wrap = document.getElementById('productPhotoWrap');
+  wrap.innerHTML = p?.photoURL ? `<img src="${p.photoURL}" style="width:100%;height:100%;object-fit:cover;">` : '🛍️';
+
+  const deleteBtn = document.getElementById('productDeleteBtn');
+  deleteBtn.style.display = p ? 'block' : 'none';
+
+  document.getElementById('productModal').classList.add('open');
+  lockScroll();
+}
+
+function closeProductModal() {
+  document.getElementById('productModal').classList.remove('open');
+  unlockScroll();
+}
+
+async function handleProductPhoto(input) {
+  if (!input.files[0]) return;
+  productPhotoFile = await compressImage(input.files[0], 800, 0.85);
+  const dataURL = await compressToDataURL(input.files[0], 800, 0.85);
+  document.getElementById('productPhotoWrap').innerHTML = `<img src="${dataURL}" style="width:100%;height:100%;object-fit:cover;">`;
+}
+
+async function saveProduct() {
+  if (!currentUser || !editingProductBakery) return;
+  const btn = document.querySelector('#productModal .btn-espresso');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const { db, storage, collection, addDoc, doc, updateDoc, setDoc, serverTimestamp, ref, uploadBytes, getDownloadURL } = fb;
+    let photoURL = editingProductId ? (allProducts.find(p => p.id === editingProductId)?.photoURL || null) : null;
+    if (productPhotoFile) {
+      const key = editingProductId || Date.now().toString();
+      const storageRef = ref(storage, `products/${encodeURIComponent(editingProductBakery)}/${key}.jpg`);
+      const snap = await uploadBytes(storageRef, productPhotoFile, { contentType: 'image/jpeg' });
+      photoURL = await getDownloadURL(snap.ref);
+    }
+    const data = {
+      bakeryName: editingProductBakery,
+      name: document.getElementById('productName').value.trim(),
+      description: document.getElementById('productDescription').value.trim(),
+      price: document.getElementById('productPrice').value ? parseFloat(document.getElementById('productPrice').value) : null,
+      buyLink: document.getElementById('productLink').value.trim() || null,
+      enquiryEmail: document.getElementById('productEmail').value.trim() || null,
+      available: document.getElementById('productAvailable').checked,
+      photoURL,
+      ownerId: currentUser.uid,
+      updatedAt: serverTimestamp()
+    };
+    if (editingProductId) {
+      await updateDoc(doc(db, 'products', editingProductId), data);
+    } else {
+      data.createdAt = serverTimestamp();
+      await addDoc(collection(db, 'products'), data);
+    }
+    closeProductModal();
+    showToast('Product saved ✓');
+    await loadProducts();
+    await renderManageShop(editingProductBakery);
+  } catch(e) {
+    showToast('Could not save product');
+    console.error(e);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save product';
+  }
+}
+
+async function deleteProduct() {
+  if (!editingProductId || !currentUser) return;
+  if (!confirm('Delete this product? This cannot be undone.')) return;
+  const { db, doc, deleteDoc } = fb;
+  try {
+    await deleteDoc(doc(db, 'products', editingProductId));
+    closeProductModal();
+    showToast('Product deleted');
+    await loadProducts();
+    await renderManageShop(editingProductBakery);
+  } catch(e) {
+    showToast('Could not delete product');
+  }
 }
 
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
