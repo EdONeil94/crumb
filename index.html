@@ -3474,6 +3474,7 @@ async function openBakeryProfile(bakeryName, catFilter) {
   const isClaimed = !!fullBakeryData.ownedBy;
   const claimedBadge = isClaimed ? `<span class="claimed-badge">✓ Claimed</span>` : '';
   const isOwner = ownsBakery(bakeryName);
+  const canManage = isOwner; // admins + business owners of this bakery
 
   document.getElementById('bakeryModalContent').innerHTML = `
     ${coverPhoto}
