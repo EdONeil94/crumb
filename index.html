@@ -3431,6 +3431,8 @@ async function openBakeryProfile(bakeryName, catFilter) {
   const avg = (b.totalScore / b.items.length).toFixed(1);
   const sortedItems = [...b.items].sort((x,y) => (y.communityAvg||y.overallRating||0) - (x.communityAvg||x.overallRating||0));
   const canEdit = !!currentUser;
+  const isOwner = ownsBakery(bakeryName);
+  const canManage = isOwner;
 
   const filtered = bakeryActiveCatFilter
     ? sortedItems.filter(i => i.category === bakeryActiveCatFilter)
@@ -3486,8 +3488,6 @@ async function openBakeryProfile(bakeryName, catFilter) {
 
   const isClaimed = !!fullBakeryData.ownedBy;
   const claimedBadge = isClaimed ? `<span class="claimed-badge">✓ Claimed</span>` : '';
-  const isOwner = ownsBakery(bakeryName);
-  const canManage = isOwner; // admins + business owners of this bakery
 
   try { document.getElementById('bakeryModalContent').innerHTML = `
     ${coverPhoto}
