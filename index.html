@@ -3401,7 +3401,20 @@ let bakeryActiveCatFilter = '';
 async function openBakeryProfile(bakeryName, catFilter) {
   buildBakeryIndex();
   const b = allBakeries[bakeryName];
-  if (!b) return;
+  if (!b) {
+    // Bakery exists in name but has no items — show empty state
+    document.getElementById('bakeryModalTitle').textContent = bakeryName;
+    document.getElementById('bakeryModal').classList.add('open');
+    lockScroll();
+    document.getElementById('bakeryModalContent').innerHTML = `
+      <div class="bakery-profile-header">
+        <div class="bakery-profile-name">${bakeryName}</div>
+      </div>
+      <div class="bakery-profile-body">
+        <div class="empty-state"><div class="empty-state-icon">🥐</div><div class="empty-state-title">No reviews yet</div></div>
+      </div>`;
+    return;
+  }
   bakeryActiveCatFilter = catFilter || '';
   document.getElementById('bakeryModalTitle').textContent = bakeryName;
   document.getElementById('bakeryModal').classList.add('open');
@@ -3476,7 +3489,7 @@ async function openBakeryProfile(bakeryName, catFilter) {
   const isOwner = ownsBakery(bakeryName);
   const canManage = isOwner; // admins + business owners of this bakery
 
-  document.getElementById('bakeryModalContent').innerHTML = `
+  try { document.getElementById('bakeryModalContent').innerHTML = `
     ${coverPhoto}
     <div class="bakery-profile-header">
       <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
@@ -3517,7 +3530,7 @@ async function openBakeryProfile(bakeryName, catFilter) {
       <div class="bakery-items-title">${bakeryActiveCatFilter ? CATEGORY_TREE[bakeryActiveCatFilter]?.label + ' reviews' : 'All reviews'} (${filtered.length})</div>
       <div>${itemsHTML || '<div class="empty-state" style="padding:24px 0;"><div class="empty-state-icon">🥐</div><div class="empty-state-title">No reviews in this category</div></div>'}</div>
       </div>
-    </div>`;
+    </div>`; } catch(err) { console.error('Bakery render error:', err); document.getElementById('bakeryModalContent').innerHTML = '<div style="padding:24px;">Error loading bakery. Check console.</div>'; }
 }
 
 function closeBakeryModal() {
