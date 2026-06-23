@@ -109,7 +109,7 @@ body.scroll-locked {
 
 nav {
   background: var(--espresso);
-  padding: 0 20px;
+  padding: 0 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -118,10 +118,12 @@ nav {
   top: 0;
   z-index: 100;
   box-shadow: 0 2px 16px rgba(44,24,16,0.3);
+  gap: 6px;
+  overflow: hidden;
 }
 .nav-logo {
   font-family: 'Playfair Display', serif;
-  font-size: 1.5rem;
+  font-size: 1.3rem;
   font-weight: 700;
   color: var(--honey);
   letter-spacing: -0.5px;
@@ -130,8 +132,10 @@ nav {
   flex-shrink: 0;
 }
 .nav-logo span { color: var(--parchment); font-style: normal; font-size: 0.62rem; display: block; letter-spacing: 3px; text-transform: uppercase; font-family: 'Inter', sans-serif; font-weight: 500; margin-top: -4px; }
-.nav-right { display: flex; align-items: center; gap: 8px; }
-.nav-links-desktop { display: flex; align-items: center; gap: 4px; }
+.nav-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.nav-links-desktop { display: flex; align-items: center; gap: 2px; }
+.nav-links-desktop .nav-btn { padding: 8px 10px; font-size: 0.82rem; }
+@media (max-width: 1100px) { .nav-links-desktop .nav-btn { padding: 6px 8px; font-size: 0.78rem; } }
 @media (max-width: 700px) { .nav-links-desktop { display: none !important; } }
 .nav-btn {
   padding: 7px 14px;
@@ -280,31 +284,145 @@ nav {
   background: radial-gradient(ellipse at 60% 40%, rgba(212,165,116,0.15) 0%, transparent 60%);
   pointer-events: none;
 }
+
+/* ─── HERO TWO-COLUMN ──── */
+.hero-inner {
+  display: flex;
+  align-items: center;
+  gap: 48px;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 24px;
+  position: relative;
+  z-index: 1;
+}
+.hero-text {
+  flex: 1;
+  text-align: left;
+  min-width: 0;
+}
+.hero-visual {
+  flex: 0 0 320px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.hero-card-stack {
+  position: relative;
+  width: 280px;
+  height: 320px;
+}
+.hero-card {
+  position: absolute;
+  background: var(--cream-white);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  width: 220px;
+}
+.hero-card-back {
+  transform: rotate(-8deg) translateY(20px);
+  left: 0; top: 20px;
+  opacity: 0.7;
+  z-index: 1;
+}
+.hero-card-mid {
+  transform: rotate(3deg) translateY(10px);
+  left: 20px; top: 10px;
+  opacity: 0.85;
+  z-index: 2;
+}
+.hero-card-front {
+  transform: rotate(-1deg);
+  left: 40px; top: 0;
+  z-index: 3;
+}
+.hero-card-img {
+  height: 130px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3rem;
+}
+.hci-bread { background: linear-gradient(135deg, #2C1810 0%, #6B7C5C 100%); }
+.hci-pastry { background: linear-gradient(135deg, #3D2B1A 0%, #8B5E3C 100%); }
+.hci-tart { background: linear-gradient(135deg, #8B5E3C 0%, #D4A574 100%); }
+.hero-card-body { padding: 12px 14px; }
+.hero-card-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--espresso);
+  margin-bottom: 2px;
+}
+.hero-card-bakery { font-size: 0.72rem; color: var(--text-muted); }
+.hero-card-rating {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.hero-score-circle {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: var(--espresso);
+  color: var(--honey);
+  font-family: 'Playfair Display', serif;
+  font-size: 0.9rem;
+  font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.hero-score-meta { font-size: 0.68rem; color: var(--text-muted); line-height: 1.3; }
+.hero-score-meta span { color: var(--caramel); font-weight: 600; }
+
+/* Override hero text alignment for two-column */
+#hero .hero-eyebrow,
+#hero .hero-title,
+#hero .hero-sub { text-align: left; }
+#hero .hero-actions { justify-content: flex-start; }
+#hero .hero-stats { justify-content: flex-start; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 28px; }
+#hero { padding: 72px 0 0; }
+
+@media (max-width: 860px) {
+  .hero-inner { flex-direction: column; gap: 40px; text-align: center; padding: 0 16px; }
+  .hero-visual { width: 100%; }
+  .hero-card-stack { margin: 0 auto; }
+  #hero .hero-eyebrow, #hero .hero-title, #hero .hero-sub { text-align: center; }
+  #hero .hero-actions { justify-content: center; }
+  #hero .hero-stats { justify-content: center; }
+}
 .hero-eyebrow {
-  font-size: 0.75rem;
-  letter-spacing: 4px;
+  font-size: 0.72rem;
+  letter-spacing: 5px;
   text-transform: uppercase;
   color: var(--honey);
   font-weight: 600;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
+  position: relative; z-index: 1;
 }
 .hero-title {
-  font-size: clamp(2.4rem, 6vw, 4rem);
+  font-size: clamp(2.8rem, 7vw, 5rem);
   font-weight: 700;
-  line-height: 1.1;
+  line-height: 1.08;
   color: var(--cream-white);
-  margin-bottom: 20px;
+  margin-bottom: 24px;
+  letter-spacing: -1px;
+  position: relative; z-index: 1;
 }
 .hero-title em { color: var(--honey); font-style: italic; }
 .hero-sub {
   font-size: 1.1rem;
   color: var(--honey-light);
-  max-width: 480px;
-  margin: 0 auto 40px;
-  line-height: 1.6;
+  max-width: 440px;
+  margin: 0 auto 44px;
+  line-height: 1.7;
   font-weight: 300;
+  position: relative; z-index: 1;
 }
-.hero-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 56px; }
+.hero-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 64px; position: relative; z-index: 1; }
 .btn-primary {
   background: var(--honey);
   color: var(--espresso);
@@ -332,13 +450,17 @@ nav {
 .hero-stats {
   display: flex;
   justify-content: center;
-  gap: 48px;
-  padding: 32px 0 0;
+  gap: 0;
+  padding: 28px 0 0;
   border-top: 1px solid rgba(255,255,255,0.1);
+  width: 100%;
+  max-width: 480px;
+  position: relative; z-index: 1;
 }
-.hero-stat { text-align: center; }
-.hero-stat-num { font-family: 'Playfair Display', serif; font-size: 2rem; font-weight: 700; color: var(--honey); }
-.hero-stat-label { font-size: 0.75rem; letter-spacing: 2px; text-transform: uppercase; color: var(--honey-light); margin-top: 4px; font-weight: 400; }
+.hero-stat { text-align: center; flex: 1; padding: 0 16px; border-right: 1px solid rgba(255,255,255,0.1); }
+.hero-stat:last-child { border-right: none; }
+.hero-stat-num { font-family: 'Playfair Display', serif; font-size: 2.2rem; font-weight: 700; color: var(--honey); }
+.hero-stat-label { font-size: 0.68rem; letter-spacing: 2.5px; text-transform: uppercase; color: var(--honey-light); margin-top: 2px; font-weight: 500; }
 
 /* ─── SECTION ────────────────────────────────────────────────────────────────── */
 .section { padding: 56px 24px; max-width: 1100px; margin: 0 auto; }
@@ -1618,15 +1740,15 @@ nav {
 
 @media (max-width: 600px) {
   /* Hero */
-  #hero { padding: 48px 16px 0; }
+  #hero { padding: 72px 20px 0; min-height: 480px; }
   .hero-eyebrow { font-size: 0.68rem; letter-spacing: 3px; }
-  .hero-title { font-size: 1.9rem; }
-  .hero-sub { font-size: 0.9rem; margin-bottom: 28px; }
+  .hero-title { font-size: 2.4rem; letter-spacing: -0.5px; }
+  .hero-sub { font-size: 0.95rem; margin-bottom: 32px; }
   .hero-actions { flex-direction: column; align-items: stretch; gap: 10px; }
-  .btn-primary, .btn-secondary { text-align: center; padding: 13px 20px; }
-  .hero-stats { gap: 16px; padding: 24px 0 0; }
-  .hero-stat-num { font-size: 1.4rem; }
-  .hero-stat-label { font-size: 0.62rem; letter-spacing: 1.5px; }
+  .btn-primary, .btn-secondary { text-align: center; padding: 15px 20px !important; font-size: 0.95rem !important; }
+  .hero-stats { gap: 0; padding: 20px 0 0; }
+  .hero-stat-num { font-size: 1.6rem; }
+  .hero-stat-label { font-size: 0.6rem; letter-spacing: 2px; }
 
   /* Sections */
   .section { padding: 32px 14px; }
@@ -1710,6 +1832,7 @@ nav {
     <button class="nav-btn" onclick="showPage('bakeries')">Bakeries</button>
     <button class="nav-btn" onclick="showPage('explore')">Explore</button>
     <button class="nav-btn" onclick="showPage('shop')">Shop</button>
+    <div style="width:1px;height:18px;background:rgba(255,255,255,0.12);margin:0 4px;"></div>
     <button class="nav-btn" id="desktopPeopleBtn" onclick="showPage('people')" style="display:none">People</button>
     <button class="nav-btn" id="desktopFeedBtn" onclick="showPage('feed')" style="display:none">Feed</button>
   </div>
@@ -1748,25 +1871,58 @@ nav {
 
   <!-- Hero -->
   <div id="hero">
-    <div class="hero-eyebrow">A community of pastry lovers</div>
-    <h1 class="hero-title">Every great bite<br>deserves a <em>record.</em></h1>
-    <p class="hero-sub">Track and rate the pastries you discover at local bakeries. Build your personal record. Share with the community.</p>
-    <div class="hero-actions">
-      <button class="btn-primary" onclick="openAddModal()">Rate a Bake!</button>
-      <button class="btn-secondary" onclick="showPage('leaderboard')">See top picks</button>
-    </div>
-    <div class="hero-stats">
-      <div class="hero-stat">
-        <div class="hero-stat-num" id="statItems">0</div>
-        <div class="hero-stat-label">Items rated</div>
+    <div class="hero-inner">
+      <div class="hero-text">
+        <div class="hero-eyebrow">A community of pastry lovers</div>
+        <h1 class="hero-title">Every great bite<br>deserves a <em>record.</em></h1>
+        <p class="hero-sub">Discover, rate and share the best bakes from your favourite local bakeries.</p>
+        <div class="hero-actions">
+          <button class="btn-primary" onclick="openAddModal()">Rate a Bake!</button>
+          <button class="btn-secondary" onclick="showPage('explore')">Explore cities</button>
+        </div>
+        <div class="hero-stats">
+          <div class="hero-stat">
+            <div class="hero-stat-num" id="statItems">0</div>
+            <div class="hero-stat-label">Bakes rated</div>
+          </div>
+          <div class="hero-stat">
+            <div class="hero-stat-num" id="statBakeries">0</div>
+            <div class="hero-stat-label">Bakeries</div>
+          </div>
+          <div class="hero-stat">
+            <div class="hero-stat-num" id="statRaters">0</div>
+            <div class="hero-stat-label">Members</div>
+          </div>
+        </div>
       </div>
-      <div class="hero-stat">
-        <div class="hero-stat-num" id="statBakeries">0</div>
-        <div class="hero-stat-label">Bakeries</div>
-      </div>
-      <div class="hero-stat">
-        <div class="hero-stat-num" id="statRaters">0</div>
-        <div class="hero-stat-label">Members</div>
+      <div class="hero-visual" aria-hidden="true">
+        <div class="hero-card-stack">
+          <div class="hero-card hero-card-back">
+            <div class="hero-card-img hci-bread">🍞</div>
+            <div class="hero-card-body">
+              <div class="hero-card-name">White Sourdough</div>
+              <div class="hero-card-bakery">Bar Hashery · York</div>
+            </div>
+          </div>
+          <div class="hero-card hero-card-mid">
+            <div class="hero-card-img hci-pastry">🥐</div>
+            <div class="hero-card-body">
+              <div class="hero-card-name">Almond Croissant</div>
+              <div class="hero-card-bakery">Little Arras · York</div>
+            </div>
+          </div>
+          <div class="hero-card hero-card-front">
+            <div class="hero-card-img hci-tart">🥧</div>
+            <div class="hero-card-body">
+              <div class="hero-card-name">Lemon Tart</div>
+              <div class="hero-card-bakery">Dusty Knuckle · London</div>
+              <div class="hero-card-rating">
+                <div class="hero-score-circle">4.8</div>
+                <div class="hero-score-meta">Community<br><span>score</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -5214,17 +5370,19 @@ async function selectExploreCity(cityName) {
 
   // Fetch Google Places data (with cache)
   let googleResults = [];
+  let googleFailed = false;
   if (exploreCache[cityName]) {
     googleResults = exploreCache[cityName];
-    renderExploreResults(city, crumbBakeries, googleResults);
+    renderExploreResults(city, crumbBakeries, googleResults, false);
   } else {
     try {
       googleResults = await fetchGoogleBakeries(city);
       exploreCache[cityName] = googleResults;
     } catch(e) {
-      console.log('Google Places error:', e);
+      console.warn('Google Places error:', e);
+      googleFailed = true;
     }
-    renderExploreResults(city, crumbBakeries, googleResults);
+    renderExploreResults(city, crumbBakeries, googleResults, googleFailed);
   }
 }
 
@@ -5245,7 +5403,12 @@ async function fetchGoogleBakeries(city) {
       maxResultCount: 20
     })
   });
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Places API ${res.status}: ${errText}`);
+  }
   const data = await res.json();
+  if (data.error) throw new Error(`Places API error: ${data.error.message || JSON.stringify(data.error)}`);
   return (data.places || [])
     .filter(p => p.rating && p.rating >= 4.0)
     .sort((a, b) => {
@@ -5257,7 +5420,7 @@ async function fetchGoogleBakeries(city) {
     .slice(0, 10);
 }
 
-function renderExploreResults(city, crumbBakeries, googleResults) {
+function renderExploreResults(city, crumbBakeries, googleResults, googleFailed) {
   const list = document.getElementById('exploreBakeryList');
 
   // Merge: Crumb bakeries take priority, then Google fills the rest
@@ -5287,11 +5450,33 @@ function renderExploreResults(city, crumbBakeries, googleResults) {
   });
 
   if (!combined.length) {
-    list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🏪</div><div class="empty-state-title">No bakeries found yet</div><div class="empty-state-text">Be the first to review a bakery in ${city.name} on Crumb!</div></div>`;
+    if (googleFailed) {
+      list.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">🏪</div>
+          <div class="empty-state-title">No Crumb reviews yet in ${city.name}</div>
+          <div class="empty-state-text">Google suggestions couldn't load right now — but you can still be the first to add a bakery review here!</div>
+          <button class="btn-primary" style="margin-top:16px;" onclick="openAddModal()">+ Add a review</button>
+        </div>`;
+    } else {
+      list.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">🏪</div>
+          <div class="empty-state-title">No bakeries found yet</div>
+          <div class="empty-state-text">Be the first to review a bakery in ${city.name} on Crumb!</div>
+          <button class="btn-primary" style="margin-top:16px;" onclick="openAddModal()">+ Add a review</button>
+        </div>`;
+    }
     return;
   }
 
-  list.innerHTML = combined.slice(0, 10).map((b, i) => {
+  // If Google failed but we have Crumb results, show a subtle notice
+  const googleFailedNotice = googleFailed ? `
+    <div style="font-size:0.78rem; color:var(--text-muted); background:var(--parchment-dark); border-radius:var(--radius-sm); padding:8px 12px; margin-bottom:16px;">
+      ⚠️ Google suggestions couldn't load — showing Crumb community reviews only.
+    </div>` : '';
+
+  list.innerHTML = googleFailedNotice + combined.slice(0, 10).map((b, i) => {
     const rank = i + 1;
     const rankClass = rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : '';
 
