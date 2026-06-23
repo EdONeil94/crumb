@@ -171,6 +171,130 @@ nav {
 }
 .nav-avatar img { width: 100%; height: 100%; object-fit: cover; }
 
+/* ─── NOTIFICATION BELL ──────────────────────────────────────────────────────── */
+.nav-bell {
+  position: relative;
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--parchment);
+  font-size: 1.1rem;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+.nav-bell:hover { background: rgba(255,255,255,0.1); }
+.nav-bell-badge {
+  position: absolute;
+  top: 0px; right: 0px;
+  background: #e74c3c;
+  color: white;
+  font-size: 0.6rem;
+  font-weight: 700;
+  min-width: 16px; height: 16px;
+  border-radius: 100px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 4px;
+  border: 2px solid var(--espresso);
+  pointer-events: none;
+  line-height: 1;
+}
+
+/* ─── NOTIFICATION PANEL ─────────────────────────────────────────────────────── */
+.notif-panel {
+  position: fixed;
+  top: 68px; right: 12px;
+  width: 340px;
+  max-height: 480px;
+  background: var(--cream-white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  z-index: 300;
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+}
+.notif-panel.open { display: flex; }
+.notif-panel-header {
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+.notif-panel-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--espresso);
+}
+.notif-mark-read {
+  font-size: 0.72rem;
+  color: var(--caramel);
+  font-weight: 500;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+}
+.notif-mark-read:hover { text-decoration: underline; }
+.notif-list {
+  overflow-y: auto;
+  flex: 1;
+  padding: 6px 0;
+}
+.notif-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+  border-left: 3px solid transparent;
+  position: relative;
+}
+.notif-item:hover { background: var(--parchment); }
+.notif-item.unread { border-left-color: var(--honey); background: rgba(212,165,116,0.08); }
+.notif-item.unread:hover { background: rgba(212,165,116,0.15); }
+.notif-avatar {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  background: var(--caramel);
+  color: white;
+  font-size: 0.8rem;
+  font-weight: 600;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.notif-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.notif-emoji {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  background: var(--parchment-dark);
+  font-size: 1rem;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.notif-body { flex: 1; min-width: 0; }
+.notif-text { font-size: 0.82rem; color: var(--text-body); line-height: 1.4; }
+.notif-text strong { font-weight: 600; color: var(--espresso); }
+.notif-time { font-size: 0.7rem; color: var(--text-muted); margin-top: 2px; }
+.notif-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+.notif-empty-icon { font-size: 2rem; margin-bottom: 8px; }
+@media (max-width: 400px) {
+  .notif-panel { right: 6px; left: 6px; width: auto; }
+}
+
 /* Hamburger */
 .nav-hamburger {
   display: none;
@@ -1838,6 +1962,10 @@ nav {
   </div>
   <div class="nav-right">
     <button class="nav-btn-primary nav-btn" onclick="openAddModal()" id="addBtn">+ Add</button>
+    <button class="nav-bell" id="navBell" onclick="toggleNotifPanel()" aria-label="Notifications">
+      🔔
+      <span class="nav-bell-badge" id="navBellBadge" style="display:none"></span>
+    </button>
     <div class="nav-avatar" id="navAvatar" onclick="toggleUserMenu()" style="display:none">?</div>
     <button class="nav-btn" onclick="openAuthModal()" id="signInBtn">Sign in</button>
     <button class="nav-hamburger" onclick="toggleMobileMenu()" id="hamburgerBtn" aria-label="Menu">
@@ -1845,6 +1973,18 @@ nav {
     </button>
   </div>
 </nav>
+
+<!-- ─── NOTIFICATION PANEL ────────────────────────────────────────────────────── -->
+<div class="notif-panel" id="notifPanel">
+  <div class="notif-panel-header">
+    <span class="notif-panel-title">Notifications</span>
+    <button class="notif-mark-read" onclick="markAllNotifsRead()">Mark all read</button>
+  </div>
+  <div class="notif-list" id="notifList">
+    <div class="notif-empty"><div class="notif-empty-icon">🔔</div>No notifications yet</div>
+  </div>
+</div>
+<div id="notifBackdrop" style="display:none;position:fixed;inset:0;z-index:299;" onclick="closeNotifPanel()"></div>
 
 <!-- Mobile menu -->
 <div class="mobile-menu-backdrop" id="mobileBackdrop" onclick="closeMobileMenu()"></div>
@@ -2941,6 +3081,7 @@ window.addEventListener('crumb-firebase-ready', () => {
     if (user) {
       await loadUserRole();
       await loadFollows();
+      loadNotifications();
     }
     updateNav();
     loadData();
@@ -2977,8 +3118,10 @@ function updateNav() {
   const mobileSignInBtn = document.getElementById('mobileSignInBtn');
   const mobileMenuDivider = document.getElementById('mobileMenuDivider');
 
+  const bell = document.getElementById('navBell');
   if (currentUser) {
     avatar.style.display = 'flex';
+    if (bell) bell.style.display = 'flex';
     if (signIn) signIn.style.display = 'none';
     if (feedBtn) feedBtn.style.display = 'block';
     if (peopleBtn) peopleBtn.style.display = 'block';
@@ -3005,6 +3148,7 @@ function updateNav() {
     if (signInDivider) signInDivider.style.display = 'none';
   } else {
     avatar.style.display = 'none';
+    if (bell) bell.style.display = 'none';
     if (signIn) signIn.style.display = 'block';
     if (feedBtn) feedBtn.style.display = 'none';
     if (peopleBtn) peopleBtn.style.display = 'none';
@@ -5370,19 +5514,17 @@ async function selectExploreCity(cityName) {
 
   // Fetch Google Places data (with cache)
   let googleResults = [];
-  let googleFailed = false;
   if (exploreCache[cityName]) {
     googleResults = exploreCache[cityName];
-    renderExploreResults(city, crumbBakeries, googleResults, false);
+    renderExploreResults(city, crumbBakeries, googleResults);
   } else {
     try {
       googleResults = await fetchGoogleBakeries(city);
       exploreCache[cityName] = googleResults;
     } catch(e) {
-      console.warn('Google Places error:', e);
-      googleFailed = true;
+      console.log('Google Places error:', e);
     }
-    renderExploreResults(city, crumbBakeries, googleResults, googleFailed);
+    renderExploreResults(city, crumbBakeries, googleResults);
   }
 }
 
@@ -5403,12 +5545,7 @@ async function fetchGoogleBakeries(city) {
       maxResultCount: 20
     })
   });
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Places API ${res.status}: ${errText}`);
-  }
   const data = await res.json();
-  if (data.error) throw new Error(`Places API error: ${data.error.message || JSON.stringify(data.error)}`);
   return (data.places || [])
     .filter(p => p.rating && p.rating >= 4.0)
     .sort((a, b) => {
@@ -5420,7 +5557,7 @@ async function fetchGoogleBakeries(city) {
     .slice(0, 10);
 }
 
-function renderExploreResults(city, crumbBakeries, googleResults, googleFailed) {
+function renderExploreResults(city, crumbBakeries, googleResults) {
   const list = document.getElementById('exploreBakeryList');
 
   // Merge: Crumb bakeries take priority, then Google fills the rest
@@ -5450,33 +5587,11 @@ function renderExploreResults(city, crumbBakeries, googleResults, googleFailed) 
   });
 
   if (!combined.length) {
-    if (googleFailed) {
-      list.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-state-icon">🏪</div>
-          <div class="empty-state-title">No Crumb reviews yet in ${city.name}</div>
-          <div class="empty-state-text">Google suggestions couldn't load right now — but you can still be the first to add a bakery review here!</div>
-          <button class="btn-primary" style="margin-top:16px;" onclick="openAddModal()">+ Add a review</button>
-        </div>`;
-    } else {
-      list.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-state-icon">🏪</div>
-          <div class="empty-state-title">No bakeries found yet</div>
-          <div class="empty-state-text">Be the first to review a bakery in ${city.name} on Crumb!</div>
-          <button class="btn-primary" style="margin-top:16px;" onclick="openAddModal()">+ Add a review</button>
-        </div>`;
-    }
+    list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🏪</div><div class="empty-state-title">No bakeries found yet</div><div class="empty-state-text">Be the first to review a bakery in ${city.name} on Crumb!</div></div>`;
     return;
   }
 
-  // If Google failed but we have Crumb results, show a subtle notice
-  const googleFailedNotice = googleFailed ? `
-    <div style="font-size:0.78rem; color:var(--text-muted); background:var(--parchment-dark); border-radius:var(--radius-sm); padding:8px 12px; margin-bottom:16px;">
-      ⚠️ Google suggestions couldn't load — showing Crumb community reviews only.
-    </div>` : '';
-
-  list.innerHTML = googleFailedNotice + combined.slice(0, 10).map((b, i) => {
+  list.innerHTML = combined.slice(0, 10).map((b, i) => {
     const rank = i + 1;
     const rankClass = rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : '';
 
@@ -5836,10 +5951,15 @@ async function toggleReaction(itemId, emoji) {
     if (snap.exists()) {
       await deleteDoc(reactionRef);
     } else {
+      // Find item owner so we can notify them
+      const itemOwner = allItems.find(i => i.id === itemId);
       await setDoc(reactionRef, {
         itemId,
         userId: currentUser.uid,
         userName: currentUser.displayName || currentUser.email?.split('@')[0] || 'Anonymous',
+        userPhoto: currentUser.photoURL || null,
+        targetUserId: itemOwner?.userId || null,
+        itemName: itemOwner?.name || null,
         emoji,
         createdAt: serverTimestamp()
       });
@@ -6317,6 +6437,146 @@ async function deleteProduct() {
   } catch(e) {
     showToast('Could not delete product');
   }
+}
+
+// ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
+let notifLastSeen = null; // timestamp of last time user opened panel
+let notifItems = [];      // cached notification objects
+
+async function loadNotifications() {
+  if (!currentUser || !fb) return;
+  const { db, collection, query, where, orderBy, getDocs, getDoc, doc } = fb;
+
+  // Load last-seen timestamp from profile
+  try {
+    const profileSnap = await getDoc(doc(db, 'profiles', currentUser.uid));
+    notifLastSeen = profileSnap.data()?.notifLastSeen?.toDate() || null;
+  } catch(e) { notifLastSeen = null; }
+
+  const notifications = [];
+  const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // 30 days
+
+  // 1. New followers
+  try {
+    const followsSnap = await getDocs(
+      query(collection(db, 'follows'), where('followingId', '==', currentUser.uid), orderBy('createdAt', 'desc'))
+    );
+    followsSnap.docs.forEach(d => {
+      const data = d.data();
+      const ts = data.createdAt?.toDate();
+      if (!ts || ts < cutoff) return;
+      notifications.push({
+        id: d.id,
+        type: 'follow',
+        actorId: data.followerId,
+        actorName: data.followerName || 'Someone',
+        actorPhoto: data.followerPhoto || null,
+        text: `started following you`,
+        ts,
+        unread: !notifLastSeen || ts > notifLastSeen,
+        onClick: () => openProfileModal(data.followerId)
+      });
+    });
+  } catch(e) { console.warn('Notif follows error:', e); }
+
+  // 2. Reactions on my items
+  try {
+    const reactSnap = await getDocs(
+      query(collection(db, 'reactions'), where('targetUserId', '==', currentUser.uid), orderBy('createdAt', 'desc'))
+    );
+    reactSnap.docs.forEach(d => {
+      const data = d.data();
+      if (data.userId === currentUser.uid) return; // skip own reactions
+      const ts = data.createdAt?.toDate();
+      if (!ts || ts < cutoff) return;
+      notifications.push({
+        id: d.id,
+        type: 'reaction',
+        actorId: data.userId,
+        actorName: data.userName || 'Someone',
+        actorPhoto: data.userPhoto || null,
+        emoji: data.emoji,
+        itemName: data.itemName || 'your review',
+        text: `reacted ${data.emoji} to <em>${data.itemName || 'your review'}</em>`,
+        ts,
+        unread: !notifLastSeen || ts > notifLastSeen,
+        onClick: () => { /* could open item detail */ }
+      });
+    });
+  } catch(e) { console.warn('Notif reactions error:', e); }
+
+  // Sort newest first
+  notifications.sort((a, b) => b.ts - a.ts);
+  notifItems = notifications;
+
+  const unreadCount = notifications.filter(n => n.unread).length;
+  updateBellBadge(unreadCount);
+}
+
+function updateBellBadge(count) {
+  const badge = document.getElementById('navBellBadge');
+  if (!badge) return;
+  if (count > 0) {
+    badge.textContent = count > 99 ? '99+' : count;
+    badge.style.display = 'flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function toggleNotifPanel() {
+  const panel = document.getElementById('notifPanel');
+  const backdrop = document.getElementById('notifBackdrop');
+  const isOpen = panel.classList.contains('open');
+  if (isOpen) {
+    closeNotifPanel();
+  } else {
+    renderNotifPanel();
+    panel.classList.add('open');
+    backdrop.style.display = 'block';
+    // Mark as seen after a short delay
+    setTimeout(() => markAllNotifsRead(), 1500);
+  }
+}
+
+function closeNotifPanel() {
+  document.getElementById('notifPanel').classList.remove('open');
+  document.getElementById('notifBackdrop').style.display = 'none';
+}
+
+function renderNotifPanel() {
+  const list = document.getElementById('notifList');
+  if (!notifItems.length) {
+    list.innerHTML = `<div class="notif-empty"><div class="notif-empty-icon">🔔</div>No notifications yet</div>`;
+    return;
+  }
+  list.innerHTML = notifItems.map((n, i) => {
+    const avatarHTML = n.type === 'reaction'
+      ? `<div class="notif-emoji">${n.emoji}</div>`
+      : n.actorPhoto
+        ? `<div class="notif-avatar"><img src="${n.actorPhoto}" alt=""></div>`
+        : `<div class="notif-avatar">${(n.actorName || '?').charAt(0).toUpperCase()}</div>`;
+    return `
+      <div class="notif-item ${n.unread ? 'unread' : ''}" onclick="closeNotifPanel(); notifItems[${i}].onClick()">
+        ${avatarHTML}
+        <div class="notif-body">
+          <div class="notif-text"><strong>${escJS(n.actorName)}</strong> ${n.text}</div>
+          <div class="notif-time">${timeAgo(n.ts)}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+async function markAllNotifsRead() {
+  if (!currentUser || !fb) return;
+  const { db, doc, updateDoc, serverTimestamp } = fb;
+  notifItems.forEach(n => n.unread = false);
+  updateBellBadge(0);
+  // Persist last-seen timestamp to profile
+  try {
+    await updateDoc(doc(db, 'profiles', currentUser.uid), { notifLastSeen: serverTimestamp() });
+    notifLastSeen = new Date();
+  } catch(e) { console.warn('Could not save notif seen time:', e); }
 }
 
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
