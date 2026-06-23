@@ -3343,7 +3343,20 @@ function feedCardHTML(item, reactionBarHTML, followedBadge) {
   const catDisp = getCategoryDisplay(item);
   const record = item.itemRecordId ? allItemRecords.find(r => r.id === item.itemRecordId) : null;
   const score = record ? record.communityAvg.toFixed(1) : (item.communityAvg ? item.communityAvg.toFixed(1) : (item.overallRating ? item.overallRating.toFixed(1) : '–'));
-  const ratingCount = record ? (record.reviewCount || 1) : (item.ratingCount || 1);
+  // reviewCount: prefer itemRecord, then count sibling reviews in allItems, then fall back to 1
+  let ratingCount;
+  if (record) {
+    ratingCount = record.reviewCount || 1;
+  } else if (item.itemRecordId) {
+    // record not loaded yet — count items sharing the same itemRecordId
+    ratingCount = allItems.filter(i => i.itemRecordId === item.itemRecordId).length || 1;
+  } else {
+    // legacy item with no itemRecordId — count by name+bakery
+    ratingCount = allItems.filter(i =>
+      (i.name || '').toLowerCase() === (item.name || '').toLowerCase() &&
+      (i.bakeryName || '').toLowerCase() === (item.bakeryName || '').toLowerCase()
+    ).length || 1;
+  }
   const avgPrice = record?.avgPrice ?? item.price ?? null;
   const price = avgPrice !== null ? ('£' + parseFloat(avgPrice).toFixed(2)) : '';
   const priceLabel = record && record.priceCount > 1 ? ('avg ' + price) : price;
@@ -3380,10 +3393,19 @@ function feedCardHTML(item, reactionBarHTML, followedBadge) {
 function cardHTML(item) {
   const catDisp = getCategoryDisplay(item);
   const emoji = catDisp.emoji;
-  // Use itemRecord community avg if available
   const record = item.itemRecordId ? allItemRecords.find(r => r.id === item.itemRecordId) : null;
   const score = record ? record.communityAvg.toFixed(1) : (item.communityAvg ? item.communityAvg.toFixed(1) : (item.overallRating ? item.overallRating.toFixed(1) : '–'));
-  const ratingCount = record ? (record.reviewCount || 1) : (item.ratingCount || 1);
+  let ratingCount;
+  if (record) {
+    ratingCount = record.reviewCount || 1;
+  } else if (item.itemRecordId) {
+    ratingCount = allItems.filter(i => i.itemRecordId === item.itemRecordId).length || 1;
+  } else {
+    ratingCount = allItems.filter(i =>
+      (i.name || '').toLowerCase() === (item.name || '').toLowerCase() &&
+      (i.bakeryName || '').toLowerCase() === (item.bakeryName || '').toLowerCase()
+    ).length || 1;
+  }
   const avgPrice = record?.avgPrice ?? (record?.priceCount > 0 ? record.avgPrice : null) ?? item.price ?? null;
   const price = avgPrice !== null && avgPrice !== undefined ? ('£' + parseFloat(avgPrice).toFixed(2)) : '';
   const priceLabel = record && record.priceCount > 1 ? ('avg ' + price) : price;
@@ -4885,7 +4907,7 @@ async function saveReview() {
       price: document.getElementById('itemPrice').value ? parseFloat(document.getElementById('itemPrice').value) : null,
       overallRating,
       communityAvg: overallRating, // will be updated below
-      ratingCount: 1,
+      ratingCount: matchedItemRecord ? ((allItemRecords.find(r => r.id === matchedItemRecord.id)?.reviewCount || 1) + 1) : 1,
       notes: document.getElementById('itemNotes').value,
       photoURL,
       userId: currentUser.uid,
