@@ -6938,7 +6938,7 @@ async function loadNotifications() {
   // 1. New followers
   try {
     const followsSnap = await getDocs(
-      query(collection(db, 'follows'), where('followingId', '==', currentUser.uid), orderBy('createdAt', 'desc'))
+      query(collection(db, 'follows'), where('followingId', '==', currentUser.uid))
     );
     followsSnap.docs.forEach(d => {
       const data = d.data();
@@ -6961,7 +6961,7 @@ async function loadNotifications() {
   // 2. Reactions on my items
   try {
     const reactSnap = await getDocs(
-      query(collection(db, 'reactions'), where('targetUserId', '==', currentUser.uid), orderBy('createdAt', 'desc'))
+      query(collection(db, 'reactions'), where('targetUserId', '==', currentUser.uid))
     );
     reactSnap.docs.forEach(d => {
       const data = d.data();
