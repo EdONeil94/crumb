@@ -3591,12 +3591,19 @@ let allBakeries = {}; // keyed by bakeryName
 
 function extractCity(address) {
   if (!address) return '';
-  // UK address format: "123 Street, York, YO1 7HH" — pick the part before postcode
+  // Google Places UK format: "3 Bootham, York YO30 7BN, UK"
+  // or "50 Goodramgate, York YO1 7LF, UK"
   const parts = address.split(',').map(p => p.trim()).filter(Boolean);
-  // Drop parts that look like postcodes (e.g. YO1 7HH)
-  const nonPostcode = parts.filter(p => !/^[A-Z]{1,2}\d[\d A-Z]*\d[A-Z]{2}$/i.test(p));
-  // The city is usually the second-to-last meaningful part
-  return nonPostcode.length >= 2 ? nonPostcode[nonPostcode.length - 1] : (nonPostcode[0] || '');
+
+  // Drop trailing country names
+  const countryWords = ['uk', 'england', 'scotland', 'wales', 'ireland', 'united kingdom', 'gb'];
+  const filtered = parts.filter(p => !countryWords.includes(p.toLowerCase()));
+
+  // Within each part, strip postcodes (e.g. "York YO30 7BN" → "York")
+  const cleaned = filtered.map(p => p.replace(/\b[A-Z]{1,2}\d[\d A-Z]*\d[A-Z]{2}\b/gi, '').trim()).filter(Boolean);
+
+  // City is typically the last remaining part (after street address)
+  return cleaned.length >= 2 ? cleaned[cleaned.length - 1] : (cleaned[0] || '');
 }
 
 function buildBakeryIndex() {
@@ -3616,18 +3623,69 @@ function buildBakeryIndex() {
         blurb: ''
       };
     }
-    // Keep coords if not yet set
+    // Grab coords from any item that has them (older reviews may not)
     if (!allBakeries[key].lat && item.bakeryLat) {
       allBakeries[key].lat = item.bakeryLat;
       allBakeries[key].lng = item.bakeryLng;
     }
+    // Grab placeId from any item that has it
+    if (!allBakeries[key].placeId && item.bakeryPlaceId) {
+      allBakeries[key].placeId = item.bakeryPlaceId;
+    }
     allBakeries[key].items.push(item);
     allBakeries[key].totalScore += (item.communityAvg || item.overallRating || 0);
+  });
+
+  // For bakeries still missing coords, try to get them from bakeryProfiles
+  // (bakeryProfiles doesn't store coords, but we can try the Explore cache
+  // which has lat/lng from the Places nearby search)
+  Object.values(allBakeries).forEach(b => {
+    if (!b.lat) {
+      // Try exploreCache across all cities
+      for (const cityResults of Object.values(exploreCache || {})) {
+        const match = cityResults.find(r =>
+          (r.name || '').toLowerCase() === b.name.toLowerCase() ||
+          (b.placeId && r.placeId === b.placeId)
+        );
+        if (match?.lat) {
+          b.lat = match.lat;
+          b.lng = match.lng;
+          break;
+        }
+      }
+    }
   });
 }
 
 let bakeryViewMode = 'all'; // 'all' | 'nearest' | 'visited'
 let userGeoCoords = null;   // { lat, lng } from geolocation
+
+async function geocodeMissingBakeries() {
+  // For bakeries with an address but no lat/lng, use Places text search to get coords
+  const missing = Object.values(allBakeries).filter(b => !b.lat && b.address);
+  if (!missing.length || !GOOGLE_MAPS_KEY) return;
+  await Promise.all(missing.map(async b => {
+    try {
+      const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': GOOGLE_MAPS_KEY,
+          'X-Goog-FieldMask': 'places.id,places.location,places.displayName'
+        },
+        body: JSON.stringify({ textQuery: `${b.name} ${b.address}`, maxResultCount: 1 })
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const place = data.places?.[0];
+      if (place?.location) {
+        b.lat = place.location.latitude;
+        b.lng = place.location.longitude;
+        if (!b.placeId) b.placeId = place.id;
+      }
+    } catch(e) { /* silent — best effort */ }
+  }));
+}
 
 function setBakeryView(mode) {
   bakeryViewMode = mode;
@@ -3636,13 +3694,22 @@ function setBakeryView(mode) {
     if (btn) btn.classList.toggle('active', m === mode);
   });
   if (mode === 'nearest') {
-    if (userGeoCoords) {
+    const doNearest = async () => {
+      buildBakeryIndex();
+      const missing = Object.values(allBakeries).filter(b => !b.lat && b.address);
+      if (missing.length) {
+        document.getElementById('bakeriesGrid').innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:32px;color:var(--text-muted)"><div class="spinner" style="margin:0 auto 12px;"></div>Finding nearby bakeries…</div>';
+      }
+      await geocodeMissingBakeries();
       renderBakeries();
+    };
+    if (userGeoCoords) {
+      doNearest();
     } else {
       navigator.geolocation.getCurrentPosition(
         pos => {
           userGeoCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          renderBakeries();
+          doNearest();
         },
         () => {
           showToast('Location access denied — can\'t sort by distance');
