@@ -171,7 +171,102 @@ nav {
 }
 .nav-avatar img { width: 100%; height: 100%; object-fit: cover; }
 
-/* ─── NOTIFICATION BELL ──────────────────────────────────────────────────────── */
+/* ─── BAKERY VIEW BUTTONS ────────────────────────────────────────────────────── */
+.bakery-view-btn {
+  padding: 7px 14px;
+  border-radius: 100px;
+  border: 1.5px solid var(--border);
+  background: var(--parchment);
+  color: var(--text-body);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.bakery-view-btn:hover { border-color: var(--honey); color: var(--caramel); }
+.bakery-view-btn.active { background: var(--espresso); color: var(--honey); border-color: var(--espresso); }
+.bakery-dist-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--caramel);
+  background: var(--parchment-dark);
+  border-radius: 100px;
+  padding: 2px 8px;
+  margin-top: 4px;
+}
+.bakery-visited-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #155724;
+  background: #d4edda;
+  border-radius: 100px;
+  padding: 2px 8px;
+  margin-top: 4px;
+}
+
+/* ─── FEATURE REQUESTS ───────────────────────────────────────────────────────── */
+.fr-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+.fr-item:last-child { border-bottom: none; }
+.fr-vote {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  min-width: 40px;
+}
+.fr-vote-btn {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: var(--parchment);
+  color: var(--text-muted);
+  font-size: 1rem;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.fr-vote-btn:hover { border-color: var(--honey); color: var(--caramel); background: var(--parchment-dark); }
+.fr-vote-btn.voted { background: var(--espresso); color: var(--honey); border-color: var(--espresso); }
+.fr-vote-count { font-size: 0.78rem; font-weight: 600; color: var(--text-muted); }
+.fr-body { flex: 1; min-width: 0; }
+.fr-title { font-size: 0.92rem; font-weight: 600; color: var(--espresso); margin-bottom: 3px; }
+.fr-detail { font-size: 0.8rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 6px; }
+.fr-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.fr-by { font-size: 0.72rem; color: var(--text-muted); }
+.fr-status {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  padding: 2px 8px;
+  border-radius: 100px;
+  text-transform: uppercase;
+}
+.fr-status.new { background: var(--parchment-dark); color: var(--text-muted); }
+.fr-status.under-review { background: #fff3cd; color: #856404; }
+.fr-status.planned { background: #d1ecf1; color: #0c5460; }
+.fr-status.in-progress { background: #d4edda; color: #155724; }
+.fr-status.done { background: var(--espresso); color: var(--honey); }
+.fr-status.declined { background: #f8d7da; color: #721c24; }
+.fr-admin-actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.fr-status-select {
+  font-size: 0.78rem;
+  padding: 4px 8px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--parchment);
+  color: var(--text-body);
+  cursor: pointer;
+}
 .nav-bell {
   position: relative;
   width: 34px; height: 34px;
@@ -2150,6 +2245,21 @@ nav {
       <div class="section-eyebrow">Explore</div>
       <h2 class="section-title">Bakeries</h2>
     </div>
+
+    <!-- Filter bar -->
+    <div style="display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:20px;">
+      <!-- View tabs -->
+      <div style="display:flex; gap:6px; flex-wrap:wrap;">
+        <button class="bakery-view-btn active" id="bakeryViewAll" onclick="setBakeryView('all')">All</button>
+        <button class="bakery-view-btn" id="bakeryViewNearest" onclick="setBakeryView('nearest')">📍 Nearest</button>
+        <button class="bakery-view-btn" id="bakeryViewVisited" onclick="setBakeryView('visited')" id="bakeryViewVisited">My visited</button>
+      </div>
+      <!-- Location dropdown -->
+      <select class="form-select" id="bakeryLocationFilter" onchange="renderBakeries()" style="padding:8px 12px; font-size:0.82rem; max-width:180px; flex-shrink:0;">
+        <option value="">All locations</option>
+      </select>
+    </div>
+
     <div id="bakeriesGrid" class="feed-grid">
       <div class="empty-state" style="grid-column:1/-1">
         <div class="empty-state-icon">🏪</div>
@@ -2679,17 +2789,29 @@ nav {
       </div>
     </div>
 
+    <!-- Feature requests — visible to all logged-in users -->
+    <div class="settings-card">
+      <div class="settings-card-header">
+        <div class="settings-card-title">💡 Request a feature</div>
+        <div class="settings-card-sub">Got an idea? Submit it and vote on what gets built next</div>
+      </div>
+      <div class="settings-card-body">
+        <button class="btn-espresso" onclick="openFeatureRequestModal()" style="padding:11px 24px;">+ Submit a request</button>
+      </div>
+    </div>
+
     <!-- Admin section — only shown to admins -->
     <div class="settings-card" id="settingsAdminCard" style="display:none;">
       <div class="settings-card-header">
         <div class="settings-card-title">⚙️ Admin Panel</div>
-        <div class="settings-card-sub">Manage users, bakeries, and flagged reviews</div>
+        <div class="settings-card-sub">Manage users, bakeries, flagged reviews and feature requests</div>
       </div>
       <div class="settings-card-body">
         <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px;">
           <button class="btn-espresso" onclick="showAdminTab('users')" id="adminTabUsers" style="font-size:0.85rem; padding:9px 18px;">👥 Users</button>
           <button class="btn-ghost" onclick="showAdminTab('bakeries')" id="adminTabBakeries" style="font-size:0.85rem; padding:9px 18px; border:1.5px solid var(--border);">🏪 Bakery assignments</button>
           <button class="btn-ghost" onclick="showAdminTab('flags')" id="adminTabFlags" style="font-size:0.85rem; padding:9px 18px; border:1.5px solid var(--border);">🚩 Flagged reviews</button>
+          <button class="btn-ghost" onclick="showAdminTab('features')" id="adminTabFeatures" style="font-size:0.85rem; padding:9px 18px; border:1.5px solid var(--border);">💡 Feature requests</button>
         </div>
         <div id="adminTabContent"></div>
       </div>
@@ -2817,6 +2939,32 @@ nav {
     <div class="modal-footer">
       <button class="btn-ghost" onclick="closeManageBakeryModal()">Cancel</button>
       <button class="btn-espresso" onclick="saveBakeryProfile()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── FEATURE REQUEST MODAL ──────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="featureRequestModal">
+  <div class="modal" style="max-width:480px;" role="dialog" aria-label="Request a feature">
+    <div class="modal-header">
+      <div class="modal-title">💡 Request a feature</div>
+      <button class="modal-close" onclick="closeFeatureRequestModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:20px;line-height:1.6;">Got an idea to make Crumb better? Share it — the most upvoted requests get built first.</p>
+      <div class="form-group">
+        <label class="form-label">What would you like to see? <span style="color:#e74c3c;">*</span></label>
+        <input type="text" class="form-input" id="featureTitle" placeholder="e.g. Dark mode, map view, share reviews…" maxlength="120">
+        <div style="text-align:right;font-size:0.72rem;color:var(--text-muted);margin-top:4px;" id="featureTitleCount">0 / 120</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">More detail <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">(optional)</span></label>
+        <textarea class="form-textarea" id="featureDetail" placeholder="Describe why this would be useful…" style="min-height:80px;" maxlength="500"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeFeatureRequestModal()">Cancel</button>
+      <button class="btn-espresso" id="featureSubmitBtn" onclick="submitFeatureRequest()">Submit request</button>
     </div>
   </div>
 </div>
@@ -3100,7 +3248,7 @@ function showPage(name) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   if (name === 'leaderboard') { if (lbCurrentMode === 'bakeries') renderBakeryLeaderboard(); else renderLeaderboard(lbCurrentTab); }
   if (name === 'feed') renderFeed();
-  if (name === 'bakeries') renderBakeries();
+  if (name === 'bakeries') { bakeryViewMode = 'all'; renderBakeries(); }
   if (name === 'explore') initExplorePage();
   if (name === 'shop') renderShopPage();
   if (name === 'people') renderPeople();
@@ -3441,6 +3589,16 @@ function cardHTML(item) {
 // ─── BAKERIES ─────────────────────────────────────────────────────────────────
 let allBakeries = {}; // keyed by bakeryName
 
+function extractCity(address) {
+  if (!address) return '';
+  // UK address format: "123 Street, York, YO1 7HH" — pick the part before postcode
+  const parts = address.split(',').map(p => p.trim()).filter(Boolean);
+  // Drop parts that look like postcodes (e.g. YO1 7HH)
+  const nonPostcode = parts.filter(p => !/^[A-Z]{1,2}\d[\d A-Z]*\d[A-Z]{2}$/i.test(p));
+  // The city is usually the second-to-last meaningful part
+  return nonPostcode.length >= 2 ? nonPostcode[nonPostcode.length - 1] : (nonPostcode[0] || '');
+}
+
 function buildBakeryIndex() {
   allBakeries = {};
   allItems.forEach(item => {
@@ -3450,38 +3608,135 @@ function buildBakeryIndex() {
         name: key,
         address: item.bakeryAddress || '',
         placeId: item.bakeryPlaceId || null,
+        lat: item.bakeryLat || null,
+        lng: item.bakeryLng || null,
+        city: extractCity(item.bakeryAddress || ''),
         items: [],
         totalScore: 0,
         blurb: ''
       };
+    }
+    // Keep coords if not yet set
+    if (!allBakeries[key].lat && item.bakeryLat) {
+      allBakeries[key].lat = item.bakeryLat;
+      allBakeries[key].lng = item.bakeryLng;
     }
     allBakeries[key].items.push(item);
     allBakeries[key].totalScore += (item.communityAvg || item.overallRating || 0);
   });
 }
 
+let bakeryViewMode = 'all'; // 'all' | 'nearest' | 'visited'
+let userGeoCoords = null;   // { lat, lng } from geolocation
+
+function setBakeryView(mode) {
+  bakeryViewMode = mode;
+  ['all','nearest','visited'].forEach(m => {
+    const btn = document.getElementById('bakeryView' + m.charAt(0).toUpperCase() + m.slice(1));
+    if (btn) btn.classList.toggle('active', m === mode);
+  });
+  if (mode === 'nearest') {
+    if (userGeoCoords) {
+      renderBakeries();
+    } else {
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          userGeoCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          renderBakeries();
+        },
+        () => {
+          showToast('Location access denied — can\'t sort by distance');
+          setBakeryView('all');
+        }
+      );
+    }
+  } else {
+    renderBakeries();
+  }
+}
+
+function populateBakeryLocationFilter() {
+  const sel = document.getElementById('bakeryLocationFilter');
+  if (!sel) return;
+  const cities = [...new Set(
+    Object.values(allBakeries)
+      .map(b => b.city)
+      .filter(Boolean)
+  )].sort();
+  const current = sel.value;
+  sel.innerHTML = '<option value="">All locations</option>' +
+    cities.map(c => `<option value="${c}" ${c === current ? 'selected' : ''}>${c}</option>`).join('');
+}
+
+function distKmUser(b) {
+  if (!userGeoCoords || !b.lat || !b.lng) return Infinity;
+  return distKm(userGeoCoords.lat, userGeoCoords.lng, b.lat, b.lng);
+}
+
 function renderBakeries() {
   buildBakeryIndex();
+  populateBakeryLocationFilter();
+
   const grid = document.getElementById('bakeriesGrid');
-  const bakeries = Object.values(allBakeries).sort((a, b) => {
-    const aAvg = a.totalScore / a.items.length;
-    const bAvg = b.totalScore / b.items.length;
-    return bAvg - aAvg;
-  });
+  const locationFilter = document.getElementById('bakeryLocationFilter')?.value || '';
+
+  let bakeries = Object.values(allBakeries);
+
+  // Location filter
+  if (locationFilter) {
+    bakeries = bakeries.filter(b => b.city === locationFilter);
+  }
+
+  // View mode filter
+  if (bakeryViewMode === 'visited' && currentUser) {
+    const myBakeryNames = new Set(allItems.filter(i => i.userId === currentUser.uid).map(i => i.bakeryName));
+    bakeries = bakeries.filter(b => myBakeryNames.has(b.name));
+  }
+
+  // Sort
+  if (bakeryViewMode === 'nearest' && userGeoCoords) {
+    bakeries = bakeries
+      .filter(b => b.lat && b.lng)
+      .sort((a, b) => distKmUser(a) - distKmUser(b));
+  } else {
+    bakeries = bakeries.sort((a, b) => {
+      const aAvg = a.totalScore / a.items.length;
+      const bAvg = b.totalScore / b.items.length;
+      return bAvg - aAvg;
+    });
+  }
+
   if (!bakeries.length) {
-    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon">🏪</div><div class="empty-state-title">No bakeries yet</div><div class="empty-state-text">Start logging pastries to build the bakery directory.</div></div>`;
+    const msg = bakeryViewMode === 'visited'
+      ? 'You haven\'t reviewed any bakeries yet'
+      : bakeryViewMode === 'nearest'
+        ? 'No bakeries with location data found nearby'
+        : 'No bakeries found';
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon">🏪</div><div class="empty-state-title">${msg}</div></div>`;
     return;
   }
+
+  const myBakeryNames = currentUser
+    ? new Set(allItems.filter(i => i.userId === currentUser.uid).map(i => i.bakeryName))
+    : new Set();
+
   grid.innerHTML = bakeries.map(b => {
     const avg = (b.totalScore / b.items.length).toFixed(1);
     const topItem = [...b.items].sort((x,y) => (y.communityAvg||y.overallRating||0) - (x.communityAvg||x.overallRating||0))[0];
-    const emoji = topItem ? (CATEGORIES[topItem.category] || '🥐') : '🏪';
+    const myReviewCount = b.items.filter(i => i.userId === currentUser?.uid).length;
+    const distBadge = bakeryViewMode === 'nearest' && userGeoCoords && b.lat
+      ? `<span class="bakery-dist-badge">📍 ${distKmUser(b).toFixed(1)} km away</span>`
+      : '';
+    const visitedBadge = myBakeryNames.has(b.name)
+      ? `<span class="bakery-visited-badge">✓ ${myReviewCount} review${myReviewCount !== 1 ? 's' : ''} by you</span>`
+      : '';
     return `
       <div class="bakery-card" onclick="openBakeryProfile('${escJS(b.name)}')">
         <div class="bakery-card-header">
           <div>
             <div class="bakery-card-name">${b.name}</div>
             ${b.address ? `<div class="bakery-card-address">📍 ${b.address}</div>` : ''}
+            ${distBadge || visitedBadge ? `<div style="margin-top:4px;">${distBadge}${visitedBadge}</div>` : ''}
           </div>
           <div class="bakery-card-score">${avg}</div>
         </div>
@@ -5184,7 +5439,7 @@ async function flagReview(itemId, reviewerName) {
 
 // ─── ADMIN PANEL ──────────────────────────────────────────────────────────────
 async function showAdminTab(tab) {
-  ['users','bakeries','flags'].forEach(t => {
+  ['users','bakeries','flags','features'].forEach(t => {
     const btn = document.getElementById('adminTab' + t.charAt(0).toUpperCase() + t.slice(1));
     if (btn) {
       btn.className = t === tab ? 'btn-espresso' : 'btn-ghost';
@@ -5203,6 +5458,8 @@ async function showAdminTab(tab) {
   } else if (tab === 'flags') {
     tabContent.innerHTML = '<div id="adminFlagsPanel"></div>';
     await renderAdminFlags();
+  } else if (tab === 'features') {
+    await renderAdminFeatures();
   }
 }
 
@@ -6460,6 +6717,139 @@ async function deleteProduct() {
     showToast('Could not delete product');
   }
 }
+
+// ─── FEATURE REQUESTS ─────────────────────────────────────────────────────────
+function openFeatureRequestModal() {
+  if (!currentUser) { openAuthModal(); return; }
+  document.getElementById('featureTitle').value = '';
+  document.getElementById('featureDetail').value = '';
+  document.getElementById('featureTitleCount').textContent = '0 / 120';
+  document.getElementById('featureRequestModal').classList.add('open');
+  lockScroll();
+  document.getElementById('featureTitle').oninput = function() {
+    document.getElementById('featureTitleCount').textContent = `${this.value.length} / 120`;
+  };
+}
+
+function closeFeatureRequestModal() {
+  document.getElementById('featureRequestModal').classList.remove('open');
+  unlockScroll();
+}
+
+async function submitFeatureRequest() {
+  if (!currentUser || !fb) return;
+  const title = document.getElementById('featureTitle').value.trim();
+  if (!title) { showToast('Please enter a title for your request'); return; }
+  const detail = document.getElementById('featureDetail').value.trim();
+  const btn = document.getElementById('featureSubmitBtn');
+  btn.disabled = true; btn.textContent = 'Submitting…';
+  const { db, collection, addDoc, serverTimestamp } = fb;
+  try {
+    await addDoc(collection(db, 'featureRequests'), {
+      title,
+      detail: detail || null,
+      userId: currentUser.uid,
+      userName: currentUser.displayName || currentUser.email?.split('@')[0] || 'Anonymous',
+      status: 'new',
+      votes: 1,
+      voterIds: [currentUser.uid],
+      createdAt: serverTimestamp()
+    });
+    closeFeatureRequestModal();
+    showToast('💡 Request submitted — thanks!');
+  } catch(e) {
+    showToast('Could not submit request');
+    console.error(e);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Submit request';
+  }
+}
+
+async function toggleFeatureVote(requestId) {
+  if (!currentUser) { openAuthModal(); return; }
+  const { db, doc, getDoc, updateDoc } = fb;
+  try {
+    const ref = doc(db, 'featureRequests', requestId);
+    const snap = await getDoc(ref);
+    const data = snap.data();
+    const voterIds = data.voterIds || [];
+    const alreadyVoted = voterIds.includes(currentUser.uid);
+    const newVoterIds = alreadyVoted
+      ? voterIds.filter(id => id !== currentUser.uid)
+      : [...voterIds, currentUser.uid];
+    await updateDoc(ref, { votes: newVoterIds.length, voterIds: newVoterIds });
+    showToast(alreadyVoted ? 'Vote removed' : '👍 Upvoted!');
+    await renderAdminFeatures();
+  } catch(e) { showToast('Could not save vote'); console.error(e); }
+}
+
+async function updateFeatureStatus(requestId, status) {
+  if (!isAdmin() || !fb) return;
+  const { db, doc, updateDoc } = fb;
+  try {
+    await updateDoc(doc(db, 'featureRequests', requestId), { status });
+    showToast('Status updated');
+    await renderAdminFeatures();
+  } catch(e) { showToast('Could not update status'); }
+}
+
+async function deleteFeatureRequest(requestId) {
+  if (!isAdmin() || !confirm('Delete this feature request?')) return;
+  const { db, doc, deleteDoc } = fb;
+  try {
+    await deleteDoc(doc(db, 'featureRequests', requestId));
+    showToast('Request deleted');
+    await renderAdminFeatures();
+  } catch(e) { showToast('Could not delete'); }
+}
+
+async function renderAdminFeatures() {
+  const panel = document.getElementById('adminTabContent');
+  if (!fb || !panel) return;
+  const { db, collection, getDocs, query, orderBy } = fb;
+  panel.innerHTML = '<div style="text-align:center;padding:24px;"><div class="spinner" style="margin:0 auto;"></div></div>';
+  try {
+    const snap = await getDocs(query(collection(db, 'featureRequests'), orderBy('votes', 'desc')));
+    const requests = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (!requests.length) {
+      panel.innerHTML = '<div class="empty-state" style="padding:24px 0;"><div class="empty-state-icon">💡</div><div class="empty-state-title">No feature requests yet</div></div>';
+      return;
+    }
+    const statusLabels = { new: 'New', 'under-review': 'Under review', planned: 'Planned', 'in-progress': 'In progress', done: 'Done', declined: 'Declined' };
+    panel.innerHTML = requests.map(r => {
+      const voted = currentUser && (r.voterIds || []).includes(currentUser.uid);
+      const statusClass = (r.status || 'new').replace(' ', '-');
+      return `
+        <div class="fr-item">
+          <div class="fr-vote">
+            <button class="fr-vote-btn ${voted ? 'voted' : ''}" onclick="toggleFeatureVote('${r.id}')" title="${voted ? 'Remove vote' : 'Upvote'}">▲</button>
+            <div class="fr-vote-count">${r.votes || 0}</div>
+          </div>
+          <div class="fr-body">
+            <div class="fr-title">${r.title || 'Untitled'}</div>
+            ${r.detail ? `<div class="fr-detail">${r.detail}</div>` : ''}
+            <div class="fr-meta">
+              <span class="fr-by">by ${r.userName || 'Anonymous'}</span>
+              <span class="fr-status ${statusClass}">${statusLabels[r.status] || 'New'}</span>
+            </div>
+            <div class="fr-admin-actions">
+              <select class="fr-status-select" onchange="updateFeatureStatus('${r.id}', this.value)">
+                ${Object.entries(statusLabels).map(([val, label]) => `<option value="${val}" ${r.status === val ? 'selected' : ''}>${label}</option>`).join('')}
+              </select>
+              <button class="admin-btn danger" onclick="deleteFeatureRequest('${r.id}')">Delete</button>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+  } catch(e) {
+    panel.innerHTML = '<div style="padding:16px;color:var(--text-muted);">Could not load feature requests.</div>';
+    console.error(e);
+  }
+}
+
+document.getElementById('featureRequestModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('featureRequestModal')) closeFeatureRequestModal();
+});
 
 // ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
 let notifLastSeen = null; // timestamp of last time user opened panel
