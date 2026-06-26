@@ -193,6 +193,95 @@ nav::before {
 }
 .nav-avatar img { width: 100%; height: 100%; object-fit: cover; }
 
+/* ─── BAKERY MAP + INFO PANEL ────────────────────────────────────────────────── */
+.bakery-map {
+  width: 100%;
+  height: 180px;
+  border: none;
+  display: block;
+  background: var(--parchment-dark);
+}
+.bakery-info-panel {
+  background: var(--parchment);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.bakery-info-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.82rem;
+  color: var(--text-body);
+  min-width: 0;
+}
+.bakery-info-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+}
+.bakery-info-link {
+  color: var(--caramel);
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bakery-info-link:hover { text-decoration: underline; }
+
+/* Opening hours accordion */
+.bakery-hours-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.82rem;
+  color: var(--text-body);
+  cursor: pointer;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+}
+.bakery-hours-toggle:hover { color: var(--caramel); }
+.bakery-hours-status {
+  font-weight: 600;
+  font-size: 0.78rem;
+  padding: 2px 8px;
+  border-radius: 100px;
+}
+.bakery-hours-status.open { background: #d4edda; color: #155724; }
+.bakery-hours-status.closed { background: #f8d7da; color: #721c24; }
+.bakery-hours-chevron {
+  margin-left: auto;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+.bakery-hours-chevron.open { transform: rotate(180deg); }
+.bakery-hours-list {
+  display: none;
+  padding: 8px 0 0 30px;
+  flex-direction: column;
+  gap: 4px;
+}
+.bakery-hours-list.open { display: flex; }
+.bakery-hours-day {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  color: var(--text-body);
+  gap: 16px;
+}
+.bakery-hours-day.today { font-weight: 700; color: var(--espresso); }
+.bakery-hours-day span:last-child { color: var(--text-muted); text-align: right; }
+.bakery-hours-day.today span:last-child { color: var(--caramel); }
+
 /* ─── BOOKMARKS ──────────────────────────────────────────────────────────────── */
 .bookmark-btn {
   width: 32px; height: 32px;
@@ -849,6 +938,25 @@ nav::before {
 .leaderboard-inner { max-width: 1100px; margin: 0 auto; padding: 56px 24px 0; }
 .leaderboard-title { font-family: 'Playfair Display', serif; font-size: 1.8rem; color: var(--honey); margin-bottom: 8px; }
 .leaderboard-sub { font-size: 0.85rem; color: var(--honey-light); margin-bottom: 32px; }
+.lb-filter-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: rgba(255,255,255,0.1);
+  border: 1.5px solid rgba(255,255,255,0.2);
+  color: var(--parchment);
+  font-size: 0.78rem;
+  font-weight: 500;
+  padding: 7px 30px 7px 12px;
+  border-radius: 100px;
+  cursor: pointer;
+  outline: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23d4a574' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  transition: border-color 0.15s;
+}
+.lb-filter-select:hover { border-color: var(--honey); }
+.lb-filter-select option { background: #2c1810; color: #faf6f0; }
 .lb-tabs {
   display: flex;
   gap: 8px;
@@ -2269,13 +2377,25 @@ nav::before {
     <div class="leaderboard-inner">
       <div class="leaderboard-title">🏆 The Hall of Crumbz</div>
       <div class="leaderboard-sub" id="lbSubtitle">Community's highest-rated bakes, ranked by average score</div>
+
       <!-- Top-level mode switcher -->
-      <div style="display:flex; gap:8px; margin-bottom:16px;">
+      <div style="display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; align-items:center;">
         <button class="lb-tab active" id="lbModeItems" onclick="switchLbMode('items')">🥐 Top Items</button>
         <button class="lb-tab" id="lbModeBakeries" onclick="switchLbMode('bakeries')">🏪 Top Bakeries</button>
+        <div style="display:flex; gap:8px; margin-left:auto; flex-wrap:wrap;">
+          <select id="lbLocationFilter" class="lb-filter-select" onchange="onLbFilterChange()">
+            <option value="">📍 All locations</option>
+          </select>
+          <select id="lbRatingFilter" class="lb-filter-select" onchange="onLbFilterChange()">
+            <option value="">⭐ Any rating</option>
+            <option value="4.5">4.5+</option>
+            <option value="4.0">4.0+</option>
+            <option value="3.5">3.5+</option>
+          </select>
+        </div>
       </div>
 
-      <!-- Item filters (hidden when bakery mode active) -->
+      <!-- Item category filters (hidden when bakery mode active) -->
       <div class="lb-tabs" id="lbItemTabs">
         <button class="lb-tab active" onclick="switchLbTab(this,'all')">All</button>
         <button class="lb-tab" onclick="switchLbTab(this,'bread')">Bread</button>
@@ -3342,7 +3462,10 @@ function showPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  if (name === 'leaderboard') { if (lbCurrentMode === 'bakeries') renderBakeryLeaderboard(); else renderLeaderboard(lbCurrentTab); }
+  if (name === 'leaderboard') {
+    populateLbLocationFilter();
+    if (lbCurrentMode === 'bakeries') renderBakeryLeaderboard(); else renderLeaderboard(lbCurrentTab);
+  }
   if (name === 'feed') renderFeed();
   if (name === 'bakeries') { bakeryViewMode = 'all'; renderBakeries(); }
   if (name === 'explore') initExplorePage();
@@ -3893,18 +4016,20 @@ function renderBakeries() {
       ? `<span class="bakery-visited-badge">✓ ${myReviewCount} review${myReviewCount !== 1 ? 's' : ''} by you</span>`
       : '';
     const bookmarkBtnHTML = currentUser
-      ? `<button class="bookmark-btn${isBookmarked(b.name) ? ' saved' : ''}" onclick="event.stopPropagation(); toggleBookmark('${escJS(b.name)}','${escJS(b.address||'')}',this)" title="Save bakery" style="position:absolute;top:12px;right:12px;">🔖</button>`
+      ? `<button class="bookmark-btn${isBookmarked(b.name) ? ' saved' : ''}" onclick="event.stopPropagation(); toggleBookmark('${escJS(b.name)}','${escJS(b.address||'')}',this)" title="Save bakery">🔖</button>`
       : '';
     return `
-      <div class="bakery-card" onclick="openBakeryProfile('${escJS(b.name)}')" style="position:relative;">
-        ${bookmarkBtnHTML}
+      <div class="bakery-card" onclick="openBakeryProfile('${escJS(b.name)}')">
         <div class="bakery-card-header">
-          <div>
+          <div style="flex:1;min-width:0;">
             <div class="bakery-card-name">${b.name}</div>
             ${b.address ? `<div class="bakery-card-address">📍 ${b.address}</div>` : ''}
             ${distBadge || visitedBadge ? `<div style="margin-top:4px;">${distBadge}${visitedBadge}</div>` : ''}
           </div>
-          <div class="bakery-card-score">${avg}</div>
+          <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+            ${bookmarkBtnHTML}
+            <div class="bakery-card-score">${avg}</div>
+          </div>
         </div>
         <div class="bakery-card-stats">
           <div class="bakery-card-stat"><strong>${b.items.length}</strong> review${b.items.length !== 1 ? 's' : ''}</div>
@@ -4174,6 +4299,67 @@ function buildLocationFilterBar(items, activeLoc, onClickFn) {
   return `<div class="filter-bar">${allBtn}${locBtns}</div>`;
 }
 
+async function fetchPlaceDetails(placeId) {
+  if (!placeId || !GOOGLE_MAPS_KEY) return null;
+  try {
+    const res = await fetch(`https://places.googleapis.com/v1/places/${placeId}`, {
+      headers: {
+        'X-Goog-Api-Key': GOOGLE_MAPS_KEY,
+        'X-Goog-FieldMask': 'id,displayName,formattedAddress,nationalPhoneNumber,internationalPhoneNumber,websiteUri,regularOpeningHours,location,rating,userRatingCount'
+      }
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch(e) { return null; }
+}
+
+function buildOpeningHoursHTML(openingHours) {
+  if (!openingHours?.weekdayDescriptions?.length) return '';
+  const days = openingHours.weekdayDescriptions;
+  const todayIdx = (new Date().getDay() + 6) % 7; // Mon=0 … Sun=6
+  const isOpenNow = openingHours.openNow;
+  const statusBadge = isOpenNow !== undefined
+    ? `<span class="bakery-hours-status ${isOpenNow ? 'open' : 'closed'}">${isOpenNow ? 'Open now' : 'Closed'}</span>`
+    : '';
+  const daysHTML = days.map((d, i) => {
+    const [day, ...rest] = d.split(': ');
+    return `<div class="bakery-hours-day${i === todayIdx ? ' today' : ''}">
+      <span>${day}</span><span>${rest.join(': ') || 'Closed'}</span>
+    </div>`;
+  }).join('');
+  return `
+    <div>
+      <button class="bakery-hours-toggle" onclick="toggleBakeryHours(this)">
+        <span class="bakery-info-icon">🕐</span>
+        <span>Opening hours</span>
+        ${statusBadge}
+        <span class="bakery-hours-chevron">▼</span>
+      </button>
+      <div class="bakery-hours-list">${daysHTML}</div>
+    </div>`;
+}
+
+function toggleBakeryHours(btn) {
+  const list = btn.nextElementSibling;
+  const chevron = btn.querySelector('.bakery-hours-chevron');
+  const isOpen = list.classList.toggle('open');
+  chevron.classList.toggle('open', isOpen);
+}
+
+function buildBakeryMapHTML(placeId, lat, lng, name) {
+  if (placeId && GOOGLE_MAPS_KEY) {
+    return `<iframe class="bakery-map" loading="lazy"
+      src="https://www.google.com/maps/embed/v1/place?key=${GOOGLE_MAPS_KEY}&q=place_id:${placeId}&zoom=15"
+      allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe>`;
+  }
+  if (lat && lng && GOOGLE_MAPS_KEY) {
+    return `<iframe class="bakery-map" loading="lazy"
+      src="https://www.google.com/maps/embed/v1/view?key=${GOOGLE_MAPS_KEY}&center=${lat},${lng}&zoom=15"
+      allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe>`;
+  }
+  return '';
+}
+
 let bakeryActiveCatFilter = '';
 
 async function openBakeryProfile(bakeryName, catFilter) {
@@ -4255,28 +4441,83 @@ async function openBakeryProfile(bakeryName, catFilter) {
     if (bSnap.exists()) fullBakeryData = bSnap.data();
   } catch(e) {}
 
+  // Find placeId from items
+  const placeId = b.placeId || fullBakeryData.placeId || null;
+  const lat = b.lat || null;
+  const lng = b.lng || null;
+
+  // Fetch Google Place Details (phone, hours, website)
+  let placeDetails = null;
+  if (placeId) placeDetails = await fetchPlaceDetails(placeId);
+
   const coverPhoto = fullBakeryData.coverPhotoURL
     ? `<img src="${fullBakeryData.coverPhotoURL}" class="bakery-cover" alt="${bakeryName}">`
-    : `<div class="bakery-cover-placeholder">🏪</div>`;
+    : '';
 
-  const socialLinks = [];
-  if (fullBakeryData.website) socialLinks.push(`<a href="${fullBakeryData.website}" target="_blank" class="bakery-social-link">🌐 Website</a>`);
-  if (fullBakeryData.instagram) socialLinks.push(`<a href="https://instagram.com/${fullBakeryData.instagram}" target="_blank" class="bakery-social-link">📸 @${fullBakeryData.instagram}</a>`);
-  const socialHTML = socialLinks.length ? `<div class="bakery-social-links">${socialLinks.join('')}</div>` : '';
+  // Map
+  const mapHTML = buildBakeryMapHTML(placeId, lat, lng, bakeryName);
+
+  // Info panel — website, phone, hours
+  const websiteUrl = placeDetails?.websiteUri || fullBakeryData.website || null;
+  const phone = placeDetails?.internationalPhoneNumber || placeDetails?.nationalPhoneNumber || null;
+  const hoursHTML = buildOpeningHoursHTML(placeDetails?.regularOpeningHours);
+  const googleRating = placeDetails?.rating;
+  const googleReviewCount = placeDetails?.userRatingCount;
+
+  const infoPanelRows = [];
+  if (websiteUrl) {
+    const display = websiteUrl.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '');
+    infoPanelRows.push(`<div class="bakery-info-row">
+      <span class="bakery-info-icon">🌐</span>
+      <a href="${websiteUrl}" target="_blank" rel="noopener" class="bakery-info-link">${display}</a>
+    </div>`);
+  }
+  if (fullBakeryData.instagram) {
+    infoPanelRows.push(`<div class="bakery-info-row">
+      <span class="bakery-info-icon">📸</span>
+      <a href="https://instagram.com/${fullBakeryData.instagram}" target="_blank" rel="noopener" class="bakery-info-link">@${fullBakeryData.instagram}</a>
+    </div>`);
+  }
+  if (phone) {
+    infoPanelRows.push(`<div class="bakery-info-row">
+      <span class="bakery-info-icon">📞</span>
+      <a href="tel:${phone.replace(/\s/g,'')}" class="bakery-info-link">${phone}</a>
+    </div>`);
+  }
+  if (b.address) {
+    infoPanelRows.push(`<div class="bakery-info-row">
+      <span class="bakery-info-icon">📍</span>
+      <span style="color:var(--text-muted);">${b.address}</span>
+    </div>`);
+  }
+  if (hoursHTML) infoPanelRows.push(hoursHTML);
+  if (googleRating) {
+    infoPanelRows.push(`<div class="bakery-info-row">
+      <span class="bakery-info-icon">⭐</span>
+      <span style="color:var(--text-muted);">${googleRating} on Google${googleReviewCount ? ` (${googleReviewCount.toLocaleString()} reviews)` : ''}</span>
+    </div>`);
+  }
+
+  const infoPanelHTML = infoPanelRows.length
+    ? `<div class="bakery-info-panel">${infoPanelRows.join('')}</div>`
+    : '';
+
+  const socialHTML = ''; // now handled in info panel
 
   const isClaimed = !!fullBakeryData.ownedBy;
   const claimedBadge = isClaimed ? `<span class="claimed-badge">✓ Claimed</span>` : '';
 
   try { document.getElementById('bakeryModalContent').innerHTML = `
+    ${mapHTML}
+    ${infoPanelHTML}
     ${coverPhoto}
     <div class="bakery-profile-header">
       <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
         <div>
           <div class="bakery-profile-name">${bakeryName}${claimedBadge}</div>
-          ${b.address ? `<div class="bakery-profile-address">📍 ${b.address}</div>` : ''}
         </div>
         ${isOwner ? `<button class="btn-caramel" style="font-size:0.78rem;padding:7px 12px;white-space:nowrap;flex-shrink:0;" onclick="closeBakeryModal(); openBakeryEditModal('${escJS(bakeryName)}')">✏️ Edit page</button>` : ''}
-        ${currentUser ? `<button class="bookmark-btn${isBookmarked(bakeryName) ? ' saved' : ''}" id="bakeryModalBookmarkBtn" onclick="toggleBookmark('${escJS(bakeryName)}','${escJS(b.address||'')}',this)" title="${isBookmarked(bakeryName) ? 'Remove bookmark' : 'Save bakery'}">${isBookmarked(bakeryName) ? '🔖' : '🔖'}</button>` : ''}
+        ${currentUser ? `<button class="bookmark-btn${isBookmarked(bakeryName) ? ' saved' : ''}" id="bakeryModalBookmarkBtn" onclick="toggleBookmark('${escJS(bakeryName)}','${escJS(b.address||'')}',this)" title="${isBookmarked(bakeryName) ? 'Remove bookmark' : 'Save bakery'}">🔖</button>` : ''}
       </div>
       ${socialHTML}
       <div class="bakery-profile-scores" style="margin-top:16px;">
@@ -4380,19 +4621,37 @@ let lbCurrentMode = 'items';
 function switchLbMode(mode) {
   lbCurrentMode = mode;
   document.getElementById('lbModeItems').classList.toggle('active', mode === 'items');
+  document.getElementById('lbModeItems').classList.toggle('active', mode === 'items');
   document.getElementById('lbModeBakeries').classList.toggle('active', mode === 'bakeries');
   document.getElementById('lbItemTabs').style.display = mode === 'items' ? 'flex' : 'none';
-  const subtitle = document.getElementById('lbSubtitle');
+  populateLbLocationFilter();
   if (mode === 'bakeries') {
-    if (subtitle) subtitle.textContent = "York's top bakeries, ranked by community average";
     renderBakeryLeaderboard();
   } else {
-    if (subtitle) subtitle.textContent = "Community's highest-rated bakes, ranked by average score";
     renderLeaderboard(lbCurrentTab);
   }
 }
 
-function switchLbTab(btn, tab) {
+function populateLbLocationFilter() {
+  const sel = document.getElementById('lbLocationFilter');
+  if (!sel) return;
+  const bakeryNames = [...new Set(allItems.map(i => i.bakeryName).filter(Boolean))].sort();
+  const current = sel.value;
+  sel.innerHTML = '<option value="">📍 All locations</option>' +
+    bakeryNames.map(n => `<option value="${n}" ${n === current ? 'selected' : ''}>${n}</option>`).join('');
+}
+
+function onLbFilterChange() {
+  if (lbCurrentMode === 'bakeries') renderBakeryLeaderboard();
+  else renderLeaderboard(lbCurrentTab);
+}
+
+function getLbFilters() {
+  return {
+    location: document.getElementById('lbLocationFilter')?.value || '',
+    minRating: parseFloat(document.getElementById('lbRatingFilter')?.value || '0') || 0
+  };
+}
   document.querySelectorAll('#lbItemTabs .lb-tab').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
   lbCurrentTab = tab;
@@ -4402,20 +4661,37 @@ function switchLbTab(btn, tab) {
 function renderBakeryLeaderboard() {
   buildBakeryIndex();
   const list = document.getElementById('lbList');
+  const { location, minRating } = getLbFilters();
 
-  const bakeries = Object.values(allBakeries)
+  let bakeries = Object.values(allBakeries)
     .filter(b => b.items.length > 0)
     .map(b => ({
       ...b,
       avg: b.totalScore / b.items.length,
       reviewCount: b.items.length,
       topItem: [...b.items].sort((x,y) => (y.communityAvg||y.overallRating||0)-(x.communityAvg||x.overallRating||0))[0]
-    }))
-    .sort((a, b) => b.avg - a.avg)
-    .slice(0, 20);
+    }));
+
+  // Apply location filter
+  if (location) bakeries = bakeries.filter(b => b.name === location);
+  // Apply min rating filter
+  if (minRating) bakeries = bakeries.filter(b => b.avg >= minRating);
+
+  bakeries = bakeries.sort((a, b) => b.avg - a.avg).slice(0, 20);
+
+  // Update subtitle
+  const subtitle = document.getElementById('lbSubtitle');
+  if (subtitle) {
+    const parts = [];
+    if (location) parts.push(location);
+    if (minRating) parts.push(`${minRating}+ rated`);
+    subtitle.textContent = parts.length
+      ? `Top bakeries — ${parts.join(', ')}`
+      : 'Top bakeries, ranked by community average';
+  }
 
   if (!bakeries.length) {
-    list.innerHTML = `<div class="empty-state" style="color:var(--honey-light)"><div class="empty-state-icon">🏪</div><div class="empty-state-title" style="color:var(--honey)">No bakeries yet</div><div class="empty-state-text">Start logging reviews to build the bakery rankings.</div></div>`;
+    list.innerHTML = `<div class="empty-state" style="color:var(--honey-light)"><div class="empty-state-icon">🏪</div><div class="empty-state-title" style="color:var(--honey)">No bakeries match</div><div class="empty-state-text">Try adjusting your filters.</div></div>`;
     return;
   }
 
@@ -4499,7 +4775,12 @@ function renderLeaderboard(tab) {
   }
 
   // Apply tab filter
+  const { location: lbLoc, minRating: lbMinRating } = getLbFilters();
   let filtered = [...records];
+
+  // Location filter
+  if (lbLoc) filtered = filtered.filter(r => (r.bakeryName || '') === lbLoc);
+
   if (tab === 'value') {
     filtered = filtered.filter(r => r.avgPrice && r.communityAvg).sort((a, b) => {
       const aVal = weightedScore(a) / parseFloat(a.avgPrice);
@@ -4512,6 +4793,23 @@ function renderLeaderboard(tab) {
   } else {
     filtered.sort((a, b) => weightedScore(b) - weightedScore(a));
   }
+
+  // Min rating filter
+  if (lbMinRating) filtered = filtered.filter(r => (r.communityAvg || r.overallRating || 0) >= lbMinRating);
+
+  // Update subtitle
+  const subtitle2 = document.getElementById('lbSubtitle');
+  if (subtitle2) {
+    const parts = [];
+    if (lbLoc) parts.push(lbLoc);
+    if (lbMinRating) parts.push(`${lbMinRating}+ rated`);
+    if (tab !== 'all' && tab !== 'value') parts.push(CATEGORY_TREE[tab]?.label || tab);
+    if (tab === 'value') parts.push('best value');
+    subtitle2.textContent = parts.length
+      ? `Top items — ${parts.join(', ')}`
+      : "Community's highest-rated bakes, ranked by average score";
+  }
+
   filtered = filtered.slice(0, 20);
 
   const list = document.getElementById('lbList');
