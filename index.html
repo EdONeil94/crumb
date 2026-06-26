@@ -3577,6 +3577,11 @@ function toggleUserMenu() {
       onmouseover="this.style.background='var(--parchment)'" onmouseout="this.style.background=''">
       ⚙️ Settings
     </div>
+    <div onclick="closeAvatarDropdown(); openFeatureRequestModal();"
+      style="padding:11px 16px; font-size:0.85rem; color:var(--text-body); cursor:pointer; display:flex; align-items:center; gap:8px;"
+      onmouseover="this.style.background='var(--parchment)'" onmouseout="this.style.background=''">
+      💡 Request a feature
+    </div>
     <div style="border-top:1px solid var(--border);">
       <div onclick="closeAvatarDropdown(); fb.signOut(fb.auth); showToast('Signed out');"
         style="padding:11px 16px; font-size:0.85rem; color:#c0392b; cursor:pointer; display:flex; align-items:center; gap:8px;"
