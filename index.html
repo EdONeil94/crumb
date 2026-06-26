@@ -4642,10 +4642,12 @@ function switchLbMode(mode) {
 function populateLbLocationFilter() {
   const sel = document.getElementById('lbLocationFilter');
   if (!sel) return;
-  const bakeryNames = [...new Set(allItems.map(i => i.bakeryName).filter(Boolean))].sort();
+  const cities = [...new Set(
+    allItems.map(i => extractCity(i.bakeryAddress || '')).filter(Boolean)
+  )].sort();
   const current = sel.value;
   sel.innerHTML = '<option value="">📍 All locations</option>' +
-    bakeryNames.map(n => `<option value="${n}" ${n === current ? 'selected' : ''}>${n}</option>`).join('');
+    cities.map(c => `<option value="${c}" ${c === current ? 'selected' : ''}>${c}</option>`).join('');
 }
 
 function onLbFilterChange() {
@@ -4681,8 +4683,8 @@ function renderBakeryLeaderboard() {
       topItem: [...b.items].sort((x,y) => (y.communityAvg||y.overallRating||0)-(x.communityAvg||x.overallRating||0))[0]
     }));
 
-  // Apply location filter
-  if (location) bakeries = bakeries.filter(b => b.name === location);
+  // Apply location filter (by city)
+  if (location) bakeries = bakeries.filter(b => extractCity(b.address || '') === location);
   // Apply min rating filter
   if (minRating) bakeries = bakeries.filter(b => b.avg >= minRating);
 
@@ -4787,8 +4789,8 @@ function renderLeaderboard(tab) {
   const { location: lbLoc, minRating: lbMinRating } = getLbFilters();
   let filtered = [...records];
 
-  // Location filter
-  if (lbLoc) filtered = filtered.filter(r => (r.bakeryName || '') === lbLoc);
+  // Location filter (by city)
+  if (lbLoc) filtered = filtered.filter(r => extractCity(r.bakeryAddress || '') === lbLoc);
 
   if (tab === 'value') {
     filtered = filtered.filter(r => r.avgPrice && r.communityAvg).sort((a, b) => {
