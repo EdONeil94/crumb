@@ -2287,6 +2287,8 @@ nav::before {
   <button class="mobile-menu-item" id="mobileProfileBtn" onclick="closeMobileMenu(); setTimeout(()=>{if(currentUser)openProfileModal(currentUser.uid);},50);" style="display:none">👤 My profile</button>
   <button class="mobile-menu-item" id="mobileEditProfileBtn" onclick="closeMobileMenu(); setTimeout(()=>showPage('settings'),50);" style="display:none">⚙️ Settings</button>
   <button class="mobile-menu-item" id="mobileSignOutBtn" onclick="fb.signOut(fb.auth); showToast('Signed out'); closeMobileMenu();" style="display:none; color:#e07070;">→ Sign out</button>
+  <div class="mobile-menu-divider"></div>
+  <button class="mobile-menu-item" onclick="openFeatureRequestModal(); closeMobileMenu();">💡 Request a feature</button>
   <div class="mobile-menu-divider" id="mobileSignInDivider"></div>
   <button class="mobile-menu-item" id="mobileSignInBtn" onclick="openAuthModal(); closeMobileMenu();">→ Sign in</button>
   <div class="mobile-menu-divider"></div>
@@ -3002,17 +3004,6 @@ nav::before {
           <div class="empty-state-title">No bakeries assigned yet</div>
           <div class="empty-state-text">Ask an admin to assign your bakery to your account.</div>
         </div>
-      </div>
-    </div>
-
-    <!-- Feature requests — visible to all logged-in users -->
-    <div class="settings-card">
-      <div class="settings-card-header">
-        <div class="settings-card-title">💡 Request a feature</div>
-        <div class="settings-card-sub">Got an idea? Submit it and vote on what gets built next</div>
-      </div>
-      <div class="settings-card-body">
-        <button class="btn-espresso" onclick="openFeatureRequestModal()" style="padding:11px 24px;">+ Submit a request</button>
       </div>
     </div>
 
@@ -7693,8 +7684,9 @@ async function renderAdminFeatures() {
   const { db, collection, getDocs, query, orderBy } = fb;
   panel.innerHTML = '<div style="text-align:center;padding:24px;"><div class="spinner" style="margin:0 auto;"></div></div>';
   try {
-    const snap = await getDocs(query(collection(db, 'featureRequests'), orderBy('votes', 'desc')));
-    const requests = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const snap = await getDocs(query(collection(db, 'featureRequests')));
+    const requests = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (b.votes || 0) - (a.votes || 0));
     if (!requests.length) {
       panel.innerHTML = '<div class="empty-state" style="padding:24px 0;"><div class="empty-state-icon">💡</div><div class="empty-state-title">No feature requests yet</div></div>';
       return;
