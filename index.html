@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Crumbz">
-<link rel="apple-touch-icon" href="https://emojicdn.elk.sh/🥐?style=apple&size=512">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='115' fill='%232c1810'/%3E%3Ctext x='256' y='340' font-size='280' text-anchor='middle'%3E🥐%3C/text%3E%3C/svg%3E">
 <meta name="description" content="Discover, rate and share the best bakes from your favourite local bakeries.">
 
 <!-- Fonts -->
@@ -192,6 +192,64 @@ nav::before {
   flex-shrink: 0;
 }
 .nav-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+/* ─── BOOKMARKS ──────────────────────────────────────────────────────────────── */
+.bookmark-btn {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: var(--parchment);
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.bookmark-btn:hover { border-color: var(--honey); color: var(--caramel); background: var(--parchment-dark); }
+.bookmark-btn.saved { background: var(--espresso); color: var(--honey); border-color: var(--espresso); }
+.bookmark-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.bookmark-card:last-child { border-bottom: none; }
+.bookmark-card-icon {
+  width: 40px; height: 40px;
+  border-radius: var(--radius-sm);
+  background: var(--parchment-dark);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+.bookmark-card-body { flex: 1; min-width: 0; }
+.bookmark-card-name { font-size: 0.9rem; font-weight: 600; color: var(--espresso); margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bookmark-card-address { font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bookmark-card-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+/* ─── EXPLORE SELECTS ────────────────────────────────────────────────────────── */
+.explore-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: rgba(255,255,255,0.1);
+  border: 1.5px solid rgba(255,255,255,0.2);
+  color: var(--parchment);
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding: 9px 36px 9px 14px;
+  border-radius: 100px;
+  cursor: pointer;
+  outline: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23d4a574' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  transition: border-color 0.15s, background-color 0.15s;
+  min-width: 160px;
+}
+.explore-select:hover { border-color: var(--honey); background-color: rgba(255,255,255,0.15); }
+.explore-select option { background: var(--espresso); color: var(--parchment); }
 
 /* ─── BAKERY VIEW BUTTONS ────────────────────────────────────────────────────── */
 .bakery-view-btn {
@@ -441,7 +499,7 @@ nav::before {
   display: none;
   flex-direction: column;
   position: fixed;
-  top: 10px;
+  top: 60px; /* updated by JS to sit below nav+statusbar */
   right: 10px;
   z-index: 200;
   background: var(--espresso);
@@ -2639,13 +2697,27 @@ nav::before {
 <div class="page" id="page-explore">
 
   <!-- Hero -->
-  <div style="background:var(--espresso); padding:56px 24px 48px; text-align:center;">
+  <div style="background:var(--espresso); padding:56px 24px 40px; text-align:center;">
     <div style="font-size:0.72rem; letter-spacing:4px; text-transform:uppercase; color:var(--honey); font-weight:600; margin-bottom:12px;">Discover</div>
     <h1 style="font-family:'Playfair Display',serif; font-size:clamp(2rem,5vw,3rem); color:var(--cream-white); font-weight:700; margin-bottom:12px;">Find great bakeries<br><em style="color:var(--honey); font-style:italic;">wherever you go</em></h1>
-    <p style="color:var(--honey-light); font-size:1rem; max-width:480px; margin:0 auto 32px; line-height:1.6; font-weight:300;">Pick a city and discover the top-rated bakeries. Where Crumbz community reviews exist, they take priority.</p>
+    <p style="color:var(--honey-light); font-size:1rem; max-width:480px; margin:0 auto 28px; line-height:1.6; font-weight:300;">Pick a city and discover the top-rated bakeries. Where Crumbz community reviews exist, they take priority.</p>
 
-    <!-- City grid -->
-    <div id="cityGrid" style="display:flex; flex-wrap:wrap; gap:8px; justify-content:center; max-width:720px; margin:0 auto; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none;"></div>
+    <!-- Country + city + sort filters -->
+    <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-bottom:20px;">
+      <select id="exploreCountrySelect" class="explore-select" onchange="onExploreCountryChange()">
+        <option value="">🌍 Detecting location…</option>
+      </select>
+      <select id="exploreCitySelect" class="explore-select" onchange="onExploreCityChange()">
+        <option value="">Select a city</option>
+      </select>
+      <select id="exploreSortSelect" class="explore-select" onchange="onExploreSortChange()">
+        <option value="top">⭐ Top rated</option>
+        <option value="trending">🔥 Trending</option>
+      </select>
+    </div>
+
+    <!-- City pills (hidden — kept for chip highlight compat) -->
+    <div id="cityGrid" style="display:none;"></div>
   </div>
 
   <div class="torn" style="margin-bottom:0;"></div>
@@ -2654,14 +2726,14 @@ nav::before {
   <div class="section" id="exploreResults" style="display:none;">
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; flex-wrap:wrap; gap:12px;">
       <div>
-        <div class="section-eyebrow" id="exploreEyebrow">Top bakeries</div>
+        <div class="section-eyebrow" id="exploreEyebrow">Top bakeries in</div>
         <h2 class="section-title" id="exploreTitle">Loading…</h2>
       </div>
-      <button class="btn-ghost" onclick="document.getElementById('exploreResults').style.display='none'; document.getElementById('exploreResultsSection').style.display='none';" style="font-size:0.85rem; color:var(--caramel);">← All cities</button>
+      <button class="btn-ghost" onclick="document.getElementById('exploreResults').style.display='none';" style="font-size:0.85rem; color:var(--caramel);">← All cities</button>
     </div>
 
-    <!-- Crumbz reviews banner (shown if city has Crumbz data) -->
-    <div id="exploreCrumbBanner" style="display:none; background:linear-gradient(135deg,var(--espresso),var(--espresso-mid)); border-radius:var(--radius); padding:14px 18px; margin-bottom:24px; display:flex; align-items:center; gap:12px; color:var(--parchment);">
+    <!-- Crumbz reviews banner -->
+    <div id="exploreCrumbBanner" style="display:none; background:linear-gradient(135deg,var(--espresso),var(--espresso-mid)); border-radius:var(--radius); padding:14px 18px; margin-bottom:24px; align-items:center; gap:12px; color:var(--parchment);">
       <span style="font-size:1.4rem;">🥐</span>
       <div>
         <div style="font-size:0.82rem; font-weight:600; color:var(--honey);" id="exploreCrumbBannerText"></div>
@@ -2673,8 +2745,6 @@ nav::before {
   </div>
 
 </div>
-
-<!-- ─── PEOPLE PAGE ──────────────────────────────────────────────────────────── -->
 <div class="page" id="page-people">
   <div class="section">
     <div class="section-header">
@@ -3254,6 +3324,7 @@ window.addEventListener('crumb-firebase-ready', () => {
     if (user) {
       await loadUserRole();
       await loadFollows();
+      loadBookmarks();
       loadNotifications();
     }
     updateNav();
@@ -3814,7 +3885,6 @@ function renderBakeries() {
 
   grid.innerHTML = bakeries.map(b => {
     const avg = (b.totalScore / b.items.length).toFixed(1);
-    const topItem = [...b.items].sort((x,y) => (y.communityAvg||y.overallRating||0) - (x.communityAvg||x.overallRating||0))[0];
     const myReviewCount = b.items.filter(i => i.userId === currentUser?.uid).length;
     const distBadge = bakeryViewMode === 'nearest' && userGeoCoords && b.lat
       ? `<span class="bakery-dist-badge">📍 ${distKmUser(b).toFixed(1)} km away</span>`
@@ -3822,8 +3892,12 @@ function renderBakeries() {
     const visitedBadge = myBakeryNames.has(b.name)
       ? `<span class="bakery-visited-badge">✓ ${myReviewCount} review${myReviewCount !== 1 ? 's' : ''} by you</span>`
       : '';
+    const bookmarkBtnHTML = currentUser
+      ? `<button class="bookmark-btn${isBookmarked(b.name) ? ' saved' : ''}" onclick="event.stopPropagation(); toggleBookmark('${escJS(b.name)}','${escJS(b.address||'')}',this)" title="Save bakery" style="position:absolute;top:12px;right:12px;">🔖</button>`
+      : '';
     return `
-      <div class="bakery-card" onclick="openBakeryProfile('${escJS(b.name)}')">
+      <div class="bakery-card" onclick="openBakeryProfile('${escJS(b.name)}')" style="position:relative;">
+        ${bookmarkBtnHTML}
         <div class="bakery-card-header">
           <div>
             <div class="bakery-card-name">${b.name}</div>
@@ -4004,6 +4078,7 @@ async function openProfileModal(uid, catFilter, locFilter) {
       <div class="profile-tab active" onclick="switchProfileTab('reviews','${uid}')">Reviews</div>
       <div class="profile-tab" onclick="switchProfileTab('followers','${uid}')">Followers</div>
       <div class="profile-tab" onclick="switchProfileTab('following','${uid}')">Following</div>
+      ${isOwnProfile ? `<div class="profile-tab" onclick="switchProfileTab('saved','${uid}')">🔖 Saved</div>` : ''}
     </div>
     <div class="profile-tab-content" id="profileTabContent">
       ${catFilterBar}${locFilterBar}
@@ -4020,15 +4095,20 @@ function closeProfileModal() {
 async function switchProfileTab(tab, uid) {
   // Update active tab
   document.querySelectorAll('.profile-tab').forEach(t => {
-    t.classList.toggle('active', t.textContent.toLowerCase() === tab);
+    const tabText = t.textContent.replace('🔖 ','').toLowerCase();
+    t.classList.toggle('active', tabText === tab);
   });
   const content = document.getElementById('profileTabContent');
   if (!content) return;
   content.innerHTML = '<div style="text-align:center;padding:32px;"><div class="spinner" style="margin:0 auto;"></div></div>';
 
   if (tab === 'reviews') {
-    // Re-open profile in reviews tab
     await openProfileModal(uid, '', '');
+    return;
+  }
+
+  if (tab === 'saved') {
+    await renderSavedTab(content);
     return;
   }
 
@@ -4196,6 +4276,7 @@ async function openBakeryProfile(bakeryName, catFilter) {
           ${b.address ? `<div class="bakery-profile-address">📍 ${b.address}</div>` : ''}
         </div>
         ${isOwner ? `<button class="btn-caramel" style="font-size:0.78rem;padding:7px 12px;white-space:nowrap;flex-shrink:0;" onclick="closeBakeryModal(); openBakeryEditModal('${escJS(bakeryName)}')">✏️ Edit page</button>` : ''}
+        ${currentUser ? `<button class="bookmark-btn${isBookmarked(bakeryName) ? ' saved' : ''}" id="bakeryModalBookmarkBtn" onclick="toggleBookmark('${escJS(bakeryName)}','${escJS(b.address||'')}',this)" title="${isBookmarked(bakeryName) ? 'Remove bookmark' : 'Save bakery'}">${isBookmarked(bakeryName) ? '🔖' : '🔖'}</button>` : ''}
       </div>
       ${socialHTML}
       <div class="bakery-profile-scores" style="margin-top:16px;">
@@ -5763,140 +5844,536 @@ function renderAdminBakeriesHTML() {
 }
 
 // ─── EXPLORE PAGE ─────────────────────────────────────────────────────────────
-const UK_CITIES = [
-  { name: 'London',      lat: 51.5074, lng: -0.1278 },
-  { name: 'Manchester',  lat: 53.4808, lng: -2.2426 },
-  { name: 'Birmingham',  lat: 52.4862, lng: -1.8904 },
-  { name: 'Edinburgh',   lat: 55.9533, lng: -3.1883 },
-  { name: 'Bristol',     lat: 51.4545, lng: -2.5879 },
-  { name: 'Leeds',       lat: 53.8008, lng: -1.5491 },
-  { name: 'Liverpool',   lat: 53.4084, lng: -2.9916 },
-  { name: 'Glasgow',     lat: 55.8642, lng: -4.2518 },
-  { name: 'Brighton',    lat: 50.8225, lng: -0.1372 },
-  { name: 'Oxford',      lat: 51.7520, lng: -1.2577 },
-  { name: 'Cambridge',   lat: 52.2053, lng: 0.1218  },
-  { name: 'Bath',        lat: 51.3781, lng: -2.3597 },
-  { name: 'York',        lat: 53.9600, lng: -1.0873 },
-  { name: 'Newcastle',   lat: 54.9783, lng: -1.6178 },
-  { name: 'Nottingham',  lat: 52.9548, lng: -1.1581 },
-  { name: 'Sheffield',   lat: 53.3811, lng: -1.4701 },
-  { name: 'Cardiff',     lat: 51.4816, lng: -3.1791 },
-  { name: 'Belfast',     lat: 54.5973, lng: -5.9301 },
-  { name: 'Norwich',     lat: 52.6309, lng: 1.2974  },
-  { name: 'Exeter',      lat: 50.7184, lng: -3.5339 },
-  { name: 'Chester',     lat: 53.1905, lng: -2.8910 },
-  { name: 'Cheltenham',  lat: 51.8994, lng: -2.0783 },
-  { name: 'Harrogate',   lat: 53.9921, lng: -1.5413 },
-  { name: 'Margate',     lat: 51.3813, lng: 1.3862  },
-  { name: 'Whitby',      lat: 54.4858, lng: -0.6206 },
-];
+// ─── EXPLORE: WORLD CITIES DATA ───────────────────────────────────────────────
+const EXPLORE_COUNTRIES = {
+  'United Kingdom': [
+    { name: 'London',        lat: 51.5074, lng: -0.1278 },
+    { name: 'Manchester',    lat: 53.4808, lng: -2.2426 },
+    { name: 'Birmingham',    lat: 52.4862, lng: -1.8904 },
+    { name: 'Edinburgh',     lat: 55.9533, lng: -3.1883 },
+    { name: 'Bristol',       lat: 51.4545, lng: -2.5879 },
+    { name: 'Leeds',         lat: 53.8008, lng: -1.5491 },
+    { name: 'Liverpool',     lat: 53.4084, lng: -2.9916 },
+    { name: 'Glasgow',       lat: 55.8642, lng: -4.2518 },
+    { name: 'Brighton',      lat: 50.8225, lng: -0.1372 },
+    { name: 'Oxford',        lat: 51.7520, lng: -1.2577 },
+    { name: 'Cambridge',     lat: 52.2053, lng: 0.1218  },
+    { name: 'Bath',          lat: 51.3781, lng: -2.3597 },
+    { name: 'York',          lat: 53.9600, lng: -1.0873 },
+    { name: 'Newcastle',     lat: 54.9783, lng: -1.6178 },
+    { name: 'Nottingham',    lat: 52.9548, lng: -1.1581 },
+    { name: 'Sheffield',     lat: 53.3811, lng: -1.4701 },
+    { name: 'Cardiff',       lat: 51.4816, lng: -3.1791 },
+    { name: 'Belfast',       lat: 54.5973, lng: -5.9301 },
+    { name: 'Norwich',       lat: 52.6309, lng: 1.2974  },
+    { name: 'Exeter',        lat: 50.7184, lng: -3.5339 },
+    { name: 'Chester',       lat: 53.1905, lng: -2.8910 },
+    { name: 'Cheltenham',    lat: 51.8994, lng: -2.0783 },
+    { name: 'Harrogate',     lat: 53.9921, lng: -1.5413 },
+    { name: 'Margate',       lat: 51.3813, lng: 1.3862  },
+    { name: 'Whitby',        lat: 54.4858, lng: -0.6206 },
+    { name: 'Salisbury',     lat: 51.0693, lng: -1.7942 },
+    { name: 'Inverness',     lat: 57.4778, lng: -4.2247 },
+    { name: 'Durham',        lat: 54.7753, lng: -1.5849 },
+    { name: 'Leicester',     lat: 52.6369, lng: -1.1398 },
+    { name: 'Southampton',   lat: 50.9097, lng: -1.4044 },
+    { name: 'Portsmouth',    lat: 50.8198, lng: -1.0880 },
+    { name: 'Reading',       lat: 51.4543, lng: -0.9781 },
+    { name: 'Coventry',      lat: 52.4068, lng: -1.5197 },
+    { name: 'Stoke-on-Trent',lat: 53.0027, lng: -2.1794 },
+    { name: 'Swansea',       lat: 51.6214, lng: -3.9436 },
+    { name: 'Aberdeen',      lat: 57.1497, lng: -2.0943 },
+    { name: 'Dundee',        lat: 56.4620, lng: -2.9707 },
+    { name: 'Perth',         lat: 56.3950, lng: -3.4310 },
+    { name: 'St Andrews',    lat: 56.3398, lng: -2.7967 },
+    { name: 'Stirling',      lat: 56.1165, lng: -3.9369 },
+    { name: 'Shrewsbury',    lat: 52.7078, lng: -2.7540 },
+    { name: 'Hereford',      lat: 52.0567, lng: -2.7160 },
+    { name: 'Worcester',     lat: 52.1920, lng: -2.2200 },
+    { name: 'Stratford-upon-Avon', lat: 52.1918, lng: -1.7083 },
+    { name: 'Ludlow',        lat: 52.3680, lng: -2.7166 },
+    { name: 'Padstow',       lat: 50.5387, lng: -4.9368 },
+    { name: 'St Ives',       lat: 50.2129, lng: -5.4804 },
+    { name: 'Whitstable',    lat: 51.3613, lng: 1.0261  },
+    { name: 'Rye',           lat: 50.9498, lng: 0.7312  },
+    { name: 'Ludlow',        lat: 52.3680, lng: -2.7166 },
+    { name: 'Hebden Bridge', lat: 53.7430, lng: -2.0118 },
+    { name: 'Totnes',        lat: 50.4319, lng: -3.6854 },
+    { name: 'Hay-on-Wye',    lat: 52.0726, lng: -3.1296 },
+    { name: 'Lewes',         lat: 50.8743, lng: 0.0116  },
+    { name: 'Frome',         lat: 51.2313, lng: -2.3248 },
+    { name: 'Bury St Edmunds',lat: 52.2467, lng: 0.7148 },
+    { name: 'Stamford',      lat: 52.6530, lng: -0.4810 },
+    { name: 'Ludlow',        lat: 52.3680, lng: -2.7166 },
+    { name: 'Skipton',       lat: 53.9620, lng: -2.0175 },
+    { name: 'Helmsley',      lat: 54.2468, lng: -1.0618 },
+    { name: 'Beverley',      lat: 53.8421, lng: -0.4310 },
+    { name: 'Ripon',         lat: 54.1386, lng: -1.5228 },
+    { name: 'Northallerton', lat: 54.3380, lng: -1.4340 },
+    { name: 'Malton',        lat: 54.1370, lng: -0.8020 },
+  ],
+  'France': [
+    { name: 'Paris',         lat: 48.8566, lng: 2.3522  },
+    { name: 'Lyon',          lat: 45.7640, lng: 4.8357  },
+    { name: 'Marseille',     lat: 43.2965, lng: 5.3698  },
+    { name: 'Bordeaux',      lat: 44.8378, lng: -0.5792 },
+    { name: 'Toulouse',      lat: 43.6047, lng: 1.4442  },
+    { name: 'Nice',          lat: 43.7102, lng: 7.2620  },
+    { name: 'Strasbourg',    lat: 48.5734, lng: 7.7521  },
+    { name: 'Nantes',        lat: 47.2184, lng: -1.5536 },
+    { name: 'Montpellier',   lat: 43.6108, lng: 3.8767  },
+    { name: 'Rennes',        lat: 48.1173, lng: -1.6778 },
+    { name: 'Lille',         lat: 50.6292, lng: 3.0573  },
+    { name: 'Grenoble',      lat: 45.1885, lng: 5.7245  },
+    { name: 'Dijon',         lat: 47.3220, lng: 5.0415  },
+    { name: 'Annecy',        lat: 45.8992, lng: 6.1294  },
+    { name: 'Brest',         lat: 48.3904, lng: -4.4861 },
+    { name: 'Rouen',         lat: 49.4432, lng: 1.0993  },
+    { name: 'Tours',         lat: 47.3941, lng: 0.6848  },
+    { name: 'Aix-en-Provence',lat: 43.5297, lng: 5.4474 },
+    { name: 'Cannes',        lat: 43.5528, lng: 7.0174  },
+    { name: 'Saint-Malo',    lat: 48.6493, lng: -2.0256 },
+    { name: 'Bayonne',       lat: 43.4929, lng: -1.4748 },
+    { name: 'Colmar',        lat: 48.0793, lng: 7.3585  },
+    { name: 'Périgueux',     lat: 45.1855, lng: 0.7203  },
+    { name: 'Épernay',       lat: 49.0400, lng: 3.9597  },
+    { name: 'Beaune',        lat: 47.0261, lng: 4.8384  },
+    { name: 'Cognac',        lat: 45.6956, lng: -0.3286 },
+  ],
+  'Spain': [
+    { name: 'Madrid',        lat: 40.4168, lng: -3.7038 },
+    { name: 'Barcelona',     lat: 41.3851, lng: 2.1734  },
+    { name: 'Seville',       lat: 37.3891, lng: -5.9845 },
+    { name: 'Valencia',      lat: 39.4699, lng: -0.3763 },
+    { name: 'Bilbao',        lat: 43.2627, lng: -2.9253 },
+    { name: 'Málaga',        lat: 36.7213, lng: -4.4214 },
+    { name: 'San Sebastián', lat: 43.3183, lng: -1.9812 },
+    { name: 'Granada',       lat: 37.1773, lng: -3.5986 },
+    { name: 'Salamanca',     lat: 40.9701, lng: -5.6635 },
+    { name: 'Palma',         lat: 39.5696, lng: 2.6502  },
+    { name: 'Zaragoza',      lat: 41.6561, lng: -0.8773 },
+    { name: 'Córdoba',       lat: 37.8882, lng: -4.7794 },
+    { name: 'Toledo',        lat: 39.8628, lng: -4.0273 },
+    { name: 'Pamplona',      lat: 42.8125, lng: -1.6458 },
+    { name: 'Alicante',      lat: 38.3452, lng: -0.4810 },
+    { name: 'Cádiz',         lat: 36.5271, lng: -6.2886 },
+    { name: 'Tarragona',     lat: 41.1189, lng: 1.2445  },
+    { name: 'Burgos',        lat: 42.3440, lng: -3.6970 },
+    { name: 'Segovia',       lat: 40.9429, lng: -4.1088 },
+    { name: 'Santiago de Compostela', lat: 42.8782, lng: -8.5448 },
+    { name: 'Estepona',      lat: 36.4271, lng: -5.1453 },
+    { name: 'Marbella',      lat: 36.5101, lng: -4.8825 },
+    { name: 'Ronda',         lat: 36.7468, lng: -5.1644 },
+  ],
+  'Italy': [
+    { name: 'Rome',          lat: 41.9028, lng: 12.4964 },
+    { name: 'Milan',         lat: 45.4642, lng: 9.1900  },
+    { name: 'Florence',      lat: 43.7696, lng: 11.2558 },
+    { name: 'Venice',        lat: 45.4408, lng: 12.3155 },
+    { name: 'Naples',        lat: 40.8518, lng: 14.2681 },
+    { name: 'Bologna',       lat: 44.4949, lng: 11.3426 },
+    { name: 'Turin',         lat: 45.0703, lng: 7.6869  },
+    { name: 'Palermo',       lat: 38.1157, lng: 13.3615 },
+    { name: 'Verona',        lat: 45.4384, lng: 10.9916 },
+    { name: 'Genoa',         lat: 44.4056, lng: 8.9463  },
+    { name: 'Siena',         lat: 43.3186, lng: 11.3307 },
+    { name: 'Pisa',          lat: 43.7228, lng: 10.4017 },
+    { name: 'Modena',        lat: 44.6471, lng: 10.9252 },
+    { name: 'Parma',         lat: 44.8015, lng: 10.3279 },
+    { name: 'Bari',          lat: 41.1171, lng: 16.8719 },
+    { name: 'Lecce',         lat: 40.3516, lng: 18.1750 },
+    { name: 'Amalfi',        lat: 40.6340, lng: 14.6027 },
+    { name: 'Catania',       lat: 37.5079, lng: 15.0830 },
+    { name: 'Trento',        lat: 46.0748, lng: 11.1217 },
+    { name: 'Trieste',       lat: 45.6495, lng: 13.7768 },
+    { name: 'Perugia',       lat: 43.1107, lng: 12.3908 },
+    { name: 'Lucca',         lat: 43.8430, lng: 10.5079 },
+    { name: 'Ravenna',       lat: 44.4184, lng: 12.2035 },
+    { name: 'Bergamo',       lat: 45.6983, lng: 9.6773  },
+    { name: 'Como',          lat: 45.8080, lng: 9.0852  },
+  ],
+  'Germany': [
+    { name: 'Berlin',        lat: 52.5200, lng: 13.4050 },
+    { name: 'Munich',        lat: 48.1351, lng: 11.5820 },
+    { name: 'Hamburg',       lat: 53.5753, lng: 10.0153 },
+    { name: 'Cologne',       lat: 50.9333, lng: 6.9500  },
+    { name: 'Frankfurt',     lat: 50.1109, lng: 8.6821  },
+    { name: 'Stuttgart',     lat: 48.7758, lng: 9.1829  },
+    { name: 'Düsseldorf',    lat: 51.2217, lng: 6.7762  },
+    { name: 'Leipzig',       lat: 51.3397, lng: 12.3731 },
+    { name: 'Dresden',       lat: 51.0504, lng: 13.7373 },
+    { name: 'Nuremberg',     lat: 49.4521, lng: 11.0767 },
+    { name: 'Bremen',        lat: 53.0793, lng: 8.8017  },
+    { name: 'Hanover',       lat: 52.3759, lng: 9.7320  },
+    { name: 'Freiburg',      lat: 47.9990, lng: 7.8421  },
+    { name: 'Heidelberg',    lat: 49.3988, lng: 8.6724  },
+    { name: 'Bonn',          lat: 50.7374, lng: 7.0982  },
+    { name: 'Münster',       lat: 51.9607, lng: 7.6261  },
+    { name: 'Regensburg',    lat: 49.0134, lng: 12.1016 },
+    { name: 'Bamberg',       lat: 49.8988, lng: 10.9028 },
+    { name: 'Lübeck',        lat: 53.8655, lng: 10.6866 },
+    { name: 'Erfurt',        lat: 50.9848, lng: 11.0299 },
+    { name: 'Weimar',        lat: 50.9795, lng: 11.3235 },
+    { name: 'Rothenburg ob der Tauber', lat: 49.3777, lng: 10.1794 },
+  ],
+  'Netherlands': [
+    { name: 'Amsterdam',     lat: 52.3676, lng: 4.9041  },
+    { name: 'Rotterdam',     lat: 51.9225, lng: 4.4792  },
+    { name: 'Utrecht',       lat: 52.0907, lng: 5.1214  },
+    { name: 'The Hague',     lat: 52.0705, lng: 4.3007  },
+    { name: 'Eindhoven',     lat: 51.4416, lng: 5.4697  },
+    { name: 'Groningen',     lat: 53.2194, lng: 6.5665  },
+    { name: 'Delft',         lat: 52.0116, lng: 4.3571  },
+    { name: 'Leiden',        lat: 52.1601, lng: 4.4970  },
+    { name: 'Haarlem',       lat: 52.3874, lng: 4.6462  },
+    { name: 'Maastricht',    lat: 50.8514, lng: 5.6910  },
+    { name: 'Nijmegen',      lat: 51.8426, lng: 5.8546  },
+    { name: 'Bruges',        lat: 51.2093, lng: 3.2247  },
+    { name: 'Middelburg',    lat: 51.4988, lng: 3.6136  },
+  ],
+  'Belgium': [
+    { name: 'Brussels',      lat: 50.8503, lng: 4.3517  },
+    { name: 'Bruges',        lat: 51.2093, lng: 3.2247  },
+    { name: 'Ghent',         lat: 51.0543, lng: 3.7174  },
+    { name: 'Antwerp',       lat: 51.2194, lng: 4.4025  },
+    { name: 'Liège',         lat: 50.6292, lng: 5.5797  },
+    { name: 'Leuven',        lat: 50.8798, lng: 4.7005  },
+    { name: 'Namur',         lat: 50.4669, lng: 4.8675  },
+    { name: 'Mons',          lat: 50.4542, lng: 3.9522  },
+    { name: 'Dinant',        lat: 50.2605, lng: 4.9121  },
+  ],
+  'Denmark': [
+    { name: 'Copenhagen',    lat: 55.6761, lng: 12.5683 },
+    { name: 'Aarhus',        lat: 56.1629, lng: 10.2039 },
+    { name: 'Odense',        lat: 55.4038, lng: 10.4024 },
+    { name: 'Aalborg',       lat: 57.0488, lng: 9.9217  },
+    { name: 'Esbjerg',       lat: 55.4764, lng: 8.4594  },
+    { name: 'Roskilde',      lat: 55.6415, lng: 12.0803 },
+    { name: 'Helsingør',     lat: 56.0361, lng: 12.6136 },
+  ],
+  'Sweden': [
+    { name: 'Stockholm',     lat: 59.3293, lng: 18.0686 },
+    { name: 'Gothenburg',    lat: 57.7089, lng: 11.9746 },
+    { name: 'Malmö',         lat: 55.6050, lng: 13.0038 },
+    { name: 'Uppsala',       lat: 59.8586, lng: 17.6389 },
+    { name: 'Lund',          lat: 55.7047, lng: 13.1910 },
+  ],
+  'Norway': [
+    { name: 'Oslo',          lat: 59.9139, lng: 10.7522 },
+    { name: 'Bergen',        lat: 60.3913, lng: 5.3221  },
+    { name: 'Trondheim',     lat: 63.4305, lng: 10.3951 },
+    { name: 'Stavanger',     lat: 58.9700, lng: 5.7331  },
+    { name: 'Tromsø',        lat: 69.6492, lng: 18.9553 },
+  ],
+  'Austria': [
+    { name: 'Vienna',        lat: 48.2082, lng: 16.3738 },
+    { name: 'Salzburg',      lat: 47.8095, lng: 13.0550 },
+    { name: 'Innsbruck',     lat: 47.2692, lng: 11.4041 },
+    { name: 'Graz',          lat: 47.0707, lng: 15.4395 },
+    { name: 'Hallstatt',     lat: 47.5622, lng: 13.6493 },
+  ],
+  'Switzerland': [
+    { name: 'Zurich',        lat: 47.3769, lng: 8.5417  },
+    { name: 'Geneva',        lat: 46.2044, lng: 6.1432  },
+    { name: 'Basel',         lat: 47.5596, lng: 7.5886  },
+    { name: 'Bern',          lat: 46.9481, lng: 7.4474  },
+    { name: 'Lucerne',       lat: 47.0502, lng: 8.3093  },
+    { name: 'Lausanne',      lat: 46.5197, lng: 6.6323  },
+    { name: 'Zermatt',       lat: 46.0207, lng: 7.7491  },
+  ],
+  'Portugal': [
+    { name: 'Lisbon',        lat: 38.7169, lng: -9.1395 },
+    { name: 'Porto',         lat: 41.1579, lng: -8.6291 },
+    { name: 'Braga',         lat: 41.5454, lng: -8.4265 },
+    { name: 'Coimbra',       lat: 40.2033, lng: -8.4103 },
+    { name: 'Évora',         lat: 38.5714, lng: -7.9130 },
+    { name: 'Sintra',        lat: 38.7978, lng: -9.3902 },
+    { name: 'Faro',          lat: 37.0194, lng: -7.9322 },
+    { name: 'Cascais',       lat: 38.6979, lng: -9.4215 },
+  ],
+  'Japan': [
+    { name: 'Tokyo',         lat: 35.6762, lng: 139.6503 },
+    { name: 'Osaka',         lat: 34.6937, lng: 135.5023 },
+    { name: 'Kyoto',         lat: 35.0116, lng: 135.7681 },
+    { name: 'Fukuoka',       lat: 33.5904, lng: 130.4017 },
+    { name: 'Sapporo',       lat: 43.0618, lng: 141.3545 },
+    { name: 'Nagoya',        lat: 35.1815, lng: 136.9066 },
+    { name: 'Hiroshima',     lat: 34.3853, lng: 132.4553 },
+    { name: 'Nara',          lat: 34.6851, lng: 135.8048 },
+    { name: 'Kamakura',      lat: 35.3197, lng: 139.5467 },
+  ],
+  'United States': [
+    { name: 'New York',      lat: 40.7128, lng: -74.0060 },
+    { name: 'Los Angeles',   lat: 34.0522, lng: -118.2437 },
+    { name: 'Chicago',       lat: 41.8781, lng: -87.6298 },
+    { name: 'San Francisco', lat: 37.7749, lng: -122.4194 },
+    { name: 'Portland',      lat: 45.5051, lng: -122.6750 },
+    { name: 'Seattle',       lat: 47.6062, lng: -122.3321 },
+    { name: 'Boston',        lat: 42.3601, lng: -71.0589 },
+    { name: 'Austin',        lat: 30.2672, lng: -97.7431 },
+    { name: 'Nashville',     lat: 36.1627, lng: -86.7816 },
+    { name: 'Denver',        lat: 39.7392, lng: -104.9903 },
+    { name: 'Miami',         lat: 25.7617, lng: -80.1918 },
+    { name: 'New Orleans',   lat: 29.9511, lng: -90.0715 },
+    { name: 'Washington DC', lat: 38.9072, lng: -77.0369 },
+    { name: 'Philadelphia',  lat: 39.9526, lng: -75.1652 },
+    { name: 'Atlanta',       lat: 33.7490, lng: -84.3880 },
+    { name: 'Minneapolis',   lat: 44.9778, lng: -93.2650 },
+    { name: 'Pittsburgh',    lat: 40.4406, lng: -79.9959 },
+    { name: 'Charleston',    lat: 32.7765, lng: -79.9311 },
+    { name: 'Savannah',      lat: 32.0835, lng: -81.0998 },
+    { name: 'San Diego',     lat: 32.7157, lng: -117.1611 },
+    { name: 'Phoenix',       lat: 33.4484, lng: -112.0740 },
+    { name: 'Houston',       lat: 29.7604, lng: -95.3698 },
+    { name: 'Detroit',       lat: 42.3314, lng: -83.0458 },
+    { name: 'Kansas City',   lat: 39.0997, lng: -94.5786 },
+    { name: 'Salt Lake City',lat: 40.7608, lng: -111.8910 },
+    { name: 'Burlington',    lat: 44.4759, lng: -73.2121 },
+  ],
+  'Canada': [
+    { name: 'Toronto',       lat: 43.6532, lng: -79.3832 },
+    { name: 'Vancouver',     lat: 49.2827, lng: -123.1207 },
+    { name: 'Montreal',      lat: 45.5017, lng: -73.5673 },
+    { name: 'Calgary',       lat: 51.0447, lng: -114.0719 },
+    { name: 'Ottawa',        lat: 45.4215, lng: -75.6972 },
+    { name: 'Quebec City',   lat: 46.8139, lng: -71.2080 },
+    { name: 'Halifax',       lat: 44.6488, lng: -63.5752 },
+    { name: 'Victoria',      lat: 48.4284, lng: -123.3656 },
+  ],
+  'Australia': [
+    { name: 'Melbourne',     lat: -37.8136, lng: 144.9631 },
+    { name: 'Sydney',        lat: -33.8688, lng: 151.2093 },
+    { name: 'Brisbane',      lat: -27.4698, lng: 153.0251 },
+    { name: 'Adelaide',      lat: -34.9285, lng: 138.6007 },
+    { name: 'Perth',         lat: -31.9505, lng: 115.8605 },
+    { name: 'Hobart',        lat: -42.8821, lng: 147.3272 },
+    { name: 'Canberra',      lat: -35.2809, lng: 149.1300 },
+    { name: 'Gold Coast',    lat: -28.0167, lng: 153.4000 },
+    { name: 'Byron Bay',     lat: -28.6474, lng: 153.6020 },
+    { name: 'Fremantle',     lat: -32.0569, lng: 115.7439 },
+  ],
+  'New Zealand': [
+    { name: 'Auckland',      lat: -36.8509, lng: 174.7645 },
+    { name: 'Wellington',    lat: -41.2865, lng: 174.7762 },
+    { name: 'Christchurch',  lat: -43.5321, lng: 172.6362 },
+    { name: 'Queenstown',    lat: -45.0312, lng: 168.6626 },
+    { name: 'Dunedin',       lat: -45.8788, lng: 170.5028 },
+  ],
+};
 
-let exploreCache = {}; // city name -> results
+// Flatten all cities for geo lookup
+const ALL_CITIES = Object.entries(EXPLORE_COUNTRIES).flatMap(([country, cities]) =>
+  cities.map(c => ({ ...c, country }))
+);
+
+// Legacy alias
+const UK_CITIES = EXPLORE_COUNTRIES['United Kingdom'];
+
+let exploreCache = {};
 let exploreActiveCity = null;
+let exploreActiveCountry = 'United Kingdom';
+let exploreSortMode = 'top';
+let exploreNearestCity = null;
 
-function getCrumbBakeriesNearCity(city) {
-  // Find bakeries within ~20km of city centre
+// ─── EXPLORE: DROPDOWNS ───────────────────────────────────────────────────────
+function populateExploreCountryDropdown(selectedCountry) {
+  const sel = document.getElementById('exploreCountrySelect');
+  if (!sel) return;
+  sel.innerHTML = Object.keys(EXPLORE_COUNTRIES).sort().map(c =>
+    `<option value="${c}" ${c === selectedCountry ? 'selected' : ''}>${c}</option>`
+  ).join('');
+}
+
+function populateExploreCityDropdown(country, selectedCity) {
+  const sel = document.getElementById('exploreCitySelect');
+  if (!sel) return;
+  const cities = (EXPLORE_COUNTRIES[country] || []).slice().sort((a,b) => a.name.localeCompare(b.name));
+  const nearestName = exploreNearestCity?.country === country ? exploreNearestCity?.name : null;
+  sel.innerHTML = `<option value="">Select a city…</option>` +
+    cities.map(c => {
+      const label = c.name === nearestName ? `📍 ${c.name} (nearest)` : c.name;
+      return `<option value="${c.name}" ${c.name === selectedCity ? 'selected' : ''}>${label}</option>`;
+    }).join('');
+}
+
+function onExploreCountryChange() {
+  exploreActiveCountry = document.getElementById('exploreCountrySelect').value;
+  exploreActiveCity = null;
+  document.getElementById('exploreResults').style.display = 'none';
+  populateExploreCityDropdown(exploreActiveCountry, null);
+}
+
+function onExploreCityChange() {
+  const city = document.getElementById('exploreCitySelect').value;
+  if (city) selectExploreCity(city);
+}
+
+function onExploreSortChange() {
+  exploreSortMode = document.getElementById('exploreSortSelect').value;
+  if (exploreActiveCity) selectExploreCity(exploreActiveCity);
+}
+
+// ─── EXPLORE: GEO DETECTION ───────────────────────────────────────────────────
+async function detectExploreLocation() {
+  populateExploreCountryDropdown('United Kingdom');
+  populateExploreCityDropdown('United Kingdom', null);
+
+  if (!navigator.geolocation) return;
+
+  document.getElementById('exploreCountrySelect').innerHTML = '<option>🌍 Detecting location…</option>';
+
+  navigator.geolocation.getCurrentPosition(pos => {
+    const { latitude, longitude } = pos.coords;
+
+    let nearest = null, nearestDist = Infinity;
+    ALL_CITIES.forEach(city => {
+      const d = distKm(latitude, longitude, city.lat, city.lng);
+      if (d < nearestDist) { nearestDist = d; nearest = city; }
+    });
+
+    exploreNearestCity = nearest;
+    exploreActiveCountry = nearest?.country || 'United Kingdom';
+
+    populateExploreCountryDropdown(exploreActiveCountry);
+    populateExploreCityDropdown(exploreActiveCountry, nearest?.name);
+
+    if (nearest) {
+      document.getElementById('exploreCitySelect').value = nearest.name;
+      selectExploreCity(nearest.name, true);
+    }
+  }, () => {
+    populateExploreCountryDropdown('United Kingdom');
+    populateExploreCityDropdown('United Kingdom', null);
+  }, { timeout: 6000 });
+}
+
+function renderExploreCityGrid() {
+  // No-op — city grid replaced by dropdown; kept for compatibility
+}
+
+function initExplorePage() {
+  populateExploreCountryDropdown(exploreActiveCountry);
+  populateExploreCityDropdown(exploreActiveCountry, exploreActiveCity);
+  if (exploreActiveCity) {
+    document.getElementById('exploreCitySelect').value = exploreActiveCity;
+    document.getElementById('exploreResults').style.display = 'block';
+  }
+  detectExploreLocation();
+}
+
+// ─── EXPLORE: TRENDING LOGIC ──────────────────────────────────────────────────
+function getTrendingBakeriesNearCity(city) {
+  const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const results = {};
-  allItems.forEach(item => {
-    if (!item.bakeryName || !item.bakeryLat) return;
-    const dist = distKm(city.lat, city.lng, item.bakeryLat, item.bakeryLng);
-    if (dist > 20) return;
-    const key = item.bakeryName;
-    if (!results[key]) results[key] = { name: key, address: item.bakeryAddress || '', lat: item.bakeryLat, lng: item.bakeryLng, items: [], totalScore: 0, dist };
-    results[key].items.push(item);
-    results[key].totalScore += (item.communityAvg || item.overallRating || 0);
-  });
 
-  // Also include bakeries whose name fuzzy-matches city (manual entry without lat/lng)
-  const cityLower = city.name.toLowerCase();
   allItems.forEach(item => {
-    if (!item.bakeryName || item.bakeryLat) return; // skip if already has coords
-    const addr = (item.bakeryAddress || '').toLowerCase();
-    if (!addr.includes(cityLower)) return;
-    const key = item.bakeryName;
-    if (!results[key]) results[key] = { name: key, address: item.bakeryAddress || '', items: [], totalScore: 0, dist: 0 };
+    const ts = item.createdAt?.toDate ? item.createdAt.toDate() : (item.createdAt ? new Date(item.createdAt) : null);
+    if (!ts || ts < cutoff) return;
+
+    let nearCity = false;
+    if (item.bakeryLat) {
+      nearCity = distKm(city.lat, city.lng, item.bakeryLat, item.bakeryLng) <= 20;
+    } else {
+      nearCity = (item.bakeryAddress || '').toLowerCase().includes(city.name.toLowerCase());
+    }
+    if (!nearCity) return;
+
+    const key = item.bakeryName || 'Unknown';
+    if (!results[key]) results[key] = { name: key, address: item.bakeryAddress || '', lat: item.bakeryLat, lng: item.bakeryLng, items: [], totalScore: 0, recentCount: 0 };
     results[key].items.push(item);
     results[key].totalScore += (item.communityAvg || item.overallRating || 0);
+    results[key].recentCount++;
   });
 
   return Object.values(results)
     .map(b => ({
       ...b,
-      communityAvg: b.items.length ? (b.totalScore / b.items.length) : 0,
+      communityAvg: b.items.length ? b.totalScore / b.items.length : 0,
       topItem: [...b.items].sort((a,b) => (b.communityAvg||b.overallRating||0) - (a.communityAvg||a.overallRating||0))[0]
     }))
+    .sort((a, b) => b.recentCount - a.recentCount || b.communityAvg - a.communityAvg);
+}
+
+function getCrumbBakeriesNearCity(city) {
+  const results = {};
+  allItems.forEach(item => {
+    if (!item.bakeryName) return;
+    let nearCity = false;
+    if (item.bakeryLat) {
+      nearCity = distKm(city.lat, city.lng, item.bakeryLat, item.bakeryLng) <= 20;
+    } else {
+      nearCity = (item.bakeryAddress || '').toLowerCase().includes(city.name.toLowerCase());
+    }
+    if (!nearCity) return;
+    const key = item.bakeryName;
+    if (!results[key]) results[key] = { name: key, address: item.bakeryAddress || '', lat: item.bakeryLat, lng: item.bakeryLng, items: [], totalScore: 0, dist: item.bakeryLat ? distKm(city.lat, city.lng, item.bakeryLat, item.bakeryLng) : 0 };
+    results[key].items.push(item);
+    results[key].totalScore += (item.communityAvg || item.overallRating || 0);
+  });
+  return Object.values(results)
+    .map(b => ({ ...b, communityAvg: b.items.length ? b.totalScore / b.items.length : 0, topItem: [...b.items].sort((a,b) => (b.communityAvg||b.overallRating||0) - (a.communityAvg||a.overallRating||0))[0] }))
     .sort((a,b) => b.communityAvg - a.communityAvg);
 }
 
-function initExplorePage() {
-  const grid = document.getElementById('cityGrid');
-  if (!grid) return;
-
-  // Figure out which cities have Crumbz reviews
-  const citiesWithCrumb = new Set();
-  UK_CITIES.forEach(city => {
-    const crumb = getCrumbBakeriesNearCity(city);
-    if (crumb.length > 0) citiesWithCrumb.add(city.name);
-  });
-
-  grid.innerHTML = UK_CITIES.map(city => {
-    const hasCrumb = citiesWithCrumb.has(city.name);
-    return `<button class="city-chip${hasCrumb ? ' has-crumb' : ''}${exploreActiveCity === city.name ? ' active' : ''}"
-      onclick="selectExploreCity('${city.name}')">${city.name}</button>`;
-  }).join('');
-
-  // If a city was previously selected, re-show it
-  if (exploreActiveCity) {
-    document.getElementById('exploreResults').style.display = 'block';
-  }
-}
-
-async function selectExploreCity(cityName) {
+async function selectExploreCity(cityName, isAutoDetected = false) {
   exploreActiveCity = cityName;
-  const city = UK_CITIES.find(c => c.name === cityName);
+
+  // Look up city across all countries (active country first)
+  const countryCities = EXPLORE_COUNTRIES[exploreActiveCountry] || [];
+  const city = countryCities.find(c => c.name === cityName) || ALL_CITIES.find(c => c.name === cityName);
   if (!city) return;
 
-  // Update active chip
+  // Update chips
   document.querySelectorAll('.city-chip').forEach(c => {
-    c.classList.toggle('active', c.textContent.replace(' 🥐','').trim() === cityName);
+    const chipName = c.textContent.replace('📍 ','').replace(' 🥐','').trim();
+    c.classList.toggle('active', chipName === cityName);
   });
 
-  // Show results section
   const resultsEl = document.getElementById('exploreResults');
   resultsEl.style.display = 'block';
-  document.getElementById('exploreEyebrow').textContent = 'Top bakeries in';
-  document.getElementById('exploreTitle').textContent = cityName;
-  document.getElementById('exploreBakeryList').innerHTML = '<div style="text-align:center;padding:40px;"><div class="spinner" style="margin:0 auto;"></div></div>';
 
-  // Scroll to results
+  const eyebrow = exploreSortMode === 'trending' ? '🔥 Trending bakeries in' : '⭐ Top bakeries in';
+  const nearestLabel = isAutoDetected ? ' (nearest to you)' : '';
+  document.getElementById('exploreEyebrow').textContent = eyebrow;
+  document.getElementById('exploreTitle').textContent = cityName + nearestLabel;
+  document.getElementById('exploreBakeryList').innerHTML = '<div style="text-align:center;padding:40px;"><div class="spinner" style="margin:0 auto;"></div></div>';
   resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-  // Check Crumbz data first
-  const crumbBakeries = getCrumbBakeriesNearCity(city);
+  // Get Crumbz data
+  const crumbBakeries = exploreSortMode === 'trending'
+    ? getTrendingBakeriesNearCity(city)
+    : getCrumbBakeriesNearCity(city);
+
   const crumbBanner = document.getElementById('exploreCrumbBanner');
   const crumbBannerText = document.getElementById('exploreCrumbBannerText');
-
   if (crumbBakeries.length > 0) {
     crumbBanner.style.display = 'flex';
-    crumbBannerText.textContent = `${crumbBakeries.length} bakeri${crumbBakeries.length !== 1 ? 'es' : 'y'} reviewed by the Crumbz community in ${cityName}`;
+    crumbBannerText.textContent = exploreSortMode === 'trending'
+      ? `${crumbBakeries.length} bakeries active in ${cityName} in the last 30 days`
+      : `${crumbBakeries.length} bakeries reviewed by the Crumbz community in ${cityName}`;
   } else {
     crumbBanner.style.display = 'none';
   }
 
-  // Fetch Google Places data (with cache)
+  // Google Places (only for top rated; trending shows Crumbz-only)
   let googleResults = [];
-  if (exploreCache[cityName]) {
-    googleResults = exploreCache[cityName];
-    renderExploreResults(city, crumbBakeries, googleResults);
-  } else {
-    try {
-      googleResults = await fetchGoogleBakeries(city);
-      exploreCache[cityName] = googleResults;
-    } catch(e) {
-      console.log('Google Places error:', e);
+  let googleFailed = false;
+  if (exploreSortMode === 'top') {
+    const cacheKey = cityName;
+    if (exploreCache[cacheKey]) {
+      googleResults = exploreCache[cacheKey];
+    } else {
+      try {
+        googleResults = await fetchGoogleBakeries(city);
+        exploreCache[cacheKey] = googleResults;
+      } catch(e) {
+        console.warn('Google Places error:', e);
+        googleFailed = true;
+      }
     }
-    renderExploreResults(city, crumbBakeries, googleResults);
   }
+
+  renderExploreResults(city, crumbBakeries, googleResults, googleFailed);
 }
 
 async function fetchGoogleBakeries(city) {
@@ -5909,7 +6386,7 @@ async function fetchGoogleBakeries(city) {
       'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.location,places.websiteUri,places.regularOpeningHours'
     },
     body: JSON.stringify({
-      textQuery: `bakery cafe patisserie in ${city.name} UK`,
+      textQuery: `bakery cafe patisserie in ${city.name} ${city.country || ''}`,
       locationBias: {
         circle: { center: { latitude: city.lat, longitude: city.lng }, radius: 8000 }
       },
@@ -5991,7 +6468,10 @@ function renderExploreResults(city, crumbBakeries, googleResults) {
                 <span style="font-size:0.75rem;color:var(--text-muted);">${b.items.length} review${b.items.length !== 1 ? 's' : ''}</span>
               </div>
             </div>
-            <button class="admin-btn primary" onclick="openBakeryProfile('${escJS(b.name)}')" style="flex-shrink:0;font-size:0.78rem;">View →</button>
+            <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+              ${currentUser ? `<button class="bookmark-btn${isBookmarked(b.name) ? ' saved' : ''}" onclick="event.stopPropagation(); toggleBookmark('${escJS(b.name)}','${escJS(b.address||'')}',this)" title="Save bakery">🔖</button>` : ''}
+              <button class="admin-btn primary" onclick="openBakeryProfile('${escJS(b.name)}')" style="font-size:0.78rem;">View →</button>
+            </div>
           </div>
           ${topItemHTML}
         </div>`;
@@ -6011,7 +6491,10 @@ function renderExploreResults(city, crumbBakeries, googleResults) {
                 <span style="font-size:0.75rem;color:var(--text-muted);">${b.googleReviews?.toLocaleString() || '?'} reviews</span>
               </div>
             </div>
-            <a href="${mapsUrl}" target="_blank" rel="noopener" class="admin-btn" style="flex-shrink:0;font-size:0.78rem;text-decoration:none;">Maps ↗</a>
+            <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+              ${currentUser ? `<button class="bookmark-btn${isBookmarked(b.name) ? ' saved' : ''}" onclick="event.stopPropagation(); toggleBookmark('${escJS(b.name)}','${escJS(b.address||'')}',this)" title="Save bakery">🔖</button>` : ''}
+              <a href="${mapsUrl}" target="_blank" rel="noopener" class="admin-btn" style="font-size:0.78rem;text-decoration:none;">Maps ↗</a>
+            </div>
           </div>
           <div class="explore-no-crumb">
             <span>Not yet reviewed on Crumbz</span>
@@ -6943,6 +7426,91 @@ document.getElementById('featureRequestModal').addEventListener('click', e => {
   if (e.target === document.getElementById('featureRequestModal')) closeFeatureRequestModal();
 });
 
+// ─── BOOKMARKS ────────────────────────────────────────────────────────────────
+let userBookmarks = {}; // bakeryName -> { id, address }
+
+async function loadBookmarks() {
+  if (!currentUser || !fb) return;
+  const { db, collection, query, where, getDocs } = fb;
+  try {
+    const snap = await getDocs(query(collection(db, 'bookmarks'), where('userId', '==', currentUser.uid)));
+    userBookmarks = {};
+    snap.docs.forEach(d => {
+      const data = d.data();
+      userBookmarks[data.bakeryName] = { id: d.id, address: data.address || '' };
+    });
+  } catch(e) { console.warn('Bookmarks load error:', e); }
+}
+
+function isBookmarked(bakeryName) {
+  return !!userBookmarks[bakeryName];
+}
+
+async function toggleBookmark(bakeryName, address, btnEl) {
+  if (!currentUser) { openAuthModal(); return; }
+  if (!fb) return;
+  const { db, collection, addDoc, doc, deleteDoc, serverTimestamp } = fb;
+
+  const already = userBookmarks[bakeryName];
+  if (already) {
+    // Remove
+    try {
+      await deleteDoc(doc(db, 'bookmarks', already.id));
+      delete userBookmarks[bakeryName];
+      if (btnEl) { btnEl.classList.remove('saved'); btnEl.title = 'Save bakery'; }
+      showToast('Bookmark removed');
+    } catch(e) { showToast('Could not remove bookmark'); }
+  } else {
+    // Add
+    try {
+      const docRef = await addDoc(collection(db, 'bookmarks'), {
+        userId: currentUser.uid,
+        bakeryName,
+        address: address || '',
+        createdAt: serverTimestamp()
+      });
+      userBookmarks[bakeryName] = { id: docRef.id, address };
+      if (btnEl) { btnEl.classList.add('saved'); btnEl.title = 'Remove bookmark'; }
+      showToast('🔖 Bakery saved!');
+    } catch(e) { showToast('Could not save bookmark'); console.error(e); }
+  }
+}
+
+async function renderSavedTab(container) {
+  if (!currentUser) {
+    container.innerHTML = '<div class="empty-state" style="padding:32px 0;"><div class="empty-state-icon">🔖</div><div class="empty-state-title">Sign in to see saved bakeries</div></div>';
+    return;
+  }
+  await loadBookmarks();
+  const saved = Object.entries(userBookmarks);
+  if (!saved.length) {
+    container.innerHTML = `
+      <div class="empty-state" style="padding:32px 0;">
+        <div class="empty-state-icon">🔖</div>
+        <div class="empty-state-title">No saved bakeries yet</div>
+        <div class="empty-state-text">Tap the 🔖 on any bakery to save it for later</div>
+      </div>`;
+    return;
+  }
+  container.innerHTML = `
+    <div style="margin-bottom:12px;font-size:0.82rem;color:var(--text-muted);">${saved.length} saved baker${saved.length !== 1 ? 'ies' : 'y'}</div>
+    <div>${saved.map(([name, data]) => {
+      const hasReviews = !!allBakeries[name];
+      return `
+        <div class="bookmark-card">
+          <div class="bookmark-card-icon">🏪</div>
+          <div class="bookmark-card-body">
+            <div class="bookmark-card-name">${name}</div>
+            ${data.address ? `<div class="bookmark-card-address">📍 ${data.address}</div>` : ''}
+          </div>
+          <div class="bookmark-card-actions">
+            ${hasReviews ? `<button class="admin-btn primary" style="font-size:0.75rem;" onclick="closeProfileModal(); openBakeryProfile('${escJS(name)}')">View →</button>` : ''}
+            <button class="admin-btn" style="font-size:0.75rem;color:#e74c3c;" onclick="toggleBookmark('${escJS(name)}','${escJS(data.address)}',null).then(()=>switchProfileTab('saved','${currentUser.uid}'))">Remove</button>
+          </div>
+        </div>`;
+    }).join('')}</div>`;
+}
+
 // ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
 let notifLastSeen = null; // timestamp of last time user opened panel
 let notifItems = [];      // cached notification objects
@@ -7218,10 +7786,14 @@ function renderAdminUsers() {
 
     const spacer = document.getElementById('statusBarSpacer');
     const nav = document.getElementById('mainNav');
+    const mobileMenu = document.querySelector('.mobile-menu');
     if (spacer && statusHeight > 0) {
       spacer.style.height = statusHeight + 'px';
       if (nav) nav.style.marginTop = statusHeight + 'px';
     }
+    // Always keep mobile menu anchored just below nav
+    const navHeight = (nav ? nav.offsetHeight : 60) + statusHeight;
+    if (mobileMenu) mobileMenu.style.top = (navHeight + 4) + 'px';
   }
 
   if (document.readyState === 'loading') {
