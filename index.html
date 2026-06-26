@@ -118,17 +118,30 @@ body.scroll-locked {
 nav {
   background: var(--espresso);
   padding: 0 12px;
-  padding-top: env(safe-area-inset-top);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: calc(60px + env(safe-area-inset-top));
+  height: 60px;
   position: sticky;
   top: 0;
   z-index: 100;
   box-shadow: 0 2px 16px rgba(44,24,16,0.3);
   gap: 6px;
   overflow: hidden;
+}
+
+/* iOS status bar spacer — pushes nav below the clock/wifi bar on mobile */
+nav::before {
+  content: '';
+  display: block;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: env(safe-area-inset-top, 20px);
+  background: var(--espresso);
+  z-index: 101;
+  pointer-events: none;
 }
 .nav-logo {
   font-family: 'Playfair Display', serif;
@@ -2049,7 +2062,8 @@ nav {
 
 
 <!-- ─── NAV ──────────────────────────────────────────────────────────────────── -->
-<nav>
+<div id="statusBarSpacer" style="height:0px;background:#2c1810;position:fixed;top:0;left:0;right:0;z-index:102;pointer-events:none;transition:height 0.1s;"></div>
+<nav style="margin-top:0px;" id="mainNav">
   <div class="nav-logo" onclick="showPage('home')">
     Crumbz
     <span>Rate every bite</span>
@@ -7180,6 +7194,44 @@ function renderAdminUsers() {
 </script>
 
 <script>
+// ─── MOBILE STATUS BAR FIX ────────────────────────────────────────────────────
+(function() {
+  function applyStatusBarHeight() {
+    // Try CSS env() first
+    const testEl = document.createElement('div');
+    testEl.style.cssText = 'position:fixed;top:env(safe-area-inset-top,0px);height:0;pointer-events:none;';
+    document.body.appendChild(testEl);
+    const envHeight = testEl.getBoundingClientRect().top;
+    document.body.removeChild(testEl);
+
+    // On iOS Safari in browser (not PWA), window.screen.height - window.innerHeight
+    // gives us the chrome height but not just status bar. Use a fixed fallback instead.
+    let statusHeight = 0;
+    if (envHeight > 0) {
+      statusHeight = envHeight;
+    } else if (/iphone|ipad|ipod/i.test(navigator.userAgent)) {
+      // iPhone with notch/Dynamic Island: ~47-59px, older: ~20px
+      // Use visualViewport offset as a proxy
+      statusHeight = window.visualViewport ? Math.round(window.visualViewport.offsetTop) : 20;
+      if (statusHeight < 1) statusHeight = 20; // minimum fallback for all iPhones
+    }
+
+    const spacer = document.getElementById('statusBarSpacer');
+    const nav = document.getElementById('mainNav');
+    if (spacer && statusHeight > 0) {
+      spacer.style.height = statusHeight + 'px';
+      if (nav) nav.style.marginTop = statusHeight + 'px';
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', applyStatusBarHeight);
+  } else {
+    applyStatusBarHeight();
+  }
+  window.addEventListener('resize', applyStatusBarHeight);
+})();
+
 // ─── PWA INSTALL ──────────────────────────────────────────────────────────────
 let deferredInstallPrompt = null;
 const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
