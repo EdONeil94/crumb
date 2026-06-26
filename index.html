@@ -3613,9 +3613,15 @@ async function loadData() {
   if (!fb) return;
   const { db, collection, getDocs, query, orderBy, limit } = fb;
   try {
-    const q = query(collection(db, 'items'), orderBy('createdAt', 'desc'));
+    const q = query(collection(db, 'items'));
     const snap = await getDocs(q);
-    allItems = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    allItems = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => {
+        const ta = a.createdAt?.toMillis?.() || a.createdAt?.seconds || 0;
+        const tb = b.createdAt?.toMillis?.() || b.createdAt?.seconds || 0;
+        return tb - ta;
+      });
     renderRecentGrid();
     updateStats();
   } catch (e) {
@@ -4652,6 +4658,8 @@ function getLbFilters() {
     minRating: parseFloat(document.getElementById('lbRatingFilter')?.value || '0') || 0
   };
 }
+
+function switchLbTab(btn, tab) {
   document.querySelectorAll('#lbItemTabs .lb-tab').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
   lbCurrentTab = tab;
@@ -8063,33 +8071,31 @@ function renderAdminUsers() {
 // ─── MOBILE STATUS BAR FIX ────────────────────────────────────────────────────
 (function() {
   function applyStatusBarHeight() {
-    // Try CSS env() first
+    // Only apply on iOS devices — desktop and Android don't need this
+    if (!/iphone|ipad|ipod/i.test(navigator.userAgent)) return;
+
+    let statusHeight = 0;
     const testEl = document.createElement('div');
-    testEl.style.cssText = 'position:fixed;top:env(safe-area-inset-top,0px);height:0;pointer-events:none;';
+    testEl.style.cssText = 'position:fixed;top:env(safe-area-inset-top,0px);height:0;pointer-events:none;visibility:hidden;';
     document.body.appendChild(testEl);
     const envHeight = testEl.getBoundingClientRect().top;
     document.body.removeChild(testEl);
 
-    // On iOS Safari in browser (not PWA), window.screen.height - window.innerHeight
-    // gives us the chrome height but not just status bar. Use a fixed fallback instead.
-    let statusHeight = 0;
     if (envHeight > 0) {
       statusHeight = envHeight;
-    } else if (/iphone|ipad|ipod/i.test(navigator.userAgent)) {
-      // iPhone with notch/Dynamic Island: ~47-59px, older: ~20px
-      // Use visualViewport offset as a proxy
-      statusHeight = window.visualViewport ? Math.round(window.visualViewport.offsetTop) : 20;
-      if (statusHeight < 1) statusHeight = 20; // minimum fallback for all iPhones
+    } else if (window.visualViewport) {
+      statusHeight = Math.round(window.visualViewport.offsetTop) || 20;
+    } else {
+      statusHeight = 20;
     }
 
     const spacer = document.getElementById('statusBarSpacer');
     const nav = document.getElementById('mainNav');
     const mobileMenu = document.querySelector('.mobile-menu');
-    if (spacer && statusHeight > 0) {
-      spacer.style.height = statusHeight + 'px';
+    if (statusHeight > 0) {
+      if (spacer) spacer.style.height = statusHeight + 'px';
       if (nav) nav.style.marginTop = statusHeight + 'px';
     }
-    // Always keep mobile menu anchored just below nav
     const navHeight = (nav ? nav.offsetHeight : 60) + statusHeight;
     if (mobileMenu) mobileMenu.style.top = (navHeight + 4) + 'px';
   }
