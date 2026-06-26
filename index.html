@@ -7,6 +7,7 @@
 <!-- PWA meta — manifest and SW active on Firebase Hosting only -->
 <!-- <link rel="manifest" href="manifest.json"> -->
 <meta name="theme-color" content="#2c1810">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Crumbz">
@@ -8153,7 +8154,13 @@ if (isInStandaloneMode) {
   if (btn) btn.style.display = 'none';
 }
 
-if ('serviceWorker' in navigator && location.hostname !== 'bitbucket.org' && !location.hostname.includes('localhost')) {
+const isFirebaseHosting = location.hostname.endsWith('.web.app') ||
+  location.hostname.endsWith('.firebaseapp.com') ||
+  (!location.hostname.includes('bitbucket') &&
+   !location.hostname.includes('localhost') &&
+   !location.hostname.includes('127.0.0.1') &&
+   !location.hostname.includes('claude.ai'));
+if ('serviceWorker' in navigator && isFirebaseHosting) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   });
