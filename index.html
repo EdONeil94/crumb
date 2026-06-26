@@ -3,7 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Crumbz — Rate Every Bite</title>
 
 <!-- PWA meta — manifest and SW active on Firebase Hosting only -->
 <!-- <link rel="manifest" href="manifest.json"> -->
@@ -119,10 +118,11 @@ body.scroll-locked {
 nav {
   background: var(--espresso);
   padding: 0 12px;
+  padding-top: env(safe-area-inset-top);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 60px;
+  height: calc(60px + env(safe-area-inset-top));
   position: sticky;
   top: 0;
   z-index: 100;
@@ -215,51 +215,6 @@ nav {
   padding: 2px 8px;
   margin-top: 4px;
 }
-
-/* ─── PWA INSTALL BANNER ─────────────────────────────────────────────────────── */
-.pwa-banner {
-  position: fixed;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%) translateY(100px);
-  background: var(--espresso);
-  color: var(--parchment);
-  border-radius: var(--radius);
-  padding: 14px 18px;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  box-shadow: var(--shadow-lg);
-  z-index: 400;
-  max-width: 380px;
-  width: calc(100vw - 32px);
-  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-  pointer-events: none;
-  opacity: 0;
-}
-.pwa-banner.show {
-  transform: translateX(-50%) translateY(0);
-  pointer-events: auto;
-  opacity: 1;
-}
-.pwa-banner-icon { font-size: 1.8rem; flex-shrink: 0; }
-.pwa-banner-body { flex: 1; min-width: 0; }
-.pwa-banner-title { font-weight: 600; font-size: 0.9rem; margin-bottom: 2px; color: var(--honey); }
-.pwa-banner-text { font-size: 0.78rem; color: var(--parchment); opacity: 0.85; line-height: 1.4; }
-.pwa-banner-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
-.pwa-banner-btn {
-  padding: 7px 14px;
-  border-radius: 100px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-  border: none;
-  white-space: nowrap;
-}
-.pwa-banner-btn.primary { background: var(--honey); color: var(--espresso); }
-.pwa-banner-btn.primary:hover { background: var(--caramel); color: white; }
-.pwa-banner-btn.ghost { background: transparent; color: var(--parchment); opacity: 0.6; }
-.pwa-banner-btn.ghost:hover { opacity: 1; }
 
 /* ─── FEATURE REQUESTS ───────────────────────────────────────────────────────── */
 .fr-item {
@@ -2153,6 +2108,8 @@ nav {
   <button class="mobile-menu-item" id="mobileSignOutBtn" onclick="fb.signOut(fb.auth); showToast('Signed out'); closeMobileMenu();" style="display:none; color:#e07070;">→ Sign out</button>
   <div class="mobile-menu-divider" id="mobileSignInDivider"></div>
   <button class="mobile-menu-item" id="mobileSignInBtn" onclick="openAuthModal(); closeMobileMenu();">→ Sign in</button>
+  <div class="mobile-menu-divider"></div>
+  <button class="mobile-menu-item" id="mobileInstallBtn" onclick="triggerPwaInstall(); closeMobileMenu();" style="display:none;">📲 Add to Home Screen</button>
 </div>
 
 <!-- ─── HOME PAGE ─────────────────────────────────────────────────────────────── -->
@@ -2168,7 +2125,6 @@ nav {
         <div class="hero-actions">
           <button class="btn-primary" onclick="openAddModal()">Rate a Bake!</button>
           <button class="btn-secondary" onclick="showPage('explore')">Explore cities</button>
-          <button class="btn-secondary" id="heroInstallBtn" onclick="triggerPwaInstall()" style="display:none;">📲 Add to Home Screen</button>
         </div>
         <div class="hero-stats">
           <div class="hero-stat">
@@ -7222,85 +7178,52 @@ function renderAdminUsers() {
   if (panel) panel.innerHTML = renderAdminUsersHTML();
 }
 </script>
-<!-- ─── PWA INSTALL BANNER ────────────────────────────────────────────────────── -->
-<div class="pwa-banner" id="pwaBanner">
-  <div class="pwa-banner-icon">🥐</div>
-  <div class="pwa-banner-body">
-    <div class="pwa-banner-title">Add Crumbz to your home screen</div>
-    <div class="pwa-banner-text" id="pwaBannerText">Install the app for the full experience</div>
-  </div>
-  <div class="pwa-banner-actions">
-    <button class="pwa-banner-btn primary" id="pwaBannerInstall" onclick="triggerPwaInstall()">Add</button>
-    <button class="pwa-banner-btn ghost" onclick="dismissPwaBanner()">Not now</button>
-  </div>
-</div>
 
 <script>
 // ─── PWA INSTALL ──────────────────────────────────────────────────────────────
 let deferredInstallPrompt = null;
-
 const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
 const isInStandaloneMode = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
 
+function showMobileInstallBtn() {
+  const btn = document.getElementById('mobileInstallBtn');
+  if (btn) btn.style.display = '';
+}
+
+// Android/Chrome — capture the prompt and show the menu item
 window.addEventListener('beforeinstallprompt', e => {
   e.preventDefault();
   deferredInstallPrompt = e;
-  setTimeout(() => showPwaBanner('android'), 3000);
-  const heroBtn = document.getElementById('heroInstallBtn');
-  if (heroBtn) heroBtn.style.display = '';
+  showMobileInstallBtn();
 });
 
-if (isIos && !isInStandaloneMode) {
-  const dismissed = sessionStorage.getItem('pwaBannerDismissed');
-  if (!dismissed) setTimeout(() => showPwaBanner('ios'), 3000);
-  const heroBtn = document.getElementById('heroInstallBtn');
-  if (heroBtn) heroBtn.style.display = '';
-}
-
-function showPwaBanner(platform) {
-  const banner = document.getElementById('pwaBanner');
-  const text = document.getElementById('pwaBannerText');
-  const installBtn = document.getElementById('pwaBannerInstall');
-  if (!banner) return;
-  if (platform === 'ios') {
-    text.textContent = 'Tap the Share button \uD83D\uDCE4 then "Add to Home Screen"';
-    installBtn.textContent = 'Got it';
-    installBtn.onclick = dismissPwaBanner;
-  } else {
-    text.textContent = 'Install for quick access — works offline too';
-    installBtn.textContent = 'Add';
-    installBtn.onclick = triggerPwaInstall;
-  }
-  banner.classList.add('show');
-}
-
-function dismissPwaBanner() {
-  const banner = document.getElementById('pwaBanner');
-  if (banner) banner.classList.remove('show');
-  sessionStorage.setItem('pwaBannerDismissed', '1');
-}
+// iOS — show menu item if not already installed
+if (isIos && !isInStandaloneMode) showMobileInstallBtn();
 
 async function triggerPwaInstall() {
-  if (isIos) { showPwaBanner('ios'); return; }
+  if (isIos) {
+    showToast('Tap the Share button 📤 then "Add to Home Screen"');
+    return;
+  }
   if (!deferredInstallPrompt) {
     showToast('Open Crumbz in Chrome or Safari to install');
     return;
   }
-  dismissPwaBanner();
   deferredInstallPrompt.prompt();
   const { outcome } = await deferredInstallPrompt.userChoice;
-  if (outcome === 'accepted') showToast('🥐 Crumbz added to your home screen!');
+  if (outcome === 'accepted') {
+    showToast('🥐 Crumbz added to your home screen!');
+    const btn = document.getElementById('mobileInstallBtn');
+    if (btn) btn.style.display = 'none';
+  }
   deferredInstallPrompt = null;
-  const heroBtn = document.getElementById('heroInstallBtn');
-  if (heroBtn) heroBtn.style.display = 'none';
 }
 
-window.matchMedia('(display-mode: standalone)').addEventListener('change', e => {
-  if (e.matches) {
-    const heroBtn = document.getElementById('heroInstallBtn');
-    if (heroBtn) heroBtn.style.display = 'none';
-  }
-});
+// Hide if already installed
+if (isInStandaloneMode) {
+  const btn = document.getElementById('mobileInstallBtn');
+  if (btn) btn.style.display = 'none';
+}
 
 if ('serviceWorker' in navigator && location.hostname !== 'bitbucket.org' && !location.hostname.includes('localhost')) {
   window.addEventListener('load', () => {
