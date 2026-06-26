@@ -2,8 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Crumb — Rate Every Bite</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Crumbz — Rate Every Bite</title>
+
+<!-- PWA meta — manifest and SW active on Firebase Hosting only -->
+<!-- <link rel="manifest" href="manifest.json"> -->
+<meta name="theme-color" content="#2c1810">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Crumbz">
+<link rel="apple-touch-icon" href="https://emojicdn.elk.sh/🥐?style=apple&size=512">
+<meta name="description" content="Discover, rate and share the best bakes from your favourite local bakeries.">
 
 <!-- Fonts -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -206,6 +215,51 @@ nav {
   padding: 2px 8px;
   margin-top: 4px;
 }
+
+/* ─── PWA INSTALL BANNER ─────────────────────────────────────────────────────── */
+.pwa-banner {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  background: var(--espresso);
+  color: var(--parchment);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  box-shadow: var(--shadow-lg);
+  z-index: 400;
+  max-width: 380px;
+  width: calc(100vw - 32px);
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: none;
+  opacity: 0;
+}
+.pwa-banner.show {
+  transform: translateX(-50%) translateY(0);
+  pointer-events: auto;
+  opacity: 1;
+}
+.pwa-banner-icon { font-size: 1.8rem; flex-shrink: 0; }
+.pwa-banner-body { flex: 1; min-width: 0; }
+.pwa-banner-title { font-weight: 600; font-size: 0.9rem; margin-bottom: 2px; color: var(--honey); }
+.pwa-banner-text { font-size: 0.78rem; color: var(--parchment); opacity: 0.85; line-height: 1.4; }
+.pwa-banner-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+.pwa-banner-btn {
+  padding: 7px 14px;
+  border-radius: 100px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  white-space: nowrap;
+}
+.pwa-banner-btn.primary { background: var(--honey); color: var(--espresso); }
+.pwa-banner-btn.primary:hover { background: var(--caramel); color: white; }
+.pwa-banner-btn.ghost { background: transparent; color: var(--parchment); opacity: 0.6; }
+.pwa-banner-btn.ghost:hover { opacity: 1; }
 
 /* ─── FEATURE REQUESTS ───────────────────────────────────────────────────────── */
 .fr-item {
@@ -2042,7 +2096,7 @@ nav {
 <!-- ─── NAV ──────────────────────────────────────────────────────────────────── -->
 <nav>
   <div class="nav-logo" onclick="showPage('home')">
-    Crumb
+    Crumbz
     <span>Rate every bite</span>
   </div>
   <div class="nav-links-desktop" id="navLinksDesktop">
@@ -2114,6 +2168,7 @@ nav {
         <div class="hero-actions">
           <button class="btn-primary" onclick="openAddModal()">Rate a Bake!</button>
           <button class="btn-secondary" onclick="showPage('explore')">Explore cities</button>
+          <button class="btn-secondary" id="heroInstallBtn" onclick="triggerPwaInstall()" style="display:none;">📲 Add to Home Screen</button>
         </div>
         <div class="hero-stats">
           <div class="hero-stat">
@@ -2184,7 +2239,7 @@ nav {
 <div class="page" id="page-leaderboard">
   <div class="leaderboard-bg">
     <div class="leaderboard-inner">
-      <div class="leaderboard-title">🏆 The Hall of Crumbs</div>
+      <div class="leaderboard-title">🏆 The Hall of Crumbz</div>
       <div class="leaderboard-sub" id="lbSubtitle">Community's highest-rated bakes, ranked by average score</div>
       <!-- Top-level mode switcher -->
       <div style="display:flex; gap:8px; margin-bottom:16px;">
@@ -2425,7 +2480,7 @@ nav {
 <div class="modal-overlay" id="authModal">
   <div class="modal" style="max-height:80vh;" role="dialog" aria-modal="true" aria-label="Sign in">
     <div class="modal-header">
-      <div class="modal-title">Join Crumb</div>
+      <div class="modal-title">Join Crumbz</div>
       <button class="modal-close" onclick="closeAuthModal()">✕</button>
     </div>
     <div class="modal-body">
@@ -2489,7 +2544,7 @@ nav {
 <div class="page" id="page-shop">
   <div style="background:var(--espresso); padding:56px 24px 48px; text-align:center;">
     <div style="font-size:0.72rem; letter-spacing:4px; text-transform:uppercase; color:var(--honey); font-weight:600; margin-bottom:12px;">Marketplace</div>
-    <h1 style="font-family:'Playfair Display',serif; font-size:clamp(2rem,5vw,3rem); color:var(--cream-white); font-weight:700; margin-bottom:12px;">The Crumb <em style="color:var(--honey); font-style:italic;">Shop</em></h1>
+    <h1 style="font-family:'Playfair Display',serif; font-size:clamp(2rem,5vw,3rem); color:var(--cream-white); font-weight:700; margin-bottom:12px;">The Crumbz <em style="color:var(--honey); font-style:italic;">Shop</em></h1>
     <p style="color:var(--honey-light); font-size:1rem; max-width:480px; margin:0 auto; line-height:1.6; font-weight:300;">Merchandise and keepsakes from your favourite local bakeries.</p>
   </div>
   <div class="torn"></div>
@@ -2548,7 +2603,7 @@ nav {
       </div>
       <div class="form-group">
         <label class="form-label">Product name</label>
-        <input type="text" class="form-input" id="productName" placeholder="e.g. Crumb Tote Bag, Gift Card, Enamel Pin…">
+        <input type="text" class="form-input" id="productName" placeholder="e.g. Crumbz Tote Bag, Gift Card, Enamel Pin…">
       </div>
       <div class="form-group">
         <label class="form-label">Product type <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">(helps with filtering)</span></label>
@@ -2617,7 +2672,7 @@ nav {
   <div style="background:var(--espresso); padding:56px 24px 48px; text-align:center;">
     <div style="font-size:0.72rem; letter-spacing:4px; text-transform:uppercase; color:var(--honey); font-weight:600; margin-bottom:12px;">Discover</div>
     <h1 style="font-family:'Playfair Display',serif; font-size:clamp(2rem,5vw,3rem); color:var(--cream-white); font-weight:700; margin-bottom:12px;">Find great bakeries<br><em style="color:var(--honey); font-style:italic;">wherever you go</em></h1>
-    <p style="color:var(--honey-light); font-size:1rem; max-width:480px; margin:0 auto 32px; line-height:1.6; font-weight:300;">Pick a city and discover the top-rated bakeries. Where Crumb community reviews exist, they take priority.</p>
+    <p style="color:var(--honey-light); font-size:1rem; max-width:480px; margin:0 auto 32px; line-height:1.6; font-weight:300;">Pick a city and discover the top-rated bakeries. Where Crumbz community reviews exist, they take priority.</p>
 
     <!-- City grid -->
     <div id="cityGrid" style="display:flex; flex-wrap:wrap; gap:8px; justify-content:center; max-width:720px; margin:0 auto; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none;"></div>
@@ -2635,12 +2690,12 @@ nav {
       <button class="btn-ghost" onclick="document.getElementById('exploreResults').style.display='none'; document.getElementById('exploreResultsSection').style.display='none';" style="font-size:0.85rem; color:var(--caramel);">← All cities</button>
     </div>
 
-    <!-- Crumb reviews banner (shown if city has Crumb data) -->
+    <!-- Crumbz reviews banner (shown if city has Crumbz data) -->
     <div id="exploreCrumbBanner" style="display:none; background:linear-gradient(135deg,var(--espresso),var(--espresso-mid)); border-radius:var(--radius); padding:14px 18px; margin-bottom:24px; display:flex; align-items:center; gap:12px; color:var(--parchment);">
       <span style="font-size:1.4rem;">🥐</span>
       <div>
         <div style="font-size:0.82rem; font-weight:600; color:var(--honey);" id="exploreCrumbBannerText"></div>
-        <div style="font-size:0.75rem; color:var(--honey-light);">Crumb community reviews shown first</div>
+        <div style="font-size:0.75rem; color:var(--honey-light);">Crumbz community reviews shown first</div>
       </div>
     </div>
 
@@ -2739,7 +2794,7 @@ nav {
     <div class="settings-card">
       <div class="settings-card-header">
         <div class="settings-card-title">👤 Profile</div>
-        <div class="settings-card-sub">Your public identity on Crumb</div>
+        <div class="settings-card-sub">Your public identity on Crumbz</div>
       </div>
       <div class="settings-card-body" id="settingsProfileBody">
         <div class="form-group">
@@ -2778,7 +2833,7 @@ nav {
     <div class="settings-card" id="settingsBusinessCard" style="display:none;">
       <div class="settings-card-header">
         <div class="settings-card-title">🏪 My Bakery Pages</div>
-        <div class="settings-card-sub">Manage your bakery listings on Crumb</div>
+        <div class="settings-card-sub">Manage your bakery listings on Crumbz</div>
       </div>
       <div class="settings-card-body" id="settingsBusinessBody">
         <div class="empty-state" style="padding:24px 0;">
@@ -2951,7 +3006,7 @@ nav {
       <button class="modal-close" onclick="closeFeatureRequestModal()">✕</button>
     </div>
     <div class="modal-body">
-      <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:20px;line-height:1.6;">Got an idea to make Crumb better? Share it — the most upvoted requests get built first.</p>
+      <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:20px;line-height:1.6;">Got an idea to make Crumbz better? Share it — the most upvoted requests get built first.</p>
       <div class="form-group">
         <label class="form-label">What would you like to see? <span style="color:#e74c3c;">*</span></label>
         <input type="text" class="form-input" id="featureTitle" placeholder="e.g. Dark mode, map view, share reviews…" maxlength="120">
@@ -5354,7 +5409,7 @@ async function saveSettingsProfile() {
 }
 
 function signOutFromSettings() {
-  if (confirm('Sign out of Crumb?')) {
+  if (confirm('Sign out of Crumbz?')) {
     fb.signOut(fb.auth);
     showPage('home');
     showToast('Signed out');
@@ -5807,7 +5862,7 @@ function initExplorePage() {
   const grid = document.getElementById('cityGrid');
   if (!grid) return;
 
-  // Figure out which cities have Crumb reviews
+  // Figure out which cities have Crumbz reviews
   const citiesWithCrumb = new Set();
   UK_CITIES.forEach(city => {
     const crumb = getCrumbBakeriesNearCity(city);
@@ -5846,14 +5901,14 @@ async function selectExploreCity(cityName) {
   // Scroll to results
   resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-  // Check Crumb data first
+  // Check Crumbz data first
   const crumbBakeries = getCrumbBakeriesNearCity(city);
   const crumbBanner = document.getElementById('exploreCrumbBanner');
   const crumbBannerText = document.getElementById('exploreCrumbBannerText');
 
   if (crumbBakeries.length > 0) {
     crumbBanner.style.display = 'flex';
-    crumbBannerText.textContent = `${crumbBakeries.length} bakeri${crumbBakeries.length !== 1 ? 'es' : 'y'} reviewed by the Crumb community in ${cityName}`;
+    crumbBannerText.textContent = `${crumbBakeries.length} bakeri${crumbBakeries.length !== 1 ? 'es' : 'y'} reviewed by the Crumbz community in ${cityName}`;
   } else {
     crumbBanner.style.display = 'none';
   }
@@ -5906,14 +5961,14 @@ async function fetchGoogleBakeries(city) {
 function renderExploreResults(city, crumbBakeries, googleResults) {
   const list = document.getElementById('exploreBakeryList');
 
-  // Merge: Crumb bakeries take priority, then Google fills the rest
+  // Merge: Crumbz bakeries take priority, then Google fills the rest
   const combined = [];
   const crumbNames = new Set(crumbBakeries.map(b => b.name.toLowerCase()));
 
-  // Add Crumb bakeries first
+  // Add Crumbz bakeries first
   crumbBakeries.forEach(b => combined.push({ ...b, source: 'crumb' }));
 
-  // Add Google results that aren't already in Crumb
+  // Add Google results that aren't already in Crumbz
   googleResults.forEach(p => {
     const pName = (p.displayName?.text || '').toLowerCase();
     const alreadyInCrumb = [...crumbNames].some(cn => pName.includes(cn) || cn.includes(pName));
@@ -5933,7 +5988,7 @@ function renderExploreResults(city, crumbBakeries, googleResults) {
   });
 
   if (!combined.length) {
-    list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🏪</div><div class="empty-state-title">No bakeries found yet</div><div class="empty-state-text">Be the first to review a bakery in ${city.name} on Crumb!</div></div>`;
+    list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🏪</div><div class="empty-state-title">No bakeries found yet</div><div class="empty-state-text">Be the first to review a bakery in ${city.name} on Crumbz!</div></div>`;
     return;
   }
 
@@ -5942,7 +5997,7 @@ function renderExploreResults(city, crumbBakeries, googleResults) {
     const rankClass = rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : '';
 
     if (b.source === 'crumb') {
-      // Crumb-reviewed bakery
+      // Crumbz-reviewed bakery
       const avg = b.communityAvg.toFixed(1);
       const topItem = b.topItem;
       const topItemHTML = topItem ? `
@@ -5962,7 +6017,7 @@ function renderExploreResults(city, crumbBakeries, googleResults) {
               <div class="explore-bakery-name">${b.name}</div>
               <div class="explore-bakery-address">📍 ${b.address}</div>
               <div class="explore-bakery-meta">
-                <span class="explore-score-badge crumb">🥐 ${avg} Crumb</span>
+                <span class="explore-score-badge crumb">🥐 ${avg} Crumbz</span>
                 <span style="font-size:0.75rem;color:var(--text-muted);">${b.items.length} review${b.items.length !== 1 ? 's' : ''}</span>
               </div>
             </div>
@@ -5989,7 +6044,7 @@ function renderExploreResults(city, crumbBakeries, googleResults) {
             <a href="${mapsUrl}" target="_blank" rel="noopener" class="admin-btn" style="flex-shrink:0;font-size:0.78rem;text-decoration:none;">Maps ↗</a>
           </div>
           <div class="explore-no-crumb">
-            <span>Not yet reviewed on Crumb</span>
+            <span>Not yet reviewed on Crumbz</span>
             <button class="admin-btn primary" style="font-size:0.75rem;" onclick="openAddModalForBakery('${escJS(b.name)}','${escJS(b.address)}','${b.placeId||''}','${b.lat||''}','${b.lng||''}')">+ Be first to review</button>
           </div>
         </div>`;
@@ -6641,7 +6696,7 @@ function handleBuy(productId) {
     const subject = encodeURIComponent(`Enquiry: ${p.name} from ${p.bakeryName}`);
     const body = encodeURIComponent(`Hi,
 
-I'm interested in purchasing "${p.name}" (£${p.price}) from your Crumb shop.
+I'm interested in purchasing "${p.name}" (£${p.price}) from your Crumbz shop.
 
 Please let me know how to proceed.
 
@@ -7079,7 +7134,7 @@ async function signInGoogle() {
   try {
     await fb.signInWithPopup(fb.auth, fb.googleProvider);
     closeAuthModal();
-    showToast('Welcome to Crumb! 🥐');
+    showToast('Welcome to Crumbz! 🥐');
   } catch (err) {
     showAuthError(err.message);
   }
@@ -7105,7 +7160,7 @@ async function signUpEmail() {
     const cred = await fb.createUserWithEmailAndPassword(fb.auth, email, pw);
     if (name) await fb.updateProfile(cred.user, { displayName: name });
     closeAuthModal();
-    showToast('Welcome to Crumb! 🥐');
+    showToast('Welcome to Crumbz! 🥐');
   } catch (err) {
     showAuthError(friendlyAuthError(err.code));
   }
@@ -7167,5 +7222,92 @@ function renderAdminUsers() {
   if (panel) panel.innerHTML = renderAdminUsersHTML();
 }
 </script>
+<!-- ─── PWA INSTALL BANNER ────────────────────────────────────────────────────── -->
+<div class="pwa-banner" id="pwaBanner">
+  <div class="pwa-banner-icon">🥐</div>
+  <div class="pwa-banner-body">
+    <div class="pwa-banner-title">Add Crumbz to your home screen</div>
+    <div class="pwa-banner-text" id="pwaBannerText">Install the app for the full experience</div>
+  </div>
+  <div class="pwa-banner-actions">
+    <button class="pwa-banner-btn primary" id="pwaBannerInstall" onclick="triggerPwaInstall()">Add</button>
+    <button class="pwa-banner-btn ghost" onclick="dismissPwaBanner()">Not now</button>
+  </div>
+</div>
+
+<script>
+// ─── PWA INSTALL ──────────────────────────────────────────────────────────────
+let deferredInstallPrompt = null;
+
+const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+const isInStandaloneMode = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  setTimeout(() => showPwaBanner('android'), 3000);
+  const heroBtn = document.getElementById('heroInstallBtn');
+  if (heroBtn) heroBtn.style.display = '';
+});
+
+if (isIos && !isInStandaloneMode) {
+  const dismissed = sessionStorage.getItem('pwaBannerDismissed');
+  if (!dismissed) setTimeout(() => showPwaBanner('ios'), 3000);
+  const heroBtn = document.getElementById('heroInstallBtn');
+  if (heroBtn) heroBtn.style.display = '';
+}
+
+function showPwaBanner(platform) {
+  const banner = document.getElementById('pwaBanner');
+  const text = document.getElementById('pwaBannerText');
+  const installBtn = document.getElementById('pwaBannerInstall');
+  if (!banner) return;
+  if (platform === 'ios') {
+    text.textContent = 'Tap the Share button \uD83D\uDCE4 then "Add to Home Screen"';
+    installBtn.textContent = 'Got it';
+    installBtn.onclick = dismissPwaBanner;
+  } else {
+    text.textContent = 'Install for quick access — works offline too';
+    installBtn.textContent = 'Add';
+    installBtn.onclick = triggerPwaInstall;
+  }
+  banner.classList.add('show');
+}
+
+function dismissPwaBanner() {
+  const banner = document.getElementById('pwaBanner');
+  if (banner) banner.classList.remove('show');
+  sessionStorage.setItem('pwaBannerDismissed', '1');
+}
+
+async function triggerPwaInstall() {
+  if (isIos) { showPwaBanner('ios'); return; }
+  if (!deferredInstallPrompt) {
+    showToast('Open Crumbz in Chrome or Safari to install');
+    return;
+  }
+  dismissPwaBanner();
+  deferredInstallPrompt.prompt();
+  const { outcome } = await deferredInstallPrompt.userChoice;
+  if (outcome === 'accepted') showToast('🥐 Crumbz added to your home screen!');
+  deferredInstallPrompt = null;
+  const heroBtn = document.getElementById('heroInstallBtn');
+  if (heroBtn) heroBtn.style.display = 'none';
+}
+
+window.matchMedia('(display-mode: standalone)').addEventListener('change', e => {
+  if (e.matches) {
+    const heroBtn = document.getElementById('heroInstallBtn');
+    if (heroBtn) heroBtn.style.display = 'none';
+  }
+});
+
+if ('serviceWorker' in navigator && location.hostname !== 'bitbucket.org' && !location.hostname.includes('localhost')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
+</script>
+
 </body>
 </html>
