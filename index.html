@@ -286,6 +286,147 @@ nav::before {
 .bakery-hours-day span:last-child { color: var(--text-muted); text-align: right; }
 .bakery-hours-day.today span:last-child { color: var(--caramel); }
 
+/* ─── RANKING CARDS ──────────────────────────────────────────────────────────── */
+.ranking-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--cream-white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: box-shadow 0.15s, transform 0.12s;
+  position: relative;
+}
+.ranking-card:hover { box-shadow: var(--shadow); transform: translateY(-1px); }
+.ranking-card.top-1 { border-color: #d4af37; background: linear-gradient(135deg, #fffbef, var(--cream-white)); }
+.ranking-card.top-2 { border-color: #a8a9ad; }
+.ranking-card.top-3 { border-color: #cd7f32; }
+.ranking-card.is-me { border-color: var(--caramel); background: rgba(212,165,116,0.06); }
+.ranking-pos {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.2rem;
+  font-weight: 700;
+  min-width: 28px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.ranking-pos.top-1 { color: #d4af37; }
+.ranking-pos.top-2 { color: #a8a9ad; }
+.ranking-pos.top-3 { color: #cd7f32; }
+.ranking-pos.other { color: var(--text-muted); font-size: 0.9rem; }
+.ranking-avatar {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  background: var(--caramel);
+  color: white;
+  font-weight: 600;
+  font-size: 0.9rem;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  border: 2px solid var(--border);
+}
+.ranking-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.ranking-info { flex: 1; min-width: 0; }
+.ranking-name {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--espresso);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ranking-location { font-size: 0.72rem; color: var(--text-muted); margin-top: 1px; }
+.ranking-stats {
+  display: flex;
+  gap: 10px;
+  margin-top: 5px;
+  flex-wrap: wrap;
+}
+.ranking-stat {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  background: var(--parchment);
+  border-radius: 100px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+.ranking-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+.ranking-score {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--espresso);
+  line-height: 1;
+}
+.ranking-trend {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 100px;
+}
+.ranking-trend.up { background: #d4edda; color: #155724; }
+.ranking-trend.down { background: #f8d7da; color: #721c24; }
+.ranking-trend.flat { background: var(--parchment-dark); color: var(--text-muted); }
+.ranking-me-badge {
+  position: absolute;
+  top: 8px; right: 8px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  background: var(--caramel);
+  color: white;
+  padding: 2px 6px;
+  border-radius: 100px;
+}
+
+/* ─── PROFILE STATS STRIP ────────────────────────────────────────────────────── */
+.profile-stats-strip {
+  display: flex;
+  align-items: center;
+  background: var(--espresso);
+  padding: 14px 20px;
+  gap: 0;
+}
+.profile-stats-strip-item { flex: 1; text-align: center; }
+.profile-stats-strip-num {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--honey);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.profile-stats-strip-label {
+  font-size: 0.65rem;
+  color: var(--honey-light);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+.profile-stats-strip-divider { width: 1px; height: 36px; background: rgba(255,255,255,0.15); flex-shrink: 0; }
+
+/* ─── ACTIVITY CALENDAR ──────────────────────────────────────────────────────── */
+.activity-month-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 0 8px; }
+.activity-month-title { font-family: 'Playfair Display', serif; font-size: 1.05rem; font-weight: 700; color: var(--espresso); }
+.activity-month-nav { display: flex; gap: 6px; }
+.activity-month-nav button { width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid var(--border); background: var(--parchment); color: var(--text-body); cursor: pointer; font-size: 0.82rem; display: flex; align-items: center; justify-content: center; }
+.activity-month-nav button:hover { border-color: var(--honey); }
+.activity-month-stats { display: flex; gap: 16px; margin-bottom: 12px; }
+.activity-month-stat { font-size: 0.8rem; color: var(--text-muted); }
+.activity-month-stat strong { color: var(--caramel); font-size: 0.95rem; font-weight: 700; margin-right: 3px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; margin-bottom: 8px; }
+.cal-day-label { text-align: center; font-size: 0.62rem; font-weight: 600; color: var(--text-muted); letter-spacing: 0.5px; padding-bottom: 6px; text-transform: uppercase; }
+.cal-day { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 0.78rem; color: var(--text-muted); position: relative; cursor: default; min-width: 0; }
+.cal-day.has-review { background: var(--espresso); color: var(--honey); font-weight: 700; cursor: pointer; transition: transform 0.12s; }
+.cal-day.has-review:hover { transform: scale(1.1); }
+.cal-day.today { border: 2px solid var(--honey); color: var(--caramel); font-weight: 600; }
+.cal-day.has-review.today { border-color: var(--honey-light); }
+.cal-review-count { position: absolute; top: -2px; right: -2px; background: var(--honey); color: var(--espresso); font-size: 0.52rem; font-weight: 700; width: 13px; height: 13px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+
 /* ─── BOOKMARKS ──────────────────────────────────────────────────────────────── */
 .bookmark-btn {
   width: 32px; height: 32px;
@@ -2875,15 +3016,27 @@ nav::before {
   <div class="section">
     <div class="section-header">
       <div class="section-eyebrow">The community</div>
-      <h2 class="section-title">Members</h2>
+      <h2 class="section-title">People</h2>
     </div>
-    <div id="peopleGrid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:16px;">
-      <div class="empty-state" style="grid-column:1/-1">
-        <div class="empty-state-icon">👤</div>
-        <div class="empty-state-title">No members yet</div>
-        <div class="empty-state-text">Sign in and start reviewing to join the community.</div>
+
+    <!-- View toggle + filters -->
+    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:20px;">
+      <div style="display:flex; gap:6px;">
+        <button class="bakery-view-btn active" id="peopleViewRankings" onclick="setPeopleView('rankings')">🏆 Rankings</button>
+        <button class="bakery-view-btn" id="peopleViewMembers" onclick="setPeopleView('members')">👥 Members</button>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;" id="rankingFilters">
+        <select class="form-select" id="rankingLocationFilter" onchange="renderRankings()" style="font-size:0.8rem; padding:7px 12px; border-radius:100px; max-width:160px;">
+          <option value="">📍 All locations</option>
+        </select>
+        <select class="form-select" id="rankingLevelFilter" onchange="populateRankingLocationFilter(); renderRankings()" style="font-size:0.8rem; padding:7px 12px; border-radius:100px;">
+          <option value="city">By city</option>
+          <option value="country">By country</option>
+        </select>
       </div>
     </div>
+
+    <div id="peopleGrid" style="display:flex; flex-direction:column; gap:10px;"></div>
   </div>
 </div>
 
@@ -3465,7 +3618,11 @@ function showPage(name) {
   if (name === 'bakeries') { bakeryViewMode = 'all'; renderBakeries(); }
   if (name === 'explore') initExplorePage();
   if (name === 'shop') renderShopPage();
-  if (name === 'people') renderPeople();
+  if (name === 'people') {
+    populateRankingLocationFilter();
+    if (peopleViewMode === 'rankings') renderRankings();
+    else renderPeople();
+  }
   if (name === 'settings') openSettingsPage();
 }
 
@@ -4066,9 +4223,177 @@ function buildItemRowHTML(item, onClickFn) {
     </div>`;
 }
 
+let peopleViewMode = 'rankings';
+
+function setPeopleView(mode) {
+  peopleViewMode = mode;
+  document.getElementById('peopleViewRankings').classList.toggle('active', mode === 'rankings');
+  document.getElementById('peopleViewMembers').classList.toggle('active', mode === 'members');
+  document.getElementById('rankingFilters').style.display = mode === 'rankings' ? 'flex' : 'none';
+  const grid = document.getElementById('peopleGrid');
+  grid.style.gridTemplateColumns = mode === 'members' ? 'repeat(auto-fill,minmax(260px,1fr))' : '';
+  grid.style.display = mode === 'members' ? 'grid' : 'flex';
+  grid.style.flexDirection = mode === 'rankings' ? 'column' : '';
+  if (mode === 'rankings') renderRankings();
+  else renderPeople();
+}
+
+function computeUserScore(uid, allUserItems, followersMap) {
+  const items = allUserItems[uid] || [];
+  const now = Date.now();
+  const ms30 = 30 * 24 * 60 * 60 * 1000;
+
+  // Metrics
+  const reviewCount = items.length;
+  const followers = followersMap[uid] || 0;
+  const categories = new Set(items.map(i => i.category).filter(Boolean)).size;
+  const bakeries = new Set(items.map(i => i.bakeryName).filter(Boolean)).size;
+  const cities = new Set(items.map(i => extractCity(i.bakeryAddress || '')).filter(Boolean)).size;
+  // Review quality: avg length of notes (rewards effort, not generosity)
+  const avgNoteLength = items.length
+    ? items.reduce((s, i) => s + (i.notes?.trim().length || 0), 0) / items.length
+    : 0;
+  // Scale: 0 chars = 0pts, 100+ chars = 4pts, 200+ chars = 8pts (cap at 8)
+  const qualityScore = Math.min(8, (avgNoteLength / 25));
+
+  // Weighted score (tunable)
+  const score = (
+    reviewCount * 3 +
+    followers * 5 +
+    categories * 4 +
+    bakeries * 2 +
+    cities * 6 +
+    qualityScore * 4
+  );
+
+  // Trend: score based on last 30d vs previous 30d
+  const recent = items.filter(i => {
+    const ts = i.createdAt?.toDate ? i.createdAt.toDate() : (i.createdAt ? new Date(i.createdAt) : null);
+    return ts && (now - ts.getTime()) < ms30;
+  });
+  const prev = items.filter(i => {
+    const ts = i.createdAt?.toDate ? i.createdAt.toDate() : (i.createdAt ? new Date(i.createdAt) : null);
+    return ts && (now - ts.getTime()) >= ms30 && (now - ts.getTime()) < ms30 * 2;
+  });
+  const recentScore = recent.length * 3 + new Set(recent.map(i => i.bakeryName)).size * 2;
+  const prevScore = prev.length * 3 + new Set(prev.map(i => i.bakeryName)).size * 2;
+
+  return { score, reviewCount, followers, categories, bakeries, cities, avgNoteLength, recentScore, prevScore };
+}
+
+function populateRankingLocationFilter() {
+  const sel = document.getElementById('rankingLocationFilter');
+  if (!sel) return;
+  const level = document.getElementById('rankingLevelFilter')?.value || 'city';
+  const locations = new Set();
+  allItems.forEach(i => {
+    const loc = level === 'city' ? extractCity(i.bakeryAddress || '') : extractCountry(i.bakeryAddress || '');
+    if (loc) locations.add(loc);
+  });
+  const current = sel.value;
+  sel.innerHTML = `<option value="">📍 All ${level === 'city' ? 'cities' : 'countries'}</option>` +
+    [...locations].sort().map(l => `<option value="${l}" ${l === current ? 'selected' : ''}>${l}</option>`).join('');
+}
+
+async function renderRankings() {
+  const grid = document.getElementById('peopleGrid');
+  grid.innerHTML = '<div style="text-align:center;padding:32px;"><div class="spinner" style="margin:0 auto;"></div></div>';
+
+  const locationFilter = document.getElementById('rankingLocationFilter')?.value || '';
+  const level = document.getElementById('rankingLevelFilter')?.value || 'city';
+
+  // Build per-user item map (filter by location if set)
+  const allUserItems = {};
+  allItems.forEach(item => {
+    if (!item.userId) return;
+    if (locationFilter) {
+      const loc = level === 'city' ? extractCity(item.bakeryAddress || '') : extractCountry(item.bakeryAddress || '');
+      if (loc !== locationFilter) return;
+    }
+    if (!allUserItems[item.userId]) allUserItems[item.userId] = [];
+    allUserItems[item.userId].push(item);
+  });
+
+  // Build followers map from follows data
+  const followersMap = {};
+  try {
+    const { db, collection, getDocs } = fb;
+    const snap = await getDocs(collection(db, 'follows'));
+    snap.docs.forEach(d => {
+      const fid = d.data().followingId;
+      if (fid) followersMap[fid] = (followersMap[fid] || 0) + 1;
+    });
+  } catch(e) {}
+
+  // Score all users who have items
+  const users = Object.keys(allUserItems).map(uid => {
+    const profile = allProfiles[uid] || {};
+    const metrics = computeUserScore(uid, allUserItems, followersMap);
+    return { uid, metrics, profile,
+      name: profile.displayName || allUserItems[uid][0]?.userName || 'Anonymous',
+      photo: profile.photoURL || allUserItems[uid][0]?.userPhoto || null,
+      location: profile.location || ''
+    };
+  }).sort((a, b) => b.metrics.score - a.metrics.score);
+
+  if (!users.length) {
+    grid.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🏆</div><div class="empty-state-title">No rankings yet</div><div class="empty-state-text">Start reviewing to appear on the leaderboard.</div></div>`;
+    return;
+  }
+
+  const posEmoji = ['🥇','🥈','🥉'];
+  grid.innerHTML = users.map((u, i) => {
+    const m = u.metrics;
+    const pos = i + 1;
+    const posClass = pos <= 3 ? `top-${pos}` : 'other';
+    const posLabel = pos <= 3 ? posEmoji[i] : `#${pos}`;
+    const isMe = currentUser && u.uid === currentUser.uid;
+
+    // Trend
+    let trendHTML = '';
+    if (m.prevScore > 0 || m.recentScore > 0) {
+      const diff = m.recentScore - m.prevScore;
+      if (diff > 2) trendHTML = `<span class="ranking-trend up">▲ Rising</span>`;
+      else if (diff < -2) trendHTML = `<span class="ranking-trend down">▼ Falling</span>`;
+      else if (m.recentScore > 0) trendHTML = `<span class="ranking-trend flat">→ Steady</span>`;
+    } else if (m.recentScore > 0) {
+      trendHTML = `<span class="ranking-trend up">✦ New</span>`;
+    }
+
+    const avatarInner = u.photo ? `<img src="${u.photo}" alt="${u.name}">` : u.name.charAt(0).toUpperCase();
+    const stats = [
+      `🥐 ${m.reviewCount} review${m.reviewCount !== 1 ? 's' : ''}`,
+      `🏪 ${m.bakeries} baker${m.bakeries !== 1 ? 'ies' : 'y'}`,
+      m.cities > 1 ? `📍 ${m.cities} cities` : '',
+      `🍞 ${m.categories} type${m.categories !== 1 ? 's' : ''}`,
+      m.followers ? `👥 ${m.followers}` : '',
+      m.avgNoteLength > 20 ? `✍️ Detailed reviews` : '',
+    ].filter(Boolean);
+
+    return `<div class="ranking-card${pos <= 3 ? ` top-${pos}` : ''}${isMe ? ' is-me' : ''}" onclick="openProfileModal('${u.uid}')">
+      ${isMe ? '<span class="ranking-me-badge">You</span>' : ''}
+      <div class="ranking-pos ${posClass}">${posLabel}</div>
+      <div class="ranking-avatar">${avatarInner}</div>
+      <div class="ranking-info">
+        <div class="ranking-name">${u.name}</div>
+        ${u.location ? `<div class="ranking-location">📍 ${u.location}</div>` : ''}
+        <div class="ranking-stats">${stats.map(s => `<span class="ranking-stat">${s}</span>`).join('')}</div>
+      </div>
+      <div class="ranking-right">
+        <div class="ranking-score">${Math.round(m.score)}</div>
+        ${trendHTML}
+      </div>
+    </div>`;
+  }).join('');
+
+}
+
 function renderPeople() {
   const grid = document.getElementById('peopleGrid');
   if (!grid) return;
+  grid.style.display = 'grid';
+  grid.style.gridTemplateColumns = 'repeat(auto-fill,minmax(260px,1fr))';
+  grid.style.flexDirection = '';
   const members = {};
   allItems.forEach(item => {
     if (!item.userId) return;
@@ -4187,6 +4512,28 @@ async function openProfileModal(uid, catFilter, locFilter) {
 
   const followBtn = !isOwnProfile && currentUser ? followBtnHTML(uid, true) : '';
 
+  const bakeriesTriedCount = new Set(userItems.map(i => i.bakeryName).filter(Boolean)).size;
+  const memberSince = profile.createdAt?.toDate ? profile.createdAt.toDate() : null;
+  const memberSinceStr = memberSince ? memberSince.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }) : null;
+
+  const statsStrip = isOwnProfile ? `
+    <div class="profile-stats-strip">
+      <div class="profile-stats-strip-item">
+        <div class="profile-stats-strip-num">${bakeriesTriedCount}</div>
+        <div class="profile-stats-strip-label">🏪 Bakeries tried</div>
+      </div>
+      <div class="profile-stats-strip-divider"></div>
+      <div class="profile-stats-strip-item">
+        <div class="profile-stats-strip-num">${userItems.length}</div>
+        <div class="profile-stats-strip-label">🥐 Items rated</div>
+      </div>
+      ${memberSinceStr ? `<div class="profile-stats-strip-divider"></div>
+      <div class="profile-stats-strip-item">
+        <div class="profile-stats-strip-num" style="font-size:0.78rem;">${memberSinceStr}</div>
+        <div class="profile-stats-strip-label">📅 Member since</div>
+      </div>` : ''}
+    </div>` : '';
+
   document.getElementById('profileModalContent').innerHTML = `
     <div class="profile-hero">
       <div class="profile-hero-avatar">${photo ? `<img src="${photo}" alt="${name}">` : initials}</div>
@@ -4205,11 +4552,13 @@ async function openProfileModal(uid, catFilter, locFilter) {
         </div>
       </div>
     </div>
+    ${statsStrip}
     <div class="profile-tabs">
       <div class="profile-tab active" onclick="switchProfileTab('reviews','${uid}')">Reviews</div>
       <div class="profile-tab" onclick="switchProfileTab('followers','${uid}')">Followers</div>
       <div class="profile-tab" onclick="switchProfileTab('following','${uid}')">Following</div>
       ${isOwnProfile ? `<div class="profile-tab" onclick="switchProfileTab('saved','${uid}')">🔖 Saved</div>` : ''}
+      ${isOwnProfile ? `<div class="profile-tab" onclick="switchProfileTab('activity','${uid}')">📅 Activity</div>` : ''}
       ${isOwnProfile ? `<div class="profile-tab" onclick="switchProfileTab('map','${uid}')">🗺️ My Map</div>` : ''}
     </div>
     <div class="profile-tab-content" id="profileTabContent">
@@ -4227,8 +4576,8 @@ function closeProfileModal() {
 async function switchProfileTab(tab, uid) {
   // Update active tab
   document.querySelectorAll('.profile-tab').forEach(t => {
-    const tabText = t.textContent.replace('🔖 ','').toLowerCase();
-    t.classList.toggle('active', tabText === tab);
+    const tabText = t.textContent.replace(/^[🔖🗺️📅]\s*/u, '').toLowerCase().trim();
+    t.classList.toggle('active', tabText === tab || (tab === 'activity' && tabText === 'activity'));
   });
   const content = document.getElementById('profileTabContent');
   if (!content) return;
@@ -4236,6 +4585,11 @@ async function switchProfileTab(tab, uid) {
 
   if (tab === 'reviews') {
     await openProfileModal(uid, '', '');
+    return;
+  }
+
+  if (tab === 'activity') {
+    renderActivityTab(content, uid);
     return;
   }
 
@@ -7740,6 +8094,146 @@ async function renderAdminFeatures() {
 document.getElementById('featureRequestModal').addEventListener('click', e => {
   if (e.target === document.getElementById('featureRequestModal')) closeFeatureRequestModal();
 });
+
+// ─── ACTIVITY CALENDAR ────────────────────────────────────────────────────────
+let calViewYear = new Date().getFullYear();
+let calViewMonth = new Date().getMonth();
+let calUid = null;
+
+function renderActivityTab(container, uid) {
+  calUid = uid;
+  calViewYear = new Date().getFullYear();
+  calViewMonth = new Date().getMonth();
+  container.innerHTML = `<div id="activityCalendarRoot" style="padding:0 4px 16px;"></div>`;
+  renderCalendar();
+}
+
+function renderCalendar() {
+  const root = document.getElementById('activityCalendarRoot');
+  if (!root) return;
+  const myItems = allItems.filter(i => i.userId === calUid);
+  const today = new Date();
+
+  const dateMap = {};
+  myItems.forEach(item => {
+    const ts = item.createdAt?.toDate ? item.createdAt.toDate() : (item.createdAt ? new Date(item.createdAt) : null);
+    if (!ts) return;
+    if (ts.getFullYear() === calViewYear && ts.getMonth() === calViewMonth) {
+      const d = ts.getDate();
+      if (!dateMap[d]) dateMap[d] = [];
+      dateMap[d].push({ ...item, _ts: ts });
+    }
+  });
+
+  const monthItems = Object.values(dateMap).flat();
+  const monthBakeries = new Set(monthItems.map(i => i.bakeryName).filter(Boolean)).size;
+  const monthCities = new Set(monthItems.map(i => extractCity(i.bakeryAddress || '')).filter(Boolean)).size;
+  const monthName = new Date(calViewYear, calViewMonth, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+
+  const firstDay = new Date(calViewYear, calViewMonth, 1).getDay();
+  const daysInMonth = new Date(calViewYear, calViewMonth + 1, 0).getDate();
+  const dayLabels = ['S','M','T','W','T','F','S'];
+
+  let cells = '';
+  for (let i = 0; i < firstDay; i++) cells += `<div class="cal-day"></div>`;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const isToday = d === today.getDate() && calViewMonth === today.getMonth() && calViewYear === today.getFullYear();
+    const reviews = dateMap[d] || [];
+    const hasReview = reviews.length > 0;
+    const countBadge = reviews.length > 1 ? `<span class="cal-review-count">${reviews.length}</span>` : '';
+    const classes = `cal-day${hasReview ? ' has-review' : ''}${isToday ? ' today' : ''}`;
+    const click = hasReview ? `onclick="onCalDayClick(${d})"` : '';
+    cells += `<div class="${classes}" ${click}>${d}${countBadge}</div>`;
+  }
+
+  const canGoNext = !(calViewYear === today.getFullYear() && calViewMonth === today.getMonth());
+
+  root.innerHTML = `
+    <div class="activity-month-header">
+      <div class="activity-month-title">${monthName}</div>
+      <div class="activity-month-nav">
+        <button onclick="calNav(-1)">‹</button>
+        <button onclick="calNav(1)" ${!canGoNext ? 'disabled style="opacity:0.3;cursor:default;"' : ''}>›</button>
+      </div>
+    </div>
+    <div class="activity-month-stats">
+      <div class="activity-month-stat"><strong>${monthItems.length}</strong> review${monthItems.length !== 1 ? 's' : ''}</div>
+      ${monthBakeries ? `<div class="activity-month-stat"><strong>${monthBakeries}</strong> baker${monthBakeries !== 1 ? 'ies' : 'y'}</div>` : ''}
+      ${monthCities ? `<div class="activity-month-stat"><strong>${monthCities}</strong> cit${monthCities !== 1 ? 'ies' : 'y'}</div>` : ''}
+    </div>
+    <div class="cal-grid">
+      ${dayLabels.map(l => `<div class="cal-day-label">${l}</div>`).join('')}
+      ${cells}
+    </div>
+    ${!monthItems.length ? `<div style="text-align:center;padding:24px 0;color:var(--text-muted);font-size:0.85rem;">No reviews this month</div>` : ''}`;
+
+  root._dateMap = dateMap;
+}
+
+function calNav(dir) {
+  calViewMonth += dir;
+  if (calViewMonth > 11) { calViewMonth = 0; calViewYear++; }
+  if (calViewMonth < 0) { calViewMonth = 11; calViewYear--; }
+  renderCalendar();
+}
+
+function onCalDayClick(day) {
+  const root = document.getElementById('activityCalendarRoot');
+  const reviews = root?._dateMap?.[day] || [];
+  if (!reviews.length) return;
+
+  if (reviews.length === 1) {
+    openBakeryProfile(reviews[0].bakeryName);
+    return;
+  }
+
+  // Multiple reviews — bottom sheet
+  const dateStr = new Date(calViewYear, calViewMonth, day)
+    .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+
+  const rows = reviews.map((item, i) => {
+    const score = (item.communityAvg || item.overallRating || 0).toFixed(1);
+    const photo = item.photoURL
+      ? `<img src="${item.photoURL}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;flex-shrink:0;" alt="">`
+      : `<div style="width:44px;height:44px;border-radius:8px;background:var(--parchment-dark);display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0;">${CATEGORIES?.[item.category]||'🥐'}</div>`;
+    return `<div data-calday-idx="${i}" style="display:flex;gap:12px;align-items:center;padding:11px 0;border-bottom:1px solid var(--border);cursor:pointer;"
+      onmouseover="this.style.background='var(--parchment)';this.style.margin='0 -20px';this.style.padding='11px 20px';"
+      onmouseout="this.style.background='';this.style.margin='';this.style.padding='11px 0';">
+      ${photo}
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:0.88rem;font-weight:600;color:var(--espresso);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.name || 'Review'}</div>
+        <div style="font-size:0.74rem;color:var(--text-muted);">${item.bakeryName || ''}</div>
+      </div>
+      <div style="font-size:1rem;font-weight:700;color:var(--caramel);flex-shrink:0;">${score}</div>
+    </div>`;
+  }).join('');
+
+  const overlay = document.createElement('div');
+  overlay.id = 'calDayModal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:600;display:flex;align-items:flex-end;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:var(--cream-white);border-radius:var(--radius) var(--radius) 0 0;width:100%;max-width:560px;max-height:72vh;overflow-y:auto;padding:20px 20px 36px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+        <div style="font-family:'Playfair Display',serif;font-size:1rem;font-weight:700;color:var(--espresso);">${dateStr}</div>
+        <button onclick="closeCalDayModal()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--text-muted);padding:4px 8px;">✕</button>
+      </div>
+      <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:16px;">${reviews.length} reviews</div>
+      ${rows}
+    </div>`;
+  document.body.appendChild(overlay);
+
+  // Attach click handlers with item data
+  overlay.querySelectorAll('[data-calday-idx]').forEach(el => {
+    const item = reviews[parseInt(el.dataset.caldayIdx)];
+    el.addEventListener('click', () => { closeCalDayModal(); if (item?.bakeryName) openBakeryProfile(item.bakeryName); });
+  });
+
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeCalDayModal(); });
+}
+
+function closeCalDayModal() {
+  document.getElementById('calDayModal')?.remove();
+}
 
 // ─── DINING MAP ───────────────────────────────────────────────────────────────
 let diningMapInstance = null;
