@@ -1154,8 +1154,25 @@ nav::before {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: block;
+  width: 100%;
 }
-.lb-bakery { font-size: 0.72rem; color: var(--honey-light); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lb-bakery {
+  font-size: 0.72rem;
+  color: var(--honey-light);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  max-width: 100%;
+}
+.lb-reviews-line {
+  font-size: 0.68rem;
+  color: var(--honey-light);
+  margin-top: 2px;
+  opacity: 0.8;
+}
 .lb-right { text-align: right; flex-shrink: 0; }
 .lb-score {
   font-family: 'Playfair Display', serif;
@@ -5121,7 +5138,7 @@ function renderBakeryLeaderboard() {
     const rankClass = rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : '';
     const emoji = b.topItem ? (CATEGORY_TREE[b.topItem.category]?.emoji || '🥐') : '🏪';
     const thumb = b.topItem?.photoURL
-      ? `<img src="${b.topItem.photoURL}" style="width:52px;height:52px;border-radius:8px;object-fit:cover;" alt="">`
+      ? `<img src="${b.topItem.photoURL}" style="width:42px;height:42px;border-radius:6px;object-fit:cover;flex-shrink:0;" alt="">`
       : `<div class="lb-image">${emoji}</div>`;
 
     return `
@@ -5130,11 +5147,11 @@ function renderBakeryLeaderboard() {
         ${thumb}
         <div class="lb-info">
           <div class="lb-name">${b.name}</div>
-          <div class="lb-bakery">📍 ${b.address || 'York'} · ${b.reviewCount} review${b.reviewCount !== 1 ? 's' : ''}</div>
+          <div class="lb-bakery">📍 ${b.address || ''}</div>
+          <div class="lb-reviews-line">${b.reviewCount} review${b.reviewCount !== 1 ? 's' : ''}</div>
         </div>
         <div class="lb-right">
           <div class="lb-score">${b.avg.toFixed(1)}</div>
-          <div class="lb-reviews">${b.reviewCount} item${b.reviewCount !== 1 ? 's' : ''}</div>
         </div>
       </div>`;
   }).join('');
@@ -5254,7 +5271,7 @@ function renderLeaderboard(tab) {
     const ratingCount = reviewCount; // alias for template
     const avgPStr = record.avgPrice ? ' · £' + parseFloat(record.avgPrice).toFixed(2) + ' avg' : '';
     const imageContent = record.photoURL
-      ? `<img src="${record.photoURL}" style="width:52px;height:52px;border-radius:8px;object-fit:cover;" alt="">`
+      ? `<img src="${record.photoURL}" style="width:42px;height:42px;border-radius:6px;object-fit:cover;flex-shrink:0;" alt="">`
       : `<div class="lb-image">${catDisp.emoji}</div>`;
     // Click opens the first matching review for this record
     const matchingItem = allItems.find(it => it.itemRecordId === record.id) || allItems.find(it => (it.name||'').toLowerCase() === (record.name||'').toLowerCase() && (it.bakeryName||'').toLowerCase() === (record.bakeryName||'').toLowerCase());
@@ -5266,10 +5283,10 @@ function renderLeaderboard(tab) {
         <div class="lb-info">
           <div class="lb-name">${record.name || 'Unknown bake'}</div>
           <div class="lb-bakery">📍 ${record.bakeryName || 'Unknown'}${avgPStr}</div>
+          <div class="lb-reviews-line">${reviewCount} review${reviewCount !== 1 ? 's' : ''}${isLowConfidence ? ' · <span style="opacity:0.6;">building confidence</span>' : ''}</div>
         </div>
         <div class="lb-right">
           <div class="lb-score">${score}</div>
-          <div class="lb-reviews">${reviewCount} review${reviewCount !== 1 ? 's' : ''}${isLowConfidence ? ' · <span style="opacity:0.6;">building confidence</span>' : ''}</div>
         </div>
       </div>`;
   }).join('');
