@@ -3071,6 +3071,13 @@ nav::before {
         <input type="text" class="form-input" id="profileLocation" placeholder="e.g. York, UK">
       </div>
       <div class="form-group">
+        <label class="form-label">Home country <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">(used for rankings)</span></label>
+        <select class="form-select" id="profileCountry">
+          <option value="">Select your country…</option>
+          ${Object.keys(EXPLORE_COUNTRIES).sort().map(c => `<option value="${c}">${c}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group">
         <label class="form-label">Bio <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">(optional)</span></label>
         <textarea class="form-textarea" id="profileBio" placeholder="A few words about you and your love of baked goods…" style="min-height:90px;"></textarea>
       </div>
@@ -3123,6 +3130,13 @@ nav::before {
         <div class="form-group">
           <label class="form-label">Location <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">(optional)</span></label>
           <input type="text" class="form-input" id="settingsLocation" placeholder="e.g. York, UK">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Home country <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">(used for rankings)</span></label>
+          <select class="form-select" id="settingsCountry">
+            <option value="">Select your country…</option>
+            ${Object.keys(EXPLORE_COUNTRIES).sort().map(c => `<option value="${c}">${c}</option>`).join('')}
+          </select>
         </div>
         <div class="form-group">
           <label class="form-label">Bio <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">(optional)</span></label>
@@ -4281,6 +4295,40 @@ function computeUserScore(uid, allUserItems, followersMap) {
   return { score, reviewCount, followers, categories, bakeries, cities, avgNoteLength, recentScore, prevScore };
 }
 
+function computeCountryRank(uid, country) {
+  // Build per-user item maps filtered to bakeries in this country
+  const allUserItems = {};
+  allItems.forEach(item => {
+    if (!item.userId) return;
+    const itemCountry = extractCountry(item.bakeryAddress || '');
+    if (itemCountry !== country) return;
+    if (!allUserItems[item.userId]) allUserItems[item.userId] = [];
+    allUserItems[item.userId].push(item);
+  });
+
+  // Also include users whose profile home country matches, even with no country-specific reviews
+  Object.keys(allProfiles).forEach(puid => {
+    const p = allProfiles[puid];
+    const pc = p.country || extractCountry(p.location || '');
+    if (pc === country && !allUserItems[puid]) allUserItems[puid] = [];
+  });
+
+  if (!allUserItems[uid]) return { rank: null };
+
+  // Score all users and sort
+  const followersMap = {};
+  Object.values(myFollows || {}).forEach(f => {
+    if (f.followingId) followersMap[f.followingId] = (followersMap[f.followingId] || 0) + 1;
+  });
+
+  const ranked = Object.keys(allUserItems)
+    .map(u => ({ uid: u, score: computeUserScore(u, allUserItems, followersMap).score }))
+    .sort((a, b) => b.score - a.score);
+
+  const rank = ranked.findIndex(r => r.uid === uid) + 1;
+  return { rank: rank || null, total: ranked.length };
+}
+
 function populateRankingLocationFilter() {
   const sel = document.getElementById('rankingLocationFilter');
   if (!sel) return;
@@ -4380,7 +4428,6 @@ async function renderRankings() {
         <div class="ranking-stats">${stats.map(s => `<span class="ranking-stat">${s}</span>`).join('')}</div>
       </div>
       <div class="ranking-right">
-        <div class="ranking-score">${Math.round(m.score)}</div>
         ${trendHTML}
       </div>
     </div>`;
@@ -4516,6 +4563,21 @@ async function openProfileModal(uid, catFilter, locFilter) {
   const memberSince = profile.createdAt?.toDate ? profile.createdAt.toDate() : null;
   const memberSinceStr = memberSince ? memberSince.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }) : null;
 
+  // Compute country ranking based on profile home country
+  let countryRankHTML = '';
+  const homeCountry = profile.country || extractCountry(profile.location || '');
+  if (homeCountry) {
+    const countryRank = computeCountryRank(uid, homeCountry);
+    if (countryRank.rank) {
+      const medal = countryRank.rank === 1 ? '🥇' : countryRank.rank === 2 ? '🥈' : countryRank.rank === 3 ? '🥉' : `#${countryRank.rank}`;
+      countryRankHTML = `<div class="profile-stats-strip-divider"></div>
+      <div class="profile-stats-strip-item">
+        <div class="profile-stats-strip-num">${medal}</div>
+        <div class="profile-stats-strip-label">📍 ${homeCountry}</div>
+      </div>`;
+    }
+  }
+
   const statsStrip = isOwnProfile ? `
     <div class="profile-stats-strip">
       <div class="profile-stats-strip-item">
@@ -4527,6 +4589,7 @@ async function openProfileModal(uid, catFilter, locFilter) {
         <div class="profile-stats-strip-num">${userItems.length}</div>
         <div class="profile-stats-strip-label">🥐 Items rated</div>
       </div>
+      ${countryRankHTML}
       ${memberSinceStr ? `<div class="profile-stats-strip-divider"></div>
       <div class="profile-stats-strip-item">
         <div class="profile-stats-strip-num" style="font-size:0.78rem;">${memberSinceStr}</div>
@@ -6048,6 +6111,8 @@ async function openSettingsPage() {
   const profile = allProfiles[currentUser.uid] || {};
   document.getElementById('settingsName').value = profile.displayName || currentUser.displayName || '';
   document.getElementById('settingsLocation').value = profile.location || '';
+  const countryEl = document.getElementById('settingsCountry');
+  if (countryEl) countryEl.value = profile.country || '';
   document.getElementById('settingsBio').value = profile.bio || '';
   settingsPhotoFile = null;
 
@@ -6115,6 +6180,7 @@ async function saveSettingsProfile() {
     const profileData = {
       displayName,
       location: document.getElementById('settingsLocation').value.trim(),
+      country: document.getElementById('settingsCountry')?.value || '',
       bio: document.getElementById('settingsBio').value.trim(),
       favCategory: document.getElementById('settingsFavCategory').value || '',
       photoURL, uid: currentUser.uid, updatedAt: new Date().toISOString()
