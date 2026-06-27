@@ -2678,7 +2678,7 @@ nav::before {
         </div>
 
         <div class="form-group">
-          <label class="form-label">Name your bake</label>
+          <label class="form-label">Name your bake <span style="color:#e74c3c;">*</span></label>
           <input type="text" class="form-input" id="itemName"
             placeholder="e.g. Almond croissant, pain au chocolat…"
             oninput="searchExistingItems(this.value)" autocomplete="off">
@@ -2696,7 +2696,7 @@ nav::before {
         </div>
 
         <div class="form-group" id="categoryGroup">
-          <label class="form-label">Category</label>
+          <label class="form-label">Category <span style="color:#e74c3c;">*</span></label>
           <div id="categoryChips">
             <div id="categoryParentChips" class="category-chips" style="margin-bottom:10px;"></div>
             <div id="categorySubChips" class="category-chips" style="display:none;"></div>
@@ -5806,6 +5806,33 @@ function showBakeryItemHints() {
 }
 
 function modalNext() {
+  // Per-step validation
+  if (currentStep === 1) {
+    if (!selectedBakery?.name && !document.getElementById('bakerySearch')?.value?.trim()) {
+      showToast('Please select a bakery first');
+      return;
+    }
+  }
+  if (currentStep === 2) {
+    const itemName = document.getElementById('itemName').value.trim();
+    if (!itemName) {
+      showToast('Please enter a name for your bake');
+      document.getElementById('itemName').focus();
+      return;
+    }
+    if (!selectedCategory) {
+      showToast('Please select a category');
+      return;
+    }
+  }
+  if (currentStep === 3) {
+    const rating = parseFloat(document.getElementById('overallRating').value);
+    if (!rating || rating === 0) {
+      showToast('Please give an overall rating');
+      return;
+    }
+  }
+
   if (currentStep < totalSteps) {
     goToStep(currentStep + 1);
   } else {
@@ -5953,6 +5980,24 @@ function prefillItemForReview(recordId) {
 // ─── SAVE ─────────────────────────────────────────────────────────────────────
 async function saveReview() {
   if (!currentUser) { openAuthModal(); return; }
+
+  // Validate mandatory fields
+  const itemName = document.getElementById('itemName').value.trim();
+  const bakeryName = selectedBakery?.name || document.getElementById('bakerySearch')?.value?.trim() || '';
+  const overallRatingRaw = document.getElementById('overallRating').value;
+  const category = selectedCategory || '';
+
+  const errors = [];
+  if (!itemName) errors.push('Item name');
+  if (!bakeryName) errors.push('Bakery');
+  if (!overallRatingRaw || parseFloat(overallRatingRaw) === 0) errors.push('Overall rating');
+  if (!category) errors.push('Category');
+
+  if (errors.length) {
+    showToast(`Please fill in: ${errors.join(', ')}`);
+    return;
+  }
+
   const nextBtn = document.getElementById('nextBtn');
   nextBtn.disabled = true;
   nextBtn.textContent = 'Saving…';
@@ -8416,7 +8461,7 @@ function loadLeafletThenMap(myItems) {
 
     function makeIcon(label) {
       return L.divIcon({
-        html: `<div style="background:#2c1810;color:#d4a574;font-size:0.6rem;font-weight:700;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #d4a574;box-shadow:0 2px 6px rgba(0,0,0,0.3);line-height:1;text-align:center;">${label}</div>`,
+        html: `<div style="background:#2c1810;color:#d4a574;font-size:0.58rem;font-weight:700;width:30px;height:30px;border-radius:15px;position:relative;border:2px solid #d4a574;box-shadow:0 2px 6px rgba(0,0,0,0.3);"><span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);white-space:nowrap;line-height:1;">${label}</span></div>`,
         className: '',
         iconSize: [30, 30],
         iconAnchor: [15, 15]
@@ -8428,7 +8473,7 @@ function loadLeafletThenMap(myItems) {
       iconCreateFunction: cluster => {
         const n = cluster.getChildCount();
         return L.divIcon({
-          html: `<div style="background:#2c1810;color:#d4a574;font-size:0.65rem;font-weight:700;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #d4a574;box-shadow:0 2px 8px rgba(0,0,0,0.3);line-height:1;">${n}🥐</div>`,
+          html: `<div style="background:#2c1810;color:#d4a574;font-size:0.62rem;font-weight:700;width:36px;height:36px;border-radius:18px;position:relative;border:2px solid #d4a574;box-shadow:0 2px 8px rgba(0,0,0,0.3);"><span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);white-space:nowrap;line-height:1;">${n}🥐</span></div>`,
           className: '', iconSize: [36, 36], iconAnchor: [18, 18]
         });
       }
