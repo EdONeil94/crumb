@@ -3074,7 +3074,6 @@ nav::before {
         <label class="form-label">Home country <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">(used for rankings)</span></label>
         <select class="form-select" id="profileCountry">
           <option value="">Select your country…</option>
-          ${Object.keys(EXPLORE_COUNTRIES).sort().map(c => `<option value="${c}">${c}</option>`).join('')}
         </select>
       </div>
       <div class="form-group">
@@ -3135,7 +3134,6 @@ nav::before {
           <label class="form-label">Home country <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">(used for rankings)</span></label>
           <select class="form-select" id="settingsCountry">
             <option value="">Select your country…</option>
-            ${Object.keys(EXPLORE_COUNTRIES).sort().map(c => `<option value="${c}">${c}</option>`).join('')}
           </select>
         </div>
         <div class="form-group">
@@ -6112,7 +6110,14 @@ async function openSettingsPage() {
   document.getElementById('settingsName').value = profile.displayName || currentUser.displayName || '';
   document.getElementById('settingsLocation').value = profile.location || '';
   const countryEl = document.getElementById('settingsCountry');
-  if (countryEl) countryEl.value = profile.country || '';
+  if (countryEl) {
+    if (countryEl.options.length <= 1) {
+      Object.keys(EXPLORE_COUNTRIES).sort().forEach(c => {
+        countryEl.add(new Option(c, c));
+      });
+    }
+    countryEl.value = profile.country || '';
+  }
   document.getElementById('settingsBio').value = profile.bio || '';
   settingsPhotoFile = null;
 
