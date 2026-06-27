@@ -4313,11 +4313,8 @@ function computeCountryRank(uid, country) {
 
   if (!allUserItems[uid]) return { rank: null };
 
-  // Score all users and sort
+  // Followers map — not easily available here without a Firestore fetch, so omit from country rank
   const followersMap = {};
-  Object.values(myFollows || {}).forEach(f => {
-    if (f.followingId) followersMap[f.followingId] = (followersMap[f.followingId] || 0) + 1;
-  });
 
   const ranked = Object.keys(allUserItems)
     .map(u => ({ uid: u, score: computeUserScore(u, allUserItems, followersMap).score }))
