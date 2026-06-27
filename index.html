@@ -15,6 +15,9 @@
 <meta name="description" content="Discover, rate and share the best bakes from your favourite local bakeries.">
 
 <!-- Fonts -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -4207,6 +4210,7 @@ async function openProfileModal(uid, catFilter, locFilter) {
       <div class="profile-tab" onclick="switchProfileTab('followers','${uid}')">Followers</div>
       <div class="profile-tab" onclick="switchProfileTab('following','${uid}')">Following</div>
       ${isOwnProfile ? `<div class="profile-tab" onclick="switchProfileTab('saved','${uid}')">🔖 Saved</div>` : ''}
+      ${isOwnProfile ? `<div class="profile-tab" onclick="switchProfileTab('map','${uid}')">🗺️ My Map</div>` : ''}
     </div>
     <div class="profile-tab-content" id="profileTabContent">
       ${catFilterBar}${locFilterBar}
@@ -4237,6 +4241,11 @@ async function switchProfileTab(tab, uid) {
 
   if (tab === 'saved') {
     await renderSavedTab(content);
+    return;
+  }
+
+  if (tab === 'map') {
+    renderDiningMapTab(content, uid);
     return;
   }
 
@@ -7731,6 +7740,235 @@ async function renderAdminFeatures() {
 document.getElementById('featureRequestModal').addEventListener('click', e => {
   if (e.target === document.getElementById('featureRequestModal')) closeFeatureRequestModal();
 });
+
+// ─── DINING MAP ───────────────────────────────────────────────────────────────
+let diningMapInstance = null;
+
+function renderDiningMapTab(container, uid) {
+  // Gather this user's reviewed items with location data
+  const myItems = allItems.filter(i => i.userId === uid && i.bakeryName);
+
+  // Build stats
+  const cityMap = {}, countryMap = {}, categoryMap = {};
+  myItems.forEach(item => {
+    const score = item.communityAvg || item.overallRating || 0;
+    const city = extractCity(item.bakeryAddress || '');
+    const country = extractCountry(item.bakeryAddress || '');
+    const cat = item.category || 'other';
+
+    if (city) {
+      if (!cityMap[city]) cityMap[city] = { count: 0, total: 0, lat: item.bakeryLat, lng: item.bakeryLng };
+      cityMap[city].count++;
+      cityMap[city].total += score;
+      if (!cityMap[city].lat && item.bakeryLat) { cityMap[city].lat = item.bakeryLat; cityMap[city].lng = item.bakeryLng; }
+    }
+    if (country) {
+      if (!countryMap[country]) countryMap[country] = { count: 0, total: 0 };
+      countryMap[country].count++;
+      countryMap[country].total += score;
+    }
+    if (!categoryMap[cat]) categoryMap[cat] = { count: 0, total: 0 };
+    categoryMap[cat].count++;
+    categoryMap[cat].total += score;
+  });
+
+  const cityCount = Object.keys(cityMap).length;
+  const countryCount = Object.keys(countryMap).length;
+  const bakeryCount = new Set(myItems.map(i => i.bakeryName)).size;
+
+  container.innerHTML = `
+    <div style="margin:-16px -24px 0;">
+
+      <!-- Map header -->
+      <div style="padding:16px 20px 12px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;">
+        <div>
+          <div style="font-family:'Playfair Display',serif; font-size:1.1rem; font-weight:700; color:var(--espresso);">🗺️ Your Baking Map</div>
+          <div style="font-size:0.78rem; color:var(--text-muted); margin-top:2px;">${cityCount} city${cityCount !== 1 ? 'ies' : 'y'} · ${bakeryCount} baker${bakeryCount !== 1 ? 'ies' : 'y'} · ${myItems.length} review${myItems.length !== 1 ? 's' : ''}</div>
+        </div>
+      </div>
+
+      <!-- Map container -->
+      <div id="diningMapEl" style="height:280px; width:100%; background:var(--parchment-dark);"></div>
+
+      <!-- Stats tabs -->
+      <div style="display:flex; border-bottom:1px solid var(--border); background:var(--cream-white);">
+        <button class="dm-stat-tab active" onclick="switchDmTab(this,'bakes')" style="flex:1; padding:10px; font-size:0.8rem; font-weight:600; border:none; background:none; cursor:pointer; color:var(--espresso); border-bottom:2px solid var(--honey);">Bakes</button>
+        <button class="dm-stat-tab" onclick="switchDmTab(this,'cities')" style="flex:1; padding:10px; font-size:0.8rem; font-weight:500; border:none; background:none; cursor:pointer; color:var(--text-muted); border-bottom:2px solid transparent;">Cities</button>
+        <button class="dm-stat-tab" onclick="switchDmTab(this,'countries')" style="flex:1; padding:10px; font-size:0.8rem; font-weight:500; border:none; background:none; cursor:pointer; color:var(--text-muted); border-bottom:2px solid transparent;">Countries</button>
+      </div>
+
+      <!-- Stats content -->
+      <div id="dmStatContent" style="padding:0 20px 24px;"></div>
+    </div>`;
+
+  // Attach data for tab switching
+  container._dmData = { myItems, cityMap, countryMap, categoryMap };
+
+  // Init map after DOM paint
+  requestAnimationFrame(() => {
+    initDiningMap(myItems, cityMap);
+    renderDmStats('bakes', container._dmData);
+  });
+}
+
+function extractCountry(address) {
+  if (!address) return '';
+  const parts = address.split(',').map(p => p.trim()).filter(Boolean);
+  const countryWords = ['england', 'scotland', 'wales', 'northern ireland'];
+  const last = parts[parts.length - 1]?.toLowerCase();
+  if (last === 'uk' || last === 'united kingdom' || countryWords.includes(last)) return 'United Kingdom';
+  return parts[parts.length - 1] || '';
+}
+
+function initDiningMap(myItems, cityMap) {
+  // Destroy previous instance
+  if (diningMapInstance) { diningMapInstance.remove(); diningMapInstance = null; }
+
+  const el = document.getElementById('diningMapEl');
+  if (!el) return;
+
+  // Load Leaflet dynamically
+  function setupMap() {
+    const L = window.L;
+    if (!L) return;
+
+    diningMapInstance = L.map('diningMapEl', {
+      center: [30, 10], zoom: 2,
+      zoomControl: true,
+      scrollWheelZoom: false
+    });
+
+    // Tile layer — CartoDB light (no API key)
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      attribution: '© OpenStreetMap © CARTO',
+      subdomains: 'abcd', maxZoom: 19
+    }).addTo(diningMapInstance);
+
+    // Custom icon
+    function makeIcon(label, size = 'sm') {
+      const sz = size === 'lg' ? 36 : 28;
+      return L.divIcon({
+        html: `<div style="background:#2c1810;color:#d4a574;font-size:${size === 'lg' ? '0.75rem' : '0.65rem'};font-weight:700;width:${sz}px;height:${sz}px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #d4a574;box-shadow:0 2px 8px rgba(0,0,0,0.3);white-space:nowrap;">${label}</div>`,
+        className: '', iconSize: [sz, sz], iconAnchor: [sz/2, sz/2]
+      });
+    }
+
+    // Marker cluster group
+    const markers = L.markerClusterGroup({
+      maxClusterRadius: 50,
+      iconCreateFunction: cluster => {
+        const count = cluster.getChildCount();
+        return makeIcon(`${count} 🥐`, 'lg');
+      }
+    });
+
+    // Add a marker per unique bakery
+    const bakeryCoords = {};
+    myItems.forEach(item => {
+      if (!item.bakeryLat || !item.bakeryLng) return;
+      const key = item.bakeryName;
+      if (!bakeryCoords[key]) {
+        bakeryCoords[key] = { lat: item.bakeryLat, lng: item.bakeryLng, name: item.bakeryName, address: item.bakeryAddress, reviews: [] };
+      }
+      bakeryCoords[key].reviews.push(item);
+    });
+
+    Object.values(bakeryCoords).forEach(b => {
+      const avg = b.reviews.reduce((s, i) => s + (i.communityAvg || i.overallRating || 0), 0) / b.reviews.length;
+      const marker = L.marker([b.lat, b.lng], { icon: makeIcon(avg.toFixed(1)) });
+      marker.bindPopup(`
+        <div style="font-family:sans-serif;min-width:140px;">
+          <div style="font-weight:700;font-size:0.88rem;margin-bottom:4px;">${b.name}</div>
+          <div style="font-size:0.75rem;color:#666;margin-bottom:6px;">${b.address || ''}</div>
+          <div style="display:flex;gap:8px;">
+            <span style="font-size:0.78rem;"><strong>${b.reviews.length}</strong> review${b.reviews.length !== 1 ? 's' : ''}</span>
+            <span style="font-size:0.78rem;color:#2c1810;font-weight:700;">⭐ ${avg.toFixed(1)}</span>
+          </div>
+        </div>`, { maxWidth: 200 });
+      markers.addLayer(marker);
+    });
+
+    diningMapInstance.addLayer(markers);
+
+    // Fit map to markers if any
+    if (Object.keys(bakeryCoords).length > 0) {
+      const group = L.featureGroup(Object.values(bakeryCoords).map(b => L.marker([b.lat, b.lng])));
+      diningMapInstance.fitBounds(group.getBounds().pad(0.3), { maxZoom: 12 });
+    }
+  }
+
+  if (window.L) {
+    setupMap();
+  } else {
+    // Load Leaflet + MarkerCluster dynamically
+    const script1 = document.createElement('script');
+    script1.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    script1.onload = () => {
+      const script2 = document.createElement('script');
+      script2.src = 'https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js';
+      script2.onload = setupMap;
+      document.head.appendChild(script2);
+    };
+    document.head.appendChild(script1);
+  }
+}
+
+function switchDmTab(btn, tab) {
+  document.querySelectorAll('.dm-stat-tab').forEach(t => {
+    t.style.fontWeight = '500';
+    t.style.color = 'var(--text-muted)';
+    t.style.borderBottom = '2px solid transparent';
+  });
+  btn.style.fontWeight = '700';
+  btn.style.color = 'var(--espresso)';
+  btn.style.borderBottom = '2px solid var(--honey)';
+  const container = document.getElementById('profileTabContent');
+  if (container?._dmData) renderDmStats(tab, container._dmData);
+}
+
+function renderDmStats(tab, data) {
+  const el = document.getElementById('dmStatContent');
+  if (!el) return;
+  const { myItems, cityMap, countryMap, categoryMap } = data;
+
+  const catLabels = {
+    bread: '🍞 Bread', pastry: '🥐 Pastry', cake: '🎂 Cake',
+    tart: '🥧 Tarts', bun: '🧁 Buns', cookie: '🍪 Biscuits', other: '☕ Other'
+  };
+
+  if (tab === 'bakes') {
+    const rows = Object.entries(categoryMap)
+      .sort((a, b) => b[1].count - a[1].count)
+      .map(([cat, d]) => ({ label: catLabels[cat] || cat, count: d.count, avg: d.count ? d.total / d.count : 0 }));
+    el.innerHTML = renderDmStatRows(rows, `${myItems.length} bakes rated`);
+  } else if (tab === 'cities') {
+    const rows = Object.entries(cityMap)
+      .sort((a, b) => b[1].count - a[1].count)
+      .map(([city, d]) => ({ label: city, count: d.count, avg: d.count ? d.total / d.count : 0 }));
+    el.innerHTML = renderDmStatRows(rows, `${Object.keys(cityMap).length} cities visited`);
+  } else {
+    const rows = Object.entries(countryMap)
+      .sort((a, b) => b[1].count - a[1].count)
+      .map(([country, d]) => ({ label: country, count: d.count, avg: d.count ? d.total / d.count : 0 }));
+    el.innerHTML = renderDmStatRows(rows, `${Object.keys(countryMap).length} countries visited`);
+  }
+}
+
+function renderDmStatRows(rows, subtitle) {
+  if (!rows.length) return `<div style="padding:24px 0;text-align:center;color:var(--text-muted);font-size:0.85rem;">No data yet</div>`;
+  return `
+    <div style="font-size:0.72rem;color:var(--text-muted);padding:12px 0 8px;letter-spacing:0.5px;text-transform:uppercase;font-weight:600;">${subtitle}</div>
+    ${rows.map(r => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);">
+        <div>
+          <div style="font-size:0.88rem;font-weight:600;color:var(--espresso);">${r.label}</div>
+          <div style="font-size:0.75rem;color:var(--text-muted);">${r.count} review${r.count !== 1 ? 's' : ''}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div style="width:38px;height:38px;border-radius:50%;border:2px solid ${r.avg >= 4 ? '#27ae60' : r.avg >= 3 ? 'var(--honey)' : 'var(--text-muted)'};display:flex;align-items:center;justify-content:center;font-size:0.82rem;font-weight:700;color:${r.avg >= 4 ? '#27ae60' : r.avg >= 3 ? 'var(--caramel)' : 'var(--text-muted)'};">${r.avg.toFixed(1)}</div>
+        </div>
+      </div>`).join('')}`;
+}
 
 // ─── BOOKMARKS ────────────────────────────────────────────────────────────────
 let userBookmarks = {}; // bakeryName -> { id, address }
