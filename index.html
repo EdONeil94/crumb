@@ -290,96 +290,82 @@ nav::before {
 .ranking-card {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 14px 16px;
+  gap: 10px;
+  padding: 10px 12px;
   background: var(--cream-white);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   cursor: pointer;
-  transition: box-shadow 0.15s, transform 0.12s;
+  transition: box-shadow 0.15s;
   position: relative;
+  overflow: hidden;
 }
-.ranking-card:hover { box-shadow: var(--shadow); transform: translateY(-1px); }
-.ranking-card.top-1 { border-color: #d4af37; background: linear-gradient(135deg, #fffbef, var(--cream-white)); }
-.ranking-card.top-2 { border-color: #a8a9ad; }
-.ranking-card.top-3 { border-color: #cd7f32; }
-.ranking-card.is-me { border-color: var(--caramel); background: rgba(212,165,116,0.06); }
+.ranking-card:hover { box-shadow: var(--shadow); }
+.ranking-card.top-1 { border-left: 3px solid #d4af37; }
+.ranking-card.top-2 { border-left: 3px solid #a8a9ad; }
+.ranking-card.top-3 { border-left: 3px solid #cd7f32; }
+.ranking-card.is-me { background: rgba(212,165,116,0.06); border-color: var(--caramel); }
 .ranking-pos {
-  font-family: 'Playfair Display', serif;
-  font-size: 1.2rem;
+  font-size: 1rem;
   font-weight: 700;
-  min-width: 28px;
+  min-width: 24px;
   text-align: center;
   flex-shrink: 0;
+  line-height: 1;
 }
 .ranking-pos.top-1 { color: #d4af37; }
 .ranking-pos.top-2 { color: #a8a9ad; }
 .ranking-pos.top-3 { color: #cd7f32; }
-.ranking-pos.other { color: var(--text-muted); font-size: 0.9rem; }
+.ranking-pos.other { color: var(--text-muted); font-size: 0.82rem; }
 .ranking-avatar {
-  width: 44px; height: 44px;
+  width: 36px; height: 36px;
   border-radius: 50%;
   background: var(--caramel);
   color: white;
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
   overflow: hidden;
-  border: 2px solid var(--border);
 }
 .ranking-avatar img { width: 100%; height: 100%; object-fit: cover; }
 .ranking-info { flex: 1; min-width: 0; }
 .ranking-name {
-  font-size: 0.92rem;
+  font-size: 0.88rem;
   font-weight: 600;
   color: var(--espresso);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.ranking-location { font-size: 0.72rem; color: var(--text-muted); margin-top: 1px; }
-.ranking-stats {
-  display: flex;
-  gap: 10px;
-  margin-top: 5px;
-  flex-wrap: wrap;
-}
-.ranking-stat {
+.ranking-location { font-size: 0.7rem; color: var(--text-muted); margin-top: 1px; }
+.ranking-meta {
   font-size: 0.7rem;
   color: var(--text-muted);
-  background: var(--parchment);
-  border-radius: 100px;
-  padding: 2px 8px;
+  margin-top: 3px;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.ranking-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
-.ranking-score {
-  font-family: 'Playfair Display', serif;
-  font-size: 1.3rem;
-  font-weight: 700;
-  color: var(--espresso);
-  line-height: 1;
-}
+.ranking-right { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex-shrink: 0; }
 .ranking-trend {
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 600;
   padding: 2px 7px;
   border-radius: 100px;
+  white-space: nowrap;
 }
 .ranking-trend.up { background: #d4edda; color: #155724; }
 .ranking-trend.down { background: #f8d7da; color: #721c24; }
 .ranking-trend.flat { background: var(--parchment-dark); color: var(--text-muted); }
 .ranking-me-badge {
-  position: absolute;
-  top: 8px; right: 8px;
-  font-size: 0.6rem;
+  font-size: 0.58rem;
   font-weight: 700;
   letter-spacing: 0.5px;
   text-transform: uppercase;
   background: var(--caramel);
   color: white;
-  padding: 2px 6px;
+  padding: 2px 5px;
   border-radius: 100px;
 }
 
@@ -2144,17 +2130,22 @@ nav::before {
   display: flex;
   border-bottom: 1px solid var(--border);
   margin-bottom: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
+.profile-tabs::-webkit-scrollbar { display: none; }
 .profile-tab {
-  flex: 1;
-  padding: 12px;
+  flex: 0 0 auto;
+  padding: 12px 16px;
   text-align: center;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   font-weight: 500;
   color: var(--text-muted);
   cursor: pointer;
   border-bottom: 2px solid transparent;
   transition: all 0.2s;
+  white-space: nowrap;
 }
 .profile-tab.active { color: var(--espresso); border-bottom-color: var(--honey); font-weight: 600; }
 .profile-tab-content { padding: 16px 24px 28px; }
@@ -4404,25 +4395,23 @@ async function renderRankings() {
     }
 
     const avatarInner = u.photo ? `<img src="${u.photo}" alt="${u.name}">` : u.name.charAt(0).toUpperCase();
-    const stats = [
-      `🥐 ${m.reviewCount} review${m.reviewCount !== 1 ? 's' : ''}`,
-      `🏪 ${m.bakeries} baker${m.bakeries !== 1 ? 'ies' : 'y'}`,
-      m.cities > 1 ? `📍 ${m.cities} cities` : '',
-      `🍞 ${m.categories} type${m.categories !== 1 ? 's' : ''}`,
-      m.followers ? `👥 ${m.followers}` : '',
-      m.avgNoteLength > 20 ? `✍️ Detailed reviews` : '',
+    const metaParts = [
+      `${m.reviewCount} review${m.reviewCount !== 1 ? 's' : ''}`,
+      `${m.bakeries} baker${m.bakeries !== 1 ? 'ies' : 'y'}`,
+      m.cities > 1 ? `${m.cities} cities` : '',
+      m.avgNoteLength > 20 ? '✍️ detailed' : '',
     ].filter(Boolean);
 
     return `<div class="ranking-card${pos <= 3 ? ` top-${pos}` : ''}${isMe ? ' is-me' : ''}" onclick="openProfileModal('${u.uid}')">
-      ${isMe ? '<span class="ranking-me-badge">You</span>' : ''}
       <div class="ranking-pos ${posClass}">${posLabel}</div>
       <div class="ranking-avatar">${avatarInner}</div>
       <div class="ranking-info">
         <div class="ranking-name">${u.name}</div>
         ${u.location ? `<div class="ranking-location">📍 ${u.location}</div>` : ''}
-        <div class="ranking-stats">${stats.map(s => `<span class="ranking-stat">${s}</span>`).join('')}</div>
+        <div class="ranking-meta">${metaParts.join(' · ')}</div>
       </div>
       <div class="ranking-right">
+        ${isMe ? '<span class="ranking-me-badge">You</span>' : ''}
         ${trendHTML}
       </div>
     </div>`;
@@ -4615,9 +4604,9 @@ async function openProfileModal(uid, catFilter, locFilter) {
       <div class="profile-tab active" onclick="switchProfileTab('reviews','${uid}')">Reviews</div>
       <div class="profile-tab" onclick="switchProfileTab('followers','${uid}')">Followers</div>
       <div class="profile-tab" onclick="switchProfileTab('following','${uid}')">Following</div>
-      ${isOwnProfile ? `<div class="profile-tab" onclick="switchProfileTab('saved','${uid}')">🔖 Saved</div>` : ''}
-      ${isOwnProfile ? `<div class="profile-tab" onclick="switchProfileTab('activity','${uid}')">📅 Activity</div>` : ''}
-      ${isOwnProfile ? `<div class="profile-tab" onclick="switchProfileTab('map','${uid}')">🗺️ My Map</div>` : ''}
+      ${isOwnProfile ? `<div class="profile-tab" onclick="switchProfileTab('saved','${uid}')">Saved</div>` : ''}
+      ${isOwnProfile ? `<div class="profile-tab" onclick="switchProfileTab('activity','${uid}')">Activity</div>` : ''}
+      ${isOwnProfile ? `<div class="profile-tab" onclick="switchProfileTab('map','${uid}')">My Map</div>` : ''}
     </div>
     <div class="profile-tab-content" id="profileTabContent">
       ${catFilterBar}${locFilterBar}
@@ -4634,8 +4623,8 @@ function closeProfileModal() {
 async function switchProfileTab(tab, uid) {
   // Update active tab
   document.querySelectorAll('.profile-tab').forEach(t => {
-    const tabText = t.textContent.replace(/^[🔖🗺️📅]\s*/u, '').toLowerCase().trim();
-    t.classList.toggle('active', tabText === tab || (tab === 'activity' && tabText === 'activity'));
+    const tabText = t.textContent.toLowerCase().trim();
+    t.classList.toggle('active', tabText === tab || (tab === 'map' && tabText === 'my map'));
   });
   const content = document.getElementById('profileTabContent');
   if (!content) return;
@@ -8427,8 +8416,10 @@ function loadLeafletThenMap(myItems) {
 
     function makeIcon(label) {
       return L.divIcon({
-        html: `<div style="background:#2c1810;color:#d4a574;font-size:0.68rem;font-weight:700;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #d4a574;box-shadow:0 2px 8px rgba(0,0,0,0.35);">${label}</div>`,
-        className: '', iconSize: [34, 34], iconAnchor: [17, 17]
+        html: `<div style="background:#2c1810;color:#d4a574;font-size:0.6rem;font-weight:700;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #d4a574;box-shadow:0 2px 6px rgba(0,0,0,0.3);line-height:1;text-align:center;">${label}</div>`,
+        className: '',
+        iconSize: [30, 30],
+        iconAnchor: [15, 15]
       });
     }
 
@@ -8437,8 +8428,8 @@ function loadLeafletThenMap(myItems) {
       iconCreateFunction: cluster => {
         const n = cluster.getChildCount();
         return L.divIcon({
-          html: `<div style="background:#2c1810;color:#d4a574;font-size:0.72rem;font-weight:700;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #d4a574;box-shadow:0 2px 10px rgba(0,0,0,0.35);">${n} 🥐</div>`,
-          className: '', iconSize: [40, 40], iconAnchor: [20, 20]
+          html: `<div style="background:#2c1810;color:#d4a574;font-size:0.65rem;font-weight:700;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #d4a574;box-shadow:0 2px 8px rgba(0,0,0,0.3);line-height:1;">${n}🥐</div>`,
+          className: '', iconSize: [36, 36], iconAnchor: [18, 18]
         });
       }
     });
