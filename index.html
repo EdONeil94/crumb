@@ -7744,6 +7744,17 @@ document.getElementById('featureRequestModal').addEventListener('click', e => {
 // ─── DINING MAP ───────────────────────────────────────────────────────────────
 let diningMapInstance = null;
 
+function extractCountry(address) {
+  if (!address) return '';
+  const parts = address.split(',').map(p => p.trim()).filter(Boolean);
+  const ukRegions = ['england', 'scotland', 'wales', 'northern ireland'];
+  const last = (parts[parts.length - 1] || '').toLowerCase();
+  if (last === 'uk' || last === 'united kingdom' || ukRegions.includes(last)) return 'United Kingdom';
+  // Also catch "UK" embedded in last segment e.g. "York YO1, UK"
+  if (parts.some(p => p.toLowerCase() === 'uk')) return 'United Kingdom';
+  return parts[parts.length - 1] || '';
+}
+
 function renderDiningMapTab(container, uid) {
   const myItems = allItems.filter(i => i.userId === uid && i.bakeryName);
 
