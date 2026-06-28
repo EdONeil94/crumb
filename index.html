@@ -19,6 +19,8 @@
 
 <!-- Fonts -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js" defer></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -418,14 +420,57 @@ nav::before {
 .order-status.collected { background: #d4edda; color: #155724; }
 .order-status.cancelled { background: #f8d7da; color: #721c24; }
 .order-qr {
-  width: 80px; height: 80px;
-  border: 2px solid var(--espresso);
+  width: 90px; height: 90px;
   border-radius: 8px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 0.55rem; font-weight: 700; color: var(--espresso);
-  letter-spacing: 0.5px; text-align: center; padding: 4px;
-  background: white; font-family: monospace;
+  overflow: hidden;
+  flex-shrink: 0;
   cursor: pointer;
+  border: 2px solid var(--espresso);
+  background: white;
+  display: flex; align-items: center; justify-content: center;
+}
+.order-qr canvas, .order-qr img { width: 100% !important; height: 100% !important; display: block; }
+
+/* QR Scanner overlay */
+.qr-scanner-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.92);
+  z-index: 700;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 16px;
+}
+.qr-scanner-frame {
+  position: relative;
+  width: 260px; height: 260px;
+}
+.qr-scanner-frame video {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  border-radius: 12px;
+}
+.qr-scanner-corners {
+  position: absolute; inset: 0;
+  pointer-events: none;
+}
+.qr-scanner-corners::before, .qr-scanner-corners::after {
+  content: '';
+  position: absolute;
+  width: 36px; height: 36px;
+  border-color: var(--honey);
+  border-style: solid;
+}
+.qr-scanner-corners::before { top: 0; left: 0; border-width: 3px 0 0 3px; border-radius: 4px 0 0 0; }
+.qr-scanner-corners::after  { bottom: 0; right: 0; border-width: 0 3px 3px 0; border-radius: 0 0 4px 0; }
+.qr-scanner-line {
+  position: absolute; left: 8px; right: 8px;
+  height: 2px; background: var(--honey); opacity: 0.8;
+  animation: qrScan 2s linear infinite;
+}
+@keyframes qrScan { 0% { top: 8px; } 100% { top: calc(100% - 8px); } }
+.qr-scanner-status {
+  color: white; font-size: 0.88rem; font-weight: 500; text-align: center;
+  max-width: 260px; line-height: 1.5;
 }
 .order-details { display: flex; align-items: center; gap: 14px; }
 .order-info { flex: 1; }
@@ -8903,7 +8948,10 @@ async function renderManagePreorders(bakeryName) {
     panel.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
         <div style="font-size:0.85rem;font-weight:600;color:var(--espresso);">Tomorrow's offerings</div>
-        <button class="btn-espresso" style="font-size:0.78rem;padding:7px 14px;" onclick="showAddOfferingForm('${escJS(bakeryName)}')">+ Add item</button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn-caramel" style="font-size:0.78rem;padding:7px 14px;" onclick="openQRScanner('${escJS(bakeryName)}')">📷 Scan QR</button>
+          <button class="btn-espresso" style="font-size:0.78rem;padding:7px 14px;" onclick="showAddOfferingForm('${escJS(bakeryName)}')">+ Add item</button>
+        </div>
       </div>
 
       <!-- Add offering form (hidden) -->
@@ -9152,14 +9200,8 @@ async function renderOrdersTab(container) {
         return (collect - new Date()) > 12 * 60 * 60 * 1000;
       })();
 
-      // Simple QR-like reference block (actual QR library not loaded — show ref code prominently)
-      const qrBlock = `<div class="order-qr" title="Show this to the baker">
-        <div>
-          <div style="font-size:1rem;margin-bottom:2px;">🥐</div>
-          <div>${ref}</div>
-          <div style="opacity:0.6;font-size:0.5rem;margin-top:2px;">Tap to enlarge</div>
-        </div>
-      </div>`;
+      // QR code block — generated after render
+      const qrBlock = r.status !== 'cancelled' ? `<div class="order-qr" id="qr_${r.id}" onclick="expandQR('${r.id}','${escJS(r.offeringName)}','${ref}')" title="Tap to enlarge"></div>` : '';
 
       return `<div class="order-card${r.status === 'collected' ? ' collected' : ''}" id="ordercard_${r.id}">
         <div class="order-card-header">
@@ -9180,6 +9222,10 @@ async function renderOrdersTab(container) {
         </div>
       </div>`;
     }).join('');
+
+    // Generate real QR codes after DOM is painted
+    requestAnimationFrame(() => generateOrderQRCodes(reservations));
+
   } catch(e) {
     container.innerHTML = '<div style="padding:16px;color:var(--text-muted);">Could not load orders.</div>';
     console.error(e);
@@ -9212,6 +9258,164 @@ async function cancelReservation(reservationId, offeringId) {
     const content = document.getElementById('profileTabContent');
     if (content) await renderOrdersTab(content);
   } catch(e) { showToast('Could not cancel'); console.error(e); }
+}
+
+// ─── QR CODE ──────────────────────────────────────────────────────────────────
+function generateOrderQRCodes(reservations) {
+  reservations.forEach(r => {
+    if (r.status === 'cancelled') return;
+    const el = document.getElementById(`qr_${r.id}`);
+    if (!el) return;
+    el.innerHTML = '';
+    if (window.QRCode) {
+      try {
+        new QRCode(el, {
+          text: `crumbz:reservation:${r.id}`,
+          width: 90, height: 90,
+          colorDark: '#2c1810', colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.H
+        });
+      } catch(e) {
+        el.innerHTML = `<div style="font-size:0.65rem;font-weight:700;color:#2c1810;padding:6px;text-align:center;font-family:monospace;line-height:1.4;">🥐<br>${r.id.slice(-6).toUpperCase()}</div>`;
+      }
+    } else {
+      // QRCode.js not loaded yet — retry once
+      setTimeout(() => generateOrderQRCodes([r]), 1000);
+    }
+  });
+}
+
+function expandQR(reservationId, itemName, ref) {
+  // Show a full-screen QR for easy scanning
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:800;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;';
+  overlay.innerHTML = `
+    <div style="background:white;border-radius:16px;padding:24px;text-align:center;">
+      <div id="expandedQR"></div>
+      <div style="font-family:serif;font-size:1rem;font-weight:700;color:#2c1810;margin-top:14px;">${itemName}</div>
+      <div style="font-size:0.75rem;color:#888;margin-top:4px;font-family:monospace;">Ref: ${ref}</div>
+      <div style="font-size:0.72rem;color:#aaa;margin-top:8px;">Show this to the baker at collection</div>
+    </div>
+    <button style="color:white;background:none;border:1.5px solid rgba(255,255,255,0.4);border-radius:100px;padding:10px 28px;font-size:0.85rem;cursor:pointer;" onclick="this.closest('div[style]').remove()">Close</button>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  requestAnimationFrame(() => {
+    const el = document.getElementById('expandedQR');
+    if (el && window.QRCode) {
+      new QRCode(el, {
+        text: `crumbz:reservation:${reservationId}`,
+        width: 220, height: 220,
+        colorDark: '#2c1810', colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.H
+      });
+    }
+  });
+}
+
+// ─── QR SCANNER (baker side) ──────────────────────────────────────────────────
+let scannerStream = null;
+let scannerAnimFrame = null;
+
+async function openQRScanner(bakeryName) {
+  // Build overlay
+  const overlay = document.createElement('div');
+  overlay.className = 'qr-scanner-overlay';
+  overlay.id = 'qrScannerOverlay';
+  overlay.innerHTML = `
+    <div class="qr-scanner-frame">
+      <video id="qrVideo" autoplay playsinline muted></video>
+      <canvas id="qrCanvas" style="display:none;"></canvas>
+      <div class="qr-scanner-corners"></div>
+      <div class="qr-scanner-line"></div>
+    </div>
+    <div class="qr-scanner-status" id="qrStatus">Point camera at customer's QR code</div>
+    <button style="color:white;background:none;border:1.5px solid rgba(255,255,255,0.4);border-radius:100px;padding:10px 28px;font-size:0.85rem;cursor:pointer;" onclick="closeQRScanner()">Cancel</button>`;
+  document.body.appendChild(overlay);
+
+  try {
+    scannerStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+    const video = document.getElementById('qrVideo');
+    video.srcObject = scannerStream;
+    await video.play();
+    scanFrame(bakeryName);
+  } catch(e) {
+    document.getElementById('qrStatus').textContent = 'Camera access denied. Please allow camera and try again.';
+  }
+}
+
+function scanFrame(bakeryName) {
+  const video = document.getElementById('qrVideo');
+  const canvas = document.getElementById('qrCanvas');
+  const status = document.getElementById('qrStatus');
+  if (!video || !canvas || video.readyState < 2) {
+    scannerAnimFrame = requestAnimationFrame(() => scanFrame(bakeryName));
+    return;
+  }
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0);
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+  if (window.jsQR) {
+    const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+    if (code?.data?.startsWith('crumbz:reservation:')) {
+      const reservationId = code.data.replace('crumbz:reservation:', '');
+      closeQRScanner();
+      processScannedReservation(reservationId, bakeryName);
+      return;
+    }
+  }
+  scannerAnimFrame = requestAnimationFrame(() => scanFrame(bakeryName));
+}
+
+function closeQRScanner() {
+  if (scannerStream) { scannerStream.getTracks().forEach(t => t.stop()); scannerStream = null; }
+  if (scannerAnimFrame) { cancelAnimationFrame(scannerAnimFrame); scannerAnimFrame = null; }
+  document.getElementById('qrScannerOverlay')?.remove();
+}
+
+async function processScannedReservation(reservationId, bakeryName) {
+  if (!fb) return;
+  const { db, doc, getDoc, updateDoc } = fb;
+  showToast('🔍 Looking up reservation…');
+  try {
+    const snap = await getDoc(doc(db, 'reservations', reservationId));
+    if (!snap.exists()) { showToast('❌ Reservation not found'); return; }
+    const r = snap.data();
+
+    // Verify it's for this bakery
+    if (r.bakeryName !== bakeryName) { showToast('❌ This reservation is for a different bakery'); return; }
+    if (r.status === 'collected') { showToast('⚠️ Already marked as collected'); return; }
+    if (r.status === 'cancelled') { showToast('⚠️ This reservation was cancelled'); return; }
+
+    // Show confirmation before marking collected
+    const ref = reservationId.slice(-6).toUpperCase();
+    const confirmOverlay = document.createElement('div');
+    confirmOverlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:800;display:flex;align-items:flex-end;justify-content:center;';
+    confirmOverlay.innerHTML = `
+      <div style="background:var(--cream-white);border-radius:var(--radius) var(--radius) 0 0;width:100%;max-width:480px;padding:24px;">
+        <div style="font-family:serif;font-size:1.1rem;font-weight:700;color:var(--espresso);margin-bottom:4px;">✅ Reservation found</div>
+        <div style="font-size:0.85rem;color:var(--text-body);margin-bottom:16px;line-height:1.6;">
+          <strong>${r.userName}</strong> · ${r.offeringName}<br>
+          🕐 ${r.slot} · Ref: <code>${ref}</code>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <button class="btn-ghost" style="flex:1;" onclick="this.closest('div[style]').remove()">Cancel</button>
+          <button class="btn-espresso" style="flex:2;" onclick="confirmCollected('${reservationId}','${bakeryName}',this)">✓ Mark as collected</button>
+        </div>
+      </div>`;
+    document.body.appendChild(confirmOverlay);
+    confirmOverlay.addEventListener('click', e => { if (e.target === confirmOverlay) confirmOverlay.remove(); });
+
+  } catch(e) { showToast('Could not look up reservation'); console.error(e); }
+}
+
+async function confirmCollected(reservationId, bakeryName, btn) {
+  btn.disabled = true; btn.textContent = 'Saving…';
+  await markCollected(reservationId, bakeryName);
+  btn.closest('div[style]').remove();
 }
 
 // ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
