@@ -3609,20 +3609,21 @@ const TASTING_DIMS_UNIVERSAL = [
 ];
 
 const TASTING_DIM_5TH = {
-  bread:      { key: 'dim_crust',       label: 'Crust',             tip: 'Quality and character of the crust' },
-  pastry:     { key: 'dim_lamination',  label: 'Lamination',        tip: 'The layers and flakiness' },
-  cake:       { key: 'dim_moistness',   label: 'Moistness',         tip: 'The crumb and moisture level' },
-  tart:       { key: 'dim_pastrybase',  label: 'Pastry Base',       tip: 'The shortcrust or puff underneath' },
-  bun:        { key: 'dim_sweetness',   label: 'Sweetness',         tip: 'The balance of sugar' },
-  cookie:     { key: 'dim_sweetness',   label: 'Sweetness',         tip: 'The balance of sugar' },
-  sandwich:   { key: 'dim_freshness',   label: 'Freshness',         tip: 'Ingredients and assembly quality' },
-  scone:      { key: 'dim_lightness',   label: 'Lightness',         tip: 'The rise and airiness' },
-  sweet_treat:{ key: 'dim_sweetness',   label: 'Sweetness',         tip: 'The balance of sugar' },
-  other:      { key: 'dim_impression',  label: 'Overall Impression',tip: 'General impression' },
+  bread:          { key: 'dim_crust',       label: 'Crust',           tip: 'Quality and character of the crust' },
+  pastry:         { key: 'dim_lamination',  label: 'Lamination',      tip: 'The layers and flakiness' },
+  cake:           { key: 'dim_moistness',   label: 'Moistness',       tip: 'The crumb and moisture level' },
+  cheesecake:     { key: 'dim_set',         label: 'Set & Consistency', tip: 'Firmness and texture of the filling' },
+  tart:           { key: 'dim_pastrybase',  label: 'Pastry Base',     tip: 'The shortcrust or puff underneath' },
+  bun:            { key: 'dim_sweetness',   label: 'Sweetness',       tip: 'The balance of sugar' },
+  cookie:         { key: 'dim_sweetness',   label: 'Sweetness',       tip: 'The balance of sugar' },
+  sandwich:       { key: 'dim_freshness',   label: 'Freshness',       tip: 'Ingredients and assembly quality' },
+  scone:          { key: 'dim_lightness',   label: 'Lightness',       tip: 'The rise and airiness' },
+  sweet_treat:    { key: 'dim_sweetness',   label: 'Sweetness',       tip: 'The balance of sugar' },
+  british_classic:{ key: 'dim_comfort',     label: 'Comfort factor',  tip: 'Does it hit the spot?' },
 };
 
-// Default 5th dim for unknown categories
-const DEFAULT_DIM_5TH = { key: 'dim_impression', label: 'Overall Impression', tip: 'General impression' };
+// Default 5th dim for uncategorised items — Sweetness is broadly applicable
+const DEFAULT_DIM_5TH = { key: 'dim_sweetness', label: 'Sweetness', tip: 'The balance of sugar' };
 
 function getTastingDims(category) {
   const fifth = TASTING_DIM_5TH[category] || DEFAULT_DIM_5TH;
