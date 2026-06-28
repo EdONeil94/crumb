@@ -9138,7 +9138,7 @@ async function renderPreorderPage() {
                         ${soldOut
                           ? `<button class="btn-ghost" disabled style="opacity:0.4;font-size:0.78rem;">Sold out</button>`
                           : currentUser
-                            ? `<button class="btn-espresso" style="font-size:0.78rem;padding:7px 14px;" onclick="reserveOffering('${o.id}','${escJS(o.bakeryName)}','${escJS(o.name)}','${escJS(o.slot)}','${o.collectDate}')">Reserve</button>`
+                            ? `<button class="btn-espresso" style="font-size:0.78rem;padding:7px 14px;" onclick="openReserveModal('${o.id}','${escJS(o.bakeryName)}','${escJS(o.name)}','${escJS(o.slot)}','${o.collectDate}',${remaining||0},${o.maxPerPerson||2})">Reserve</button>`
                             : `<button class="btn-espresso" style="font-size:0.78rem;padding:7px 14px;" onclick="openAuthModal()">Sign in</button>`}
                       </div>
                     </div>
@@ -9234,7 +9234,10 @@ async function renderManagePreorders(bakeryName) {
                 <div style="font-weight:600;font-size:0.85rem;color:var(--espresso);">${o.name}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted);">${o.slot} · £${parseFloat(o.price||0).toFixed(2)} · ${remaining} left · ${reserved} reserved</div>
               </div>
-              <button onclick="deleteOffering('${o.id}','${escJS(bakeryName)}')" style="background:none;border:none;color:#e74c3c;font-size:0.8rem;cursor:pointer;">✕</button>
+              <div style="display:flex;gap:6px;flex-shrink:0;">
+                <button onclick="openEditOffering('${o.id}','${escJS(bakeryName)}')" style="background:none;border:none;color:var(--caramel);font-size:0.8rem;cursor:pointer;">✏️</button>
+                <button onclick="deleteOffering('${o.id}','${escJS(bakeryName)}')" style="background:none;border:none;color:#e74c3c;font-size:0.8rem;cursor:pointer;">✕</button>
+              </div>
             </div>`;
           }).join('')}
           ${reservationsForDate.length ? `
@@ -9265,6 +9268,125 @@ async function uploadItemPhoto(file) {
   return await getDownloadURL(snap.ref);
 }
 
+async function openEditOffering(offeringId, bakeryName) {
+  if (!fb) return;
+  const { db, doc, getDoc } = fb;
+  const snap = await getDoc(doc(db, 'preorderOfferings', offeringId));
+  if (!snap.exists()) { showToast('Offering not found'); return; }
+  const o = snap.data();
+
+  const slotIsRange = o.slot?.includes('–');
+  const slotIsBy = o.slot?.startsWith('Collect by');
+
+  const overlay = document.createElement('div');
+  overlay.id = 'editOfferingOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:700;display:flex;align-items:flex-end;justify-content:center;';
+
+  const slotFromVal = slotIsRange ? o.slot.split('–')[0].trim() : (slotIsBy ? '' : o.slot || '');
+  const slotToVal = slotIsRange ? o.slot.split('–')[1]?.trim() : '';
+  const slotByVal = slotIsBy ? o.slot.replace('Collect by ', '').trim() : '';
+
+  const timeOpts = COLLECTION_TIMES.map(t => `<option value="${t}">${t}</option>`).join('');
+
+  overlay.innerHTML = `
+    <div style="background:var(--cream-white);border-radius:var(--radius) var(--radius) 0 0;width:100%;max-width:560px;max-height:82vh;overflow-y:auto;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--cream-white);z-index:1;">
+        <div style="font-family:'Playfair Display',serif;font-size:1rem;font-weight:700;color:var(--espresso);">✏️ Edit offering</div>
+        <button onclick="document.getElementById('editOfferingOverlay').remove()" style="background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--text-muted);">✕</button>
+      </div>
+      <div style="padding:16px 20px 32px;display:flex;flex-direction:column;gap:14px;">
+        <div class="form-group" style="margin:0;"><label class="form-label">Item name</label>
+          <input type="text" class="form-input" id="editOfferingName" value="${escJS(o.name||'')}"></div>
+        <div class="form-group" style="margin:0;"><label class="form-label">Description</label>
+          <textarea class="form-textarea" id="editOfferingDesc" style="min-height:60px;">${o.description||''}</textarea></div>
+        <div class="form-group" style="margin:0;"><label class="form-label">Price (£)</label>
+          <input type="number" class="form-input" id="editOfferingPrice" value="${o.price||''}" step="0.01" min="0"></div>
+        <div class="form-group" style="margin:0;"><label class="form-label">Quantity available</label>
+          <input type="number" class="form-input" id="editOfferingQty" value="${o.quantity||''}" min="1" step="1">
+          <div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">Currently ${o.remaining??o.quantity??0} remaining of ${o.quantity??0} — adjusting quantity won't restore already-reserved slots</div>
+        </div>
+        <div class="form-group" style="margin:0;"><label class="form-label">Max per person</label>
+          <input type="number" class="form-input" id="editOfferingMaxPerPerson" value="${o.maxPerPerson||2}" min="1" step="1">
+          <div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">Maximum a single customer can reserve</div>
+        </div>
+        <div class="form-group" style="margin:0;"><label class="form-label">Collection window</label>
+          <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <button type="button" id="editSlotModeRange" class="bakery-view-btn ${!slotIsBy?'active':''}" style="flex:1;border-radius:8px;" onclick="setEditSlotMode('range')">Time range</button>
+            <button type="button" id="editSlotModeBy" class="bakery-view-btn ${slotIsBy?'active':''}" style="flex:1;border-radius:8px;" onclick="setEditSlotMode('by')">Collect by</button>
+          </div>
+          <div id="editSlotRangeInputs" style="display:${slotIsBy?'none':'flex'};align-items:center;gap:8px;">
+            <select class="form-select" id="editOfferingSlotFrom" style="flex:1;">${COLLECTION_TIMES.map(t=>`<option value="${t}" ${t===slotFromVal?'selected':''}>${t}</option>`).join('')}</select>
+            <span style="color:var(--text-muted);font-size:0.85rem;flex-shrink:0;">to</span>
+            <select class="form-select" id="editOfferingSlotTo" style="flex:1;">${COLLECTION_TIMES.map(t=>`<option value="${t}" ${t===slotToVal?'selected':''}>${t}</option>`).join('')}</select>
+          </div>
+          <div id="editSlotByInput" style="display:${slotIsBy?'block':'none'};">
+            <select class="form-select" id="editOfferingSlotBy">${COLLECTION_TIMES.map(t=>`<option value="${t}" ${t===slotByVal?'selected':''}>${t}</option>`).join('')}</select>
+          </div>
+        </div>
+        <div class="form-group" style="margin:0;"><label class="form-label">Photo</label>
+          ${o.photoURL ? `<img src="${o.photoURL}" style="width:70px;height:70px;object-fit:cover;border-radius:8px;margin-bottom:8px;display:block;">` : ''}
+          <input type="file" accept="image/*" id="editOfferingPhoto" style="font-size:0.82rem;"></div>
+        <div style="display:flex;gap:10px;margin-top:4px;">
+          <button class="btn-ghost" style="flex:1;" onclick="document.getElementById('editOfferingOverlay').remove()">Cancel</button>
+          <button class="btn-espresso" style="flex:2;" onclick="saveEditOffering('${offeringId}','${escJS(bakeryName)}')">Save changes</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+}
+
+function setEditSlotMode(mode) {
+  document.getElementById('editSlotModeRange').classList.toggle('active', mode === 'range');
+  document.getElementById('editSlotModeBy').classList.toggle('active', mode === 'by');
+  document.getElementById('editSlotRangeInputs').style.display = mode === 'range' ? 'flex' : 'none';
+  document.getElementById('editSlotByInput').style.display = mode === 'by' ? 'block' : 'none';
+}
+
+function getEditSlotValue() {
+  const modeRange = document.getElementById('editSlotModeRange')?.classList.contains('active');
+  if (modeRange) {
+    const from = document.getElementById('editOfferingSlotFrom')?.value;
+    const to = document.getElementById('editOfferingSlotTo')?.value;
+    return from && to ? `${from} – ${to}` : from || '';
+  } else {
+    const by = document.getElementById('editOfferingSlotBy')?.value;
+    return by ? `Collect by ${by}` : '';
+  }
+}
+
+async function saveEditOffering(offeringId, bakeryName) {
+  if (!fb) return;
+  const { db, doc, updateDoc } = fb;
+  const name = document.getElementById('editOfferingName').value.trim();
+  const price = parseFloat(document.getElementById('editOfferingPrice').value);
+  const qty = parseInt(document.getElementById('editOfferingQty').value);
+  const maxPerPerson = parseInt(document.getElementById('editOfferingMaxPerPerson').value) || 2;
+  const slot = getEditSlotValue();
+  if (!name || !price || !qty || !slot) { showToast('Please fill in all required fields'); return; }
+
+  let photoURL = null;
+  const fileInput = document.getElementById('editOfferingPhoto');
+  if (fileInput?.files[0]) {
+    try { photoURL = await uploadItemPhoto(fileInput.files[0]); } catch(e) {}
+  }
+
+  try {
+    const updates = {
+      name,
+      description: document.getElementById('editOfferingDesc').value.trim(),
+      price, quantity: qty, maxPerPerson, slot,
+      ...(photoURL ? { photoURL } : {})
+    };
+    await updateDoc(doc(db, 'preorderOfferings', offeringId), updates);
+    // Update catalogue entry too
+    await saveToCatalogue(bakeryName, name, updates.description, price, photoURL);
+    showToast('✅ Offering updated');
+    document.getElementById('editOfferingOverlay')?.remove();
+    await renderManagePreorders(bakeryName);
+  } catch(e) { showToast('Could not save changes'); console.error(e); }
+}
+
 function showAddOfferingForm(bakeryName) {
   // Build date options: next 7 days (collection dates)
   const dateOptions = [];
@@ -9292,7 +9414,11 @@ function showAddOfferingForm(bakeryName) {
     <div class="form-group"><label class="form-label">Price (£) <span style="color:#e74c3c;">*</span></label>
       <input type="number" class="form-input" id="offeringPrice" placeholder="0.00" step="0.01" min="0"></div>
     <div class="form-group"><label class="form-label">Quantity available <span style="color:#e74c3c;">*</span></label>
-      <input type="number" class="form-input" id="offeringQty" placeholder="e.g. 6" min="1" step="1"></div>
+      <input type="number" class="form-input" id="offeringQty" placeholder="e.g. 12" min="1" step="1"></div>
+    <div class="form-group"><label class="form-label">Max per person <span style="color:#e74c3c;">*</span></label>
+      <input type="number" class="form-input" id="offeringMaxPerPerson" placeholder="e.g. 2" min="1" step="1" value="2">
+      <div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">Maximum a single customer can reserve</div>
+    </div>
     <div class="form-group"><label class="form-label">Collection date <span style="color:#e74c3c;">*</span></label>
       <select class="form-select" id="offeringDate">${dateOptions.join('')}</select>
       <div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">⏰ Pre-orders go live at 8am the day before</div>
@@ -9424,6 +9550,7 @@ async function saveOffering(bakeryName) {
   const name = document.getElementById('offeringName').value.trim();
   const price = parseFloat(document.getElementById('offeringPrice').value);
   const qty = parseInt(document.getElementById('offeringQty').value);
+  const maxPerPerson = parseInt(document.getElementById('offeringMaxPerPerson').value) || 2;
   const slot = getSlotValue();
   const collectDate = document.getElementById('offeringDate').value;
   if (!name || !price || !qty || !slot || !collectDate) { showToast('Please fill in all required fields'); return; }
@@ -9448,7 +9575,7 @@ async function saveOffering(bakeryName) {
   try {
     await addDoc(collection(db, 'preorderOfferings'), {
       bakeryName, name, description, price,
-      quantity: qty, remaining: qty, slot,
+      quantity: qty, remaining: qty, maxPerPerson, slot,
       collectDate, goLiveAt: goLiveISO, photoURL,
       createdBy: currentUser.uid, createdAt: serverTimestamp(), active: true
     });
@@ -9557,7 +9684,7 @@ async function renderPreorderTab(container, bakeryName) {
                   ${soldOut
                     ? `<button class="btn-ghost" disabled style="opacity:0.4;font-size:0.78rem;">Sold out</button>`
                     : currentUser
-                      ? `<button class="btn-espresso" style="font-size:0.78rem;padding:7px 14px;" onclick="reserveOffering('${o.id}','${escJS(bakeryName)}','${escJS(o.name)}','${o.slot}','${date}')">Reserve</button>`
+                      ? `<button class="btn-espresso" style="font-size:0.78rem;padding:7px 14px;" onclick="openReserveModal('${o.id}','${escJS(bakeryName)}','${escJS(o.name)}','${o.slot}','${date}',${o.remaining??o.quantity??0},${o.maxPerPerson||2})">Reserve</button>`
                       : `<button class="btn-espresso" style="font-size:0.78rem;padding:7px 14px;" onclick="openAuthModal()">Sign in</button>`}
                 </div>
               </div>
@@ -9572,52 +9699,99 @@ async function renderPreorderTab(container, bakeryName) {
 }
 
 
-async function reserveOffering(offeringId, bakeryName, offeringName, slot, collectDate) {
-  if (!currentUser || !fb) { openAuthModal(); return; }
-  const { db, doc, getDoc, collection, addDoc, serverTimestamp } = fb;
-
-  try {
-    const offeringRef = doc(db, 'preorderOfferings', offeringId);
-    let reservationId;
-
-    await runTransaction(db, async tx => {
-      const offeringSnap = await tx.get(offeringRef);
-      if (!offeringSnap.exists()) throw new Error('Offering no longer exists');
-      const data = offeringSnap.data();
-      const remaining = data.remaining ?? data.quantity ?? 0;
-      if (remaining <= 0) throw new Error('SOLD_OUT');
-
-      // Decrement remaining
-      tx.update(offeringRef, { remaining: remaining - 1 });
-
-      // Create reservation doc
-      const resRef = doc(collection(db, 'reservations'));
-      reservationId = resRef.id;
-      tx.set(resRef, {
-        userId: currentUser.uid,
-        userName: currentUser.displayName || currentUser.email?.split('@')[0] || 'Customer',
-        userEmail: currentUser.email || '',
-        bakeryName, offeringId, offeringName, slot, collectDate,
-        status: 'pending',
-        price: data.price,
-        createdAt: serverTimestamp()
+function openReserveModal(offeringId, bakeryName, offeringName, slot, collectDate, remaining, maxPerPerson) {
+  const max = Math.min(remaining, maxPerPerson || 2);
+  if (max <= 1) {
+    reserveOffering(offeringId, bakeryName, offeringName, slot, collectDate, 1);
+    return;
+  }
+  const overlay = document.createElement('div');
+  overlay.id = 'reserveModalOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:700;display:flex;align-items:flex-end;justify-content:center;';
+  const options = Array.from({length: max}, (_,i) => i+1).map(n =>
+    `<button onclick="closeReserveModal(); reserveOffering('${offeringId}','${escJS(bakeryName)}','${escJS(offeringName)}','${escJS(slot)}','${collectDate}',${n})"
+      style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:14px 20px;border:none;border-bottom:1px solid var(--border);background:none;cursor:pointer;font-size:0.92rem;color:var(--espresso);"
+      onmouseover="this.style.background='var(--parchment)'" onmouseout="this.style.background='none'">
+      <span>${n}× ${offeringName}</span>
+      <span class="qty-price-${offeringId}-${n}" style="font-weight:700;color:var(--caramel);">…</span>
+    </button>`).join('');
+  overlay.innerHTML = `
+    <div style="background:var(--cream-white);border-radius:var(--radius) var(--radius) 0 0;width:100%;max-width:480px;">
+      <div style="padding:16px 20px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="font-family:'Playfair Display',serif;font-size:1rem;font-weight:700;color:var(--espresso);">How many would you like?</div>
+          <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px;">${offeringName} · max ${maxPerPerson} per person · ${remaining} left</div>
+        </div>
+        <button onclick="closeReserveModal()" style="background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--text-muted);">✕</button>
+      </div>
+      <div>${options}</div>
+      <div style="padding:12px 20px 32px;">
+        <button class="btn-ghost" style="width:100%;" onclick="closeReserveModal()">Cancel</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeReserveModal(); });
+  // Load price
+  if (fb) {
+    const { db, doc, getDoc } = fb;
+    getDoc(doc(db, 'preorderOfferings', offeringId)).then(snap => {
+      if (!snap.exists()) return;
+      const price = snap.data().price || 0;
+      Array.from({length: max}, (_,i) => i+1).forEach(n => {
+        document.querySelectorAll(`.qty-price-${offeringId}-${n}`).forEach(el => {
+          el.textContent = `£${(price * n).toFixed(2)}`;
+        });
       });
     });
-
-    showToast(`🎉 Reserved! Collect at ${slot} tomorrow. Pay in store.`);
-    // Refresh the tab to update remaining count
-    const content = document.getElementById('bakeryTabContent');
-    if (content) await renderPreorderTab(content, bakeryName);
-
-  } catch(e) {
-    if (e.message === 'SOLD_OUT') {
-      showToast('😔 Sorry — just sold out! Someone got there first.');
-    } else {
-      showToast('Could not complete reservation');
-      console.error(e);
-    }
   }
 }
+
+function closeReserveModal() {
+  document.getElementById('reserveModalOverlay')?.remove();
+}
+
+async function reserveOffering(offeringId, bakeryName, offeringName, slot, collectDate, quantity) {
+  quantity = quantity || 1;
+  if (!currentUser || !fb) { openAuthModal(); return; }
+  const { db, doc, getDoc, updateDoc, collection, addDoc, serverTimestamp, query, where, getDocs } = fb;
+  try {
+    const offeringRef = doc(db, 'preorderOfferings', offeringId);
+    const offeringSnap = await getDoc(offeringRef);
+    if (!offeringSnap.exists()) throw new Error('Offering no longer exists');
+    const data = offeringSnap.data();
+    const remaining = data.remaining ?? data.quantity ?? 0;
+    const maxPerPerson = data.maxPerPerson || 2;
+    if (remaining <= 0 || quantity > remaining) throw new Error('SOLD_OUT');
+    if (quantity > maxPerPerson) { showToast(`Maximum ${maxPerPerson} per person`); return; }
+    const existingSnap = await getDocs(query(
+      collection(db, 'reservations'),
+      where('userId', '==', currentUser.uid),
+      where('offeringId', '==', offeringId),
+      where('status', '==', 'pending')
+    ));
+    if (!existingSnap.empty) { showToast('You already have a reservation for this item'); return; }
+    await updateDoc(offeringRef, { remaining: remaining - quantity });
+    await addDoc(collection(db, 'reservations'), {
+      userId: currentUser.uid,
+      userName: currentUser.displayName || currentUser.email?.split('@')[0] || 'Customer',
+      userEmail: currentUser.email || '',
+      bakeryName, offeringId, offeringName, slot, collectDate,
+      quantity, status: 'pending',
+      price: data.price,
+      totalPrice: (data.price || 0) * quantity,
+      createdAt: serverTimestamp()
+    });
+    showToast(`🎉 Reserved ${quantity > 1 ? quantity + '× ' : ''}${offeringName}! Collect ${slot}. Pay in store.`);
+    const bakeryContent = document.getElementById('bakeryTabContent');
+    if (bakeryContent) await renderPreorderTab(bakeryContent, bakeryName);
+    const poResults = document.getElementById('preorderPageResults');
+    if (poResults) await renderPreorderPage();
+  } catch(e) {
+    if (e.message === 'SOLD_OUT') showToast('😔 Sorry — not enough stock. Someone got there first.');
+    else if (e.message !== 'Offering no longer exists') { showToast('Could not complete reservation'); console.error(e); }
+  }
+}
+
 
 // ── Customer: view orders in profile ──────────────────────────────────────────
 async function renderOrdersTab(container) {
@@ -9666,7 +9840,9 @@ async function renderOrdersTab(container) {
         <div class="order-details">
           <div class="order-info">
             <div class="order-slot">🕐 ${r.slot} · ${collectDate}</div>
-            <div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px;">Pay in store · £${parseFloat(r.price||0).toFixed(2)}</div>
+            <div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px;">
+              ${r.quantity > 1 ? `${r.quantity}× · ` : ''}Pay in store · £${parseFloat(r.totalPrice || r.price || 0).toFixed(2)}
+            </div>
             <div class="order-id">Ref: ${ref}</div>
             ${canCancel ? `<button onclick="cancelReservation('${r.id}','${r.offeringId}')" style="margin-top:8px;background:none;border:none;color:#e74c3c;font-size:0.75rem;cursor:pointer;padding:0;">Cancel reservation</button>` : ''}
           </div>
