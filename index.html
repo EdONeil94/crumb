@@ -8928,81 +8928,77 @@ function closeManagePreordersModal() {
 }
 
 async function renderManagePreorders(bakeryName) {
-  const { db, collection, query, where, getDocs, orderBy } = fb;
+  const { db, collection, query, where, getDocs } = fb;
   const panel = document.getElementById('managePreordersContent');
   try {
-    // Tomorrow's date string
-    const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
 
     const [offeringsSnap, reservationsSnap] = await Promise.all([
-      getDocs(query(collection(db, 'preorderOfferings'), where('bakeryName','==',bakeryName))),
-      getDocs(query(collection(db, 'reservations'), where('bakeryName','==',bakeryName), where('collectDate','==',tomorrowStr)))
+      getDocs(query(collection(db, 'preorderOfferings'),
+        where('bakeryName','==',bakeryName), where('active','==',true))),
+      getDocs(query(collection(db, 'reservations'), where('bakeryName','==',bakeryName)))
     ]);
 
-    const offerings = offeringsSnap.docs.map(d => ({id: d.id, ...d.data()}));
-    const reservations = reservationsSnap.docs.map(d => ({id: d.id, ...d.data()}));
+    const allOfferings = offeringsSnap.docs.map(d => ({id: d.id, ...d.data()}))
+      .filter(o => o.collectDate >= todayStr)
+      .sort((a,b) => a.collectDate.localeCompare(b.collectDate));
+    const allReservations = reservationsSnap.docs.map(d => ({id: d.id, ...d.data()}));
 
-    const slotOptions = COLLECTION_SLOTS.map(s => `<option value="${s}">${s}</option>`).join('');
+    const byDate = {};
+    allOfferings.forEach(o => {
+      if (!byDate[o.collectDate]) byDate[o.collectDate] = [];
+      byDate[o.collectDate].push(o);
+    });
 
     panel.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-        <div style="font-size:0.85rem;font-weight:600;color:var(--espresso);">Tomorrow's offerings</div>
+        <div style="font-size:0.85rem;font-weight:600;color:var(--espresso);">Pre-order offerings</div>
         <div style="display:flex;gap:8px;">
           <button class="btn-caramel" style="font-size:0.78rem;padding:7px 14px;" onclick="openQRScanner('${escJS(bakeryName)}')">📷 Scan QR</button>
+          <button class="btn-ghost" style="font-size:0.78rem;padding:7px 14px;" onclick="openCatalogueManager('${escJS(bakeryName)}')">📋 Catalogue</button>
           <button class="btn-espresso" style="font-size:0.78rem;padding:7px 14px;" onclick="showAddOfferingForm('${escJS(bakeryName)}')">+ Add item</button>
         </div>
       </div>
-
-      <!-- Add offering form (hidden) -->
-      <div id="addOfferingForm" style="display:none;background:var(--parchment);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
-        <div class="form-group"><label class="form-label">Item name <span style="color:#e74c3c;">*</span></label>
-          <input type="text" class="form-input" id="offeringName" placeholder="e.g. Almond Croissant"></div>
-        <div class="form-group"><label class="form-label">Description</label>
-          <textarea class="form-textarea" id="offeringDesc" placeholder="What makes this special…" style="min-height:60px;"></textarea></div>
-        <div class="form-group"><label class="form-label">Price (£) <span style="color:#e74c3c;">*</span></label>
-          <input type="number" class="form-input" id="offeringPrice" placeholder="0.00" step="0.01" min="0"></div>
-        <div class="form-group"><label class="form-label">Quantity available <span style="color:#e74c3c;">*</span></label>
-          <input type="number" class="form-input" id="offeringQty" placeholder="e.g. 6" min="1" step="1"></div>
-        <div class="form-group"><label class="form-label">Collection slot <span style="color:#e74c3c;">*</span></label>
-          <select class="form-select" id="offeringSlot">${slotOptions}</select></div>
-        <div class="form-group"><label class="form-label">Photo</label>
-          <input type="file" accept="image/*" id="offeringPhoto" style="font-size:0.82rem;"></div>
-        <div style="display:flex;gap:8px;margin-top:8px;">
-          <button class="btn-ghost" onclick="document.getElementById('addOfferingForm').style.display='none'">Cancel</button>
-          <button class="btn-espresso" onclick="saveOffering('${escJS(bakeryName)}')">Save offering</button>
-        </div>
-      </div>
-
-      <!-- Existing offerings -->
-      <div id="offeringsList">
-        ${!offerings.length ? `<div class="empty-state" style="padding:20px 0;"><div class="empty-state-icon">🥐</div><div class="empty-state-title">No offerings yet</div><div class="empty-state-text">Add items for tomorrow's pre-orders</div></div>` :
-          offerings.map(o => {
-            const reserved = reservations.filter(r => r.offeringId === o.id && r.status !== 'cancelled').length;
-            const remaining = (o.quantity || 0) - reserved;
-            return `<div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:8px;background:var(--cream-white);">
-              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;">
-                <div style="font-weight:600;font-size:0.88rem;color:var(--espresso);">${o.name}</div>
-                <button onclick="deleteOffering('${o.id}','${escJS(bakeryName)}')" style="background:none;border:none;color:#e74c3c;font-size:0.75rem;cursor:pointer;">Remove</button>
+      <div id="addOfferingForm" style="display:none;background:var(--parchment);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;"></div>
+      ${!allOfferings.length ? `<div class="empty-state" style="padding:20px 0;"><div class="empty-state-icon">🥐</div><div class="empty-state-title">No upcoming offerings</div><div class="empty-state-text">Add items for customers to pre-order. They go live at 8am the day before.</div></div>`
+      : Object.entries(byDate).map(([date, offerings]) => {
+        const dateLabel = new Date(date + 'T12:00:00').toLocaleDateString('en-GB', {weekday:'long', day:'numeric', month:'long'});
+        const goLive = new Date(date + 'T00:00:00');
+        goLive.setDate(goLive.getDate() - 1); goLive.setHours(8,0,0,0);
+        const isLive = now >= goLive;
+        const reservationsForDate = allReservations.filter(r => r.collectDate === date && r.status !== 'cancelled');
+        return `<div style="margin-bottom:20px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <div style="font-size:0.85rem;font-weight:700;color:var(--espresso);">${dateLabel}</div>
+            <span style="font-size:0.65rem;font-weight:600;padding:2px 8px;border-radius:100px;${isLive ? 'background:#d4edda;color:#155724;' : 'background:#fff3cd;color:#856404;'}">${isLive ? '🟢 Live now' : `⏰ Live ${goLive.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})} 8am`}</span>
+          </div>
+          ${offerings.map(o => {
+            const reserved = reservationsForDate.filter(r => r.offeringId === o.id).length;
+            const remaining = o.remaining ?? o.quantity ?? 0;
+            return `<div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin-bottom:6px;background:var(--cream-white);display:flex;gap:10px;align-items:center;">
+              ${o.photoURL ? `<img src="${o.photoURL}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;flex-shrink:0;">` : `<div style="width:40px;height:40px;border-radius:6px;background:var(--parchment-dark);display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0;">🥐</div>`}
+              <div style="flex:1;min-width:0;">
+                <div style="font-weight:600;font-size:0.85rem;color:var(--espresso);">${o.name}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted);">${o.slot} · £${parseFloat(o.price||0).toFixed(2)} · ${remaining} left · ${reserved} reserved</div>
               </div>
-              <div style="font-size:0.75rem;color:var(--text-muted);">${o.slot} · £${parseFloat(o.price||0).toFixed(2)} · ${remaining}/${o.quantity} remaining · ${reserved} reserved</div>
+              <button onclick="deleteOffering('${o.id}','${escJS(bakeryName)}')" style="background:none;border:none;color:#e74c3c;font-size:0.8rem;cursor:pointer;">✕</button>
             </div>`;
           }).join('')}
-      </div>
-
-      <!-- Tomorrow's reservations to collect -->
-      ${reservations.length ? `
-        <div style="margin-top:20px;font-size:0.85rem;font-weight:600;color:var(--espresso);margin-bottom:10px;">📋 Tomorrow's collections (${reservations.length})</div>
-        ${reservations.map(r => `
-          <div class="manage-res-card${r.status === 'collected' ? ' collected' : ''}" id="rescard_${r.id}">
-            <div style="flex:1;min-width:0;">
-              <div style="font-size:0.85rem;font-weight:600;color:var(--espresso);">${r.userName || 'Customer'}</div>
-              <div style="font-size:0.75rem;color:var(--text-muted);">${r.offeringName} · ${r.slot} · Ref: ${r.id.slice(-6).toUpperCase()}</div>
-            </div>
-            ${r.status === 'collected'
-              ? `<span style="font-size:0.72rem;font-weight:700;color:#155724;background:#d4edda;padding:3px 10px;border-radius:100px;">✓ Collected</span>`
-              : `<button class="btn-espresso" style="font-size:0.75rem;padding:6px 12px;" onclick="markCollected('${r.id}','${escJS(bakeryName)}')">Mark collected</button>`}
-          </div>`).join('')}` : ''}`;
+          ${reservationsForDate.length ? `
+            <div style="font-size:0.75rem;font-weight:600;color:var(--espresso);margin:10px 0 6px;">📋 Reservations (${reservationsForDate.length})</div>
+            ${reservationsForDate.map(r => `
+              <div class="manage-res-card${r.status === 'collected' ? ' collected' : ''}" id="rescard_${r.id}">
+                <div style="flex:1;min-width:0;">
+                  <div style="font-size:0.82rem;font-weight:600;color:var(--espresso);">${r.userName || 'Customer'}</div>
+                  <div style="font-size:0.7rem;color:var(--text-muted);">${r.offeringName} · ${r.slot} · #${r.id.slice(-6).toUpperCase()}</div>
+                </div>
+                ${r.status === 'collected'
+                  ? `<span style="font-size:0.68rem;font-weight:700;color:#155724;background:#d4edda;padding:3px 8px;border-radius:100px;">✓ Collected</span>`
+                  : `<button class="btn-espresso" style="font-size:0.72rem;padding:5px 10px;" onclick="markCollected('${r.id}','${escJS(bakeryName)}')">Collected</button>`}
+              </div>`).join('')}` : ''}
+        </div>`;
+      }).join('')}`;
   } catch(e) {
     panel.innerHTML = '<div style="padding:16px;color:var(--text-muted);">Could not load pre-orders.</div>';
     console.error(e);
@@ -9010,7 +9006,125 @@ async function renderManagePreorders(bakeryName) {
 }
 
 function showAddOfferingForm(bakeryName) {
+  // Build date options: next 7 days (collection dates)
+  const dateOptions = [];
+  for (let i = 1; i <= 7; i++) {
+    const d = new Date(); d.setDate(d.getDate() + i);
+    const label = i === 1 ? 'Tomorrow' : d.toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'short' });
+    dateOptions.push(`<option value="${d.toISOString().split('T')[0]}">${label}</option>`);
+  }
+
+  const slotOptions = COLLECTION_SLOTS.map(s => `<option value="${s}">${s}</option>`).join('');
+
   document.getElementById('addOfferingForm').style.display = 'block';
+  document.getElementById('addOfferingForm').innerHTML = `
+    <!-- Catalogue picker -->
+    <div class="form-group" id="cataloguePickerGroup">
+      <label class="form-label">From your catalogue <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
+      <select class="form-select" id="cataloguePicker" onchange="fillFromCatalogue('${escJS(bakeryName)}',this.value)">
+        <option value="">— Start fresh or pick a saved item —</option>
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">Item name <span style="color:#e74c3c;">*</span></label>
+      <input type="text" class="form-input" id="offeringName" placeholder="e.g. Almond Croissant"></div>
+    <div class="form-group"><label class="form-label">Description</label>
+      <textarea class="form-textarea" id="offeringDesc" placeholder="What makes this special…" style="min-height:60px;"></textarea></div>
+    <div class="form-group"><label class="form-label">Price (£) <span style="color:#e74c3c;">*</span></label>
+      <input type="number" class="form-input" id="offeringPrice" placeholder="0.00" step="0.01" min="0"></div>
+    <div class="form-group"><label class="form-label">Quantity available <span style="color:#e74c3c;">*</span></label>
+      <input type="number" class="form-input" id="offeringQty" placeholder="e.g. 6" min="1" step="1"></div>
+    <div class="form-group"><label class="form-label">Collection date <span style="color:#e74c3c;">*</span></label>
+      <select class="form-select" id="offeringDate">${dateOptions.join('')}</select>
+      <div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">⏰ Pre-orders go live at 8am the day before</div>
+    </div>
+    <div class="form-group"><label class="form-label">Collection slot <span style="color:#e74c3c;">*</span></label>
+      <select class="form-select" id="offeringSlot">${slotOptions}</select></div>
+    <div class="form-group"><label class="form-label">Photo</label>
+      <div id="offeringPhotoPreview" style="margin-bottom:6px;"></div>
+      <input type="file" accept="image/*" id="offeringPhoto" style="font-size:0.82rem;" onchange="previewOfferingPhoto(this)"></div>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button class="btn-ghost" onclick="document.getElementById('addOfferingForm').style.display='none'">Cancel</button>
+      <button class="btn-espresso" onclick="saveOffering('${escJS(bakeryName)}')">Save offering</button>
+    </div>`;
+
+  // Load catalogue async
+  loadBakeryCatalogue(bakeryName);
+}
+
+function previewOfferingPhoto(input) {
+  const preview = document.getElementById('offeringPhotoPreview');
+  if (!preview || !input.files[0]) return;
+  const url = URL.createObjectURL(input.files[0]);
+  preview.innerHTML = `<img src="${url}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;">`;
+}
+
+async function loadBakeryCatalogue(bakeryName) {
+  if (!fb) return;
+  const { db, collection, query, where, getDocs, orderBy } = fb;
+  try {
+    const snap = await getDocs(query(
+      collection(db, 'bakeryCatalogue'),
+      where('bakeryName', '==', bakeryName)
+    ));
+    const items = snap.docs.map(d => ({id: d.id, ...d.data()}))
+      .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    const sel = document.getElementById('cataloguePicker');
+    if (!sel) return;
+    if (!items.length) {
+      sel.innerHTML = '<option value="">— No saved items yet (will save after first offering) —</option>';
+      return;
+    }
+    sel.innerHTML = '<option value="">— Pick a saved item to auto-fill —</option>' +
+      items.map(i => `<option value="${i.id}" data-name="${escJS(i.name)}" data-desc="${escJS(i.description||'')}" data-price="${i.price||''}" data-photo="${i.photoURL||''}">${i.name} · £${parseFloat(i.price||0).toFixed(2)}</option>`).join('');
+  } catch(e) { console.warn('Catalogue load error:', e); }
+}
+
+function fillFromCatalogue(bakeryName, catalogueId) {
+  if (!catalogueId) return;
+  const sel = document.getElementById('cataloguePicker');
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt) return;
+
+  document.getElementById('offeringName').value = opt.dataset.name || '';
+  document.getElementById('offeringDesc').value = opt.dataset.desc || '';
+  document.getElementById('offeringPrice').value = opt.dataset.price || '';
+
+  // Show existing photo preview
+  if (opt.dataset.photo) {
+    const preview = document.getElementById('offeringPhotoPreview');
+    if (preview) preview.innerHTML = `<img src="${opt.dataset.photo}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;">`;
+  }
+
+  // Store catalogue item ID so we can reuse its photoURL on save
+  document.getElementById('addOfferingForm').dataset.catalogueId = catalogueId;
+  document.getElementById('addOfferingForm').dataset.cataloguePhoto = opt.dataset.photo || '';
+}
+
+async function saveToCatalogue(bakeryName, name, description, price, photoURL) {
+  if (!fb || !currentUser) return;
+  const { db, collection, query, where, getDocs, addDoc, updateDoc, doc, serverTimestamp } = fb;
+  try {
+    // Check if this item already exists in catalogue (by name, case-insensitive)
+    const snap = await getDocs(query(
+      collection(db, 'bakeryCatalogue'),
+      where('bakeryName', '==', bakeryName),
+      where('nameLower', '==', name.toLowerCase())
+    ));
+    if (snap.empty) {
+      // New item — add to catalogue
+      await addDoc(collection(db, 'bakeryCatalogue'), {
+        bakeryName, name, nameLower: name.toLowerCase(),
+        description: description || '', price, photoURL: photoURL || null,
+        createdBy: currentUser.uid, createdAt: serverTimestamp()
+      });
+    } else {
+      // Existing — update price and photo if changed
+      await updateDoc(doc(db, 'bakeryCatalogue', snap.docs[0].id), {
+        price, photoURL: photoURL || snap.docs[0].data().photoURL || null,
+        description: description || snap.docs[0].data().description || ''
+      });
+    }
+  } catch(e) { console.warn('Catalogue save error:', e); }
 }
 
 async function saveOffering(bakeryName) {
@@ -9019,28 +9133,38 @@ async function saveOffering(bakeryName) {
   const price = parseFloat(document.getElementById('offeringPrice').value);
   const qty = parseInt(document.getElementById('offeringQty').value);
   const slot = document.getElementById('offeringSlot').value;
-  if (!name || !price || !qty || !slot) { showToast('Please fill in all required fields'); return; }
+  const collectDate = document.getElementById('offeringDate').value;
+  if (!name || !price || !qty || !slot || !collectDate) { showToast('Please fill in all required fields'); return; }
+
+  // Go-live = 8am the day before collection
+  const goLiveDate = new Date(collectDate + 'T00:00:00');
+  goLiveDate.setDate(goLiveDate.getDate() - 1);
+  goLiveDate.setHours(8, 0, 0, 0);
+  const goLiveISO = goLiveDate.toISOString();
 
   const { db, collection, addDoc, serverTimestamp } = fb;
-  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowStr = tomorrow.toISOString().split('T')[0];
 
-  // Handle optional photo
-  let photoURL = null;
+  // Photo — new upload takes priority, then catalogue photo
+  let photoURL = document.getElementById('addOfferingForm').dataset.cataloguePhoto || null;
   const fileInput = document.getElementById('offeringPhoto');
   if (fileInput?.files[0]) {
     try { photoURL = await uploadItemPhoto(fileInput.files[0]); } catch(e) {}
   }
 
+  const description = document.getElementById('offeringDesc').value.trim();
+
   try {
     await addDoc(collection(db, 'preorderOfferings'), {
-      bakeryName, name,
-      description: document.getElementById('offeringDesc').value.trim(),
-      price, quantity: qty, remaining: qty, slot,
-      collectDate: tomorrowStr, photoURL,
+      bakeryName, name, description, price,
+      quantity: qty, remaining: qty, slot,
+      collectDate, goLiveAt: goLiveISO, photoURL,
       createdBy: currentUser.uid, createdAt: serverTimestamp(), active: true
     });
-    showToast('✅ Offering added');
+
+    // Save/update catalogue entry
+    await saveToCatalogue(bakeryName, name, description, price, photoURL);
+
+    showToast('✅ Offering added — goes live at 8am the day before');
     document.getElementById('addOfferingForm').style.display = 'none';
     await renderManagePreorders(bakeryName);
   } catch(e) { showToast('Could not save offering'); console.error(e); }
@@ -9069,56 +9193,92 @@ async function markCollected(reservationId, bakeryName) {
 async function renderPreorderTab(container, bakeryName) {
   if (!fb) { container.innerHTML = '<div class="empty-state"><div class="empty-state-title">Not available</div></div>'; return; }
   const { db, collection, query, where, getDocs } = fb;
-  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowStr = tomorrow.toISOString().split('T')[0];
-  const tomorrowLabel = tomorrow.toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long' });
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
 
   try {
     const snap = await getDocs(query(collection(db, 'preorderOfferings'),
-      where('bakeryName','==',bakeryName), where('collectDate','==',tomorrowStr), where('active','==',true)));
-    const offerings = snap.docs.map(d => ({id: d.id, ...d.data()}));
+      where('bakeryName','==',bakeryName), where('active','==',true)));
+
+    // Filter to upcoming dates only, check goLiveAt
+    const offerings = snap.docs.map(d => ({id: d.id, ...d.data()}))
+      .filter(o => {
+        if (o.collectDate < todayStr) return false; // past
+        // Check go-live time
+        const goLive = o.goLiveAt ? new Date(o.goLiveAt) : (() => {
+          const d = new Date(o.collectDate + 'T00:00:00');
+          d.setDate(d.getDate() - 1); d.setHours(8,0,0,0); return d;
+        })();
+        return now >= goLive;
+      })
+      .sort((a,b) => a.collectDate.localeCompare(b.collectDate) || a.slot.localeCompare(b.slot));
+
+    // Check if there are upcoming not-yet-live offerings
+    const upcomingSnap = await getDocs(query(collection(db, 'preorderOfferings'),
+      where('bakeryName','==',bakeryName), where('active','==',true)));
+    const notYetLive = upcomingSnap.docs.map(d => ({id:d.id,...d.data()})).filter(o => {
+      if (o.collectDate < todayStr) return false;
+      const goLive = o.goLiveAt ? new Date(o.goLiveAt) : (() => {
+        const d = new Date(o.collectDate + 'T00:00:00');
+        d.setDate(d.getDate() - 1); d.setHours(8,0,0,0); return d;
+      })();
+      return now < goLive;
+    });
 
     if (!offerings.length) {
+      const teaser = notYetLive.length ? `<div style="font-size:0.78rem;color:var(--text-muted);margin-top:8px;">🕐 Pre-orders open ${new Date(notYetLive[0].collectDate + 'T00:00:00').toLocaleDateString('en-GB',{weekday:'long'})} at 8am</div>` : '';
       container.innerHTML = `<div class="empty-state" style="padding:32px 0;">
         <div class="empty-state-icon">🗓️</div>
-        <div class="empty-state-title">No pre-orders available</div>
-        <div class="empty-state-text">Check back later — this bakery hasn't listed tomorrow's items yet.</div>
+        <div class="empty-state-title">No pre-orders available yet</div>
+        <div class="empty-state-text">Check back later — this bakery hasn't listed any items yet.</div>
+        ${teaser}
       </div>`;
       return;
     }
 
-    container.innerHTML = `
-      <div style="padding:12px 0 6px;font-size:0.78rem;color:var(--text-muted);">Pre-order for collection <strong style="color:var(--espresso);">${tomorrowLabel}</strong></div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;margin-top:8px;">
-        ${offerings.map(o => {
-          const remaining = o.remaining ?? o.quantity ?? 0;
-          const soldOut = remaining <= 0;
-          return `<div class="preorder-card">
-            ${o.photoURL ? `<img src="${o.photoURL}" class="preorder-img" alt="${o.name}">` : `<div class="preorder-img">🥐</div>`}
-            <div class="preorder-body">
-              <div class="preorder-name">${o.name}</div>
-              ${o.description ? `<div class="preorder-desc">${o.description}</div>` : ''}
-              <div class="preorder-meta">
-                <span class="preorder-slot">🕐 ${o.slot}</span>
-                <span class="preorder-qty${remaining <= 2 ? ' low' : ''}">${soldOut ? 'Sold out' : `${remaining} left`}</span>
+    // Group by collectDate
+    const byDate = {};
+    offerings.forEach(o => {
+      if (!byDate[o.collectDate]) byDate[o.collectDate] = [];
+      byDate[o.collectDate].push(o);
+    });
+
+    container.innerHTML = Object.entries(byDate).map(([date, dateOfferings]) => {
+      const dateLabel = new Date(date + 'T12:00:00').toLocaleDateString('en-GB', {weekday:'long', day:'numeric', month:'long'});
+      return `
+        <div style="padding:8px 0 4px;font-size:0.82rem;font-weight:700;color:var(--espresso);">Collection: ${dateLabel}</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;margin-bottom:20px;">
+          ${dateOfferings.map(o => {
+            const remaining = o.remaining ?? o.quantity ?? 0;
+            const soldOut = remaining <= 0;
+            return `<div class="preorder-card">
+              ${o.photoURL ? `<img src="${o.photoURL}" class="preorder-img" alt="${o.name}">` : `<div class="preorder-img">🥐</div>`}
+              <div class="preorder-body">
+                <div class="preorder-name">${o.name}</div>
+                ${o.description ? `<div class="preorder-desc">${o.description}</div>` : ''}
+                <div class="preorder-meta">
+                  <span class="preorder-slot">🕐 ${o.slot}</span>
+                  <span class="preorder-qty${remaining <= 2 && !soldOut ? ' low' : ''}">${soldOut ? 'Sold out' : `${remaining} left`}</span>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;">
+                  <span class="preorder-price">£${parseFloat(o.price||0).toFixed(2)}</span>
+                  ${soldOut
+                    ? `<button class="btn-ghost" disabled style="opacity:0.4;font-size:0.78rem;">Sold out</button>`
+                    : currentUser
+                      ? `<button class="btn-espresso" style="font-size:0.78rem;padding:7px 14px;" onclick="reserveOffering('${o.id}','${escJS(bakeryName)}','${escJS(o.name)}','${o.slot}','${date}')">Reserve</button>`
+                      : `<button class="btn-espresso" style="font-size:0.78rem;padding:7px 14px;" onclick="openAuthModal()">Sign in</button>`}
+                </div>
               </div>
-              <div style="display:flex;align-items:center;justify-content:space-between;">
-                <span class="preorder-price">£${parseFloat(o.price||0).toFixed(2)}</span>
-                ${soldOut
-                  ? `<button class="btn-ghost" disabled style="opacity:0.4;font-size:0.78rem;">Sold out</button>`
-                  : currentUser
-                    ? `<button class="btn-espresso" style="font-size:0.78rem;padding:7px 14px;" onclick="reserveOffering('${o.id}','${escJS(bakeryName)}','${escJS(o.name)}','${o.slot}','${tomorrowStr}')">Reserve</button>`
-                    : `<button class="btn-espresso" style="font-size:0.78rem;padding:7px 14px;" onclick="openAuthModal()">Sign in to reserve</button>`}
-              </div>
-            </div>
-          </div>`;
-        }).join('')}
-      </div>`;
+            </div>`;
+          }).join('')}
+        </div>`;
+    }).join('');
   } catch(e) {
     container.innerHTML = '<div style="padding:16px;color:var(--text-muted);">Could not load pre-orders.</div>';
     console.error(e);
   }
 }
+
 
 async function reserveOffering(offeringId, bakeryName, offeringName, slot, collectDate) {
   if (!currentUser || !fb) { openAuthModal(); return; }
@@ -9258,6 +9418,58 @@ async function cancelReservation(reservationId, offeringId) {
     const content = document.getElementById('profileTabContent');
     if (content) await renderOrdersTab(content);
   } catch(e) { showToast('Could not cancel'); console.error(e); }
+}
+
+async function openCatalogueManager(bakeryName) {
+  const overlay = document.createElement('div');
+  overlay.id = 'catalogueManagerOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:700;display:flex;align-items:flex-end;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:var(--cream-white);border-radius:var(--radius) var(--radius) 0 0;width:100%;max-width:560px;max-height:75vh;display:flex;flex-direction:column;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);">
+        <div style="font-family:'Playfair Display',serif;font-size:1rem;font-weight:700;color:var(--espresso);">📋 Item catalogue</div>
+        <button onclick="document.getElementById('catalogueManagerOverlay').remove()" style="background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--text-muted);">✕</button>
+      </div>
+      <div id="catalogueList" style="overflow-y:auto;flex:1;padding:16px 20px;">
+        <div style="text-align:center;padding:24px;"><div class="spinner" style="margin:0 auto;"></div></div>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  if (!fb) return;
+  const { db, collection, query, where, getDocs, doc, deleteDoc } = fb;
+  try {
+    const snap = await getDocs(query(collection(db, 'bakeryCatalogue'), where('bakeryName','==',bakeryName)));
+    const items = snap.docs.map(d => ({id:d.id,...d.data()})).sort((a,b) => a.name.localeCompare(b.name));
+    const list = document.getElementById('catalogueList');
+    if (!items.length) {
+      list.innerHTML = `<div class="empty-state" style="padding:24px 0;"><div class="empty-state-icon">📋</div><div class="empty-state-title">No catalogue items yet</div><div class="empty-state-text">Items are saved automatically when you create your first offering.</div></div>`;
+      return;
+    }
+    list.innerHTML = items.map(item => `
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">
+        ${item.photoURL ? `<img src="${item.photoURL}" style="width:44px;height:44px;object-fit:cover;border-radius:6px;flex-shrink:0;">` : `<div style="width:44px;height:44px;border-radius:6px;background:var(--parchment-dark);display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0;">🥐</div>`}
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:0.88rem;font-weight:600;color:var(--espresso);">${item.name}</div>
+          <div style="font-size:0.72rem;color:var(--text-muted);">£${parseFloat(item.price||0).toFixed(2)}${item.description ? ` · ${item.description.slice(0,40)}${item.description.length>40?'…':''}` : ''}</div>
+        </div>
+        <button onclick="removeCatalogueItem('${item.id}','${escJS(bakeryName)}')" style="background:none;border:none;color:#e74c3c;font-size:0.8rem;cursor:pointer;flex-shrink:0;">Remove</button>
+      </div>`).join('');
+  } catch(e) {
+    document.getElementById('catalogueList').innerHTML = '<div style="padding:16px;color:var(--text-muted);">Could not load catalogue.</div>';
+  }
+}
+
+async function removeCatalogueItem(itemId, bakeryName) {
+  if (!confirm('Remove this item from your catalogue?')) return;
+  const { db, doc, deleteDoc } = fb;
+  try {
+    await deleteDoc(doc(db, 'bakeryCatalogue', itemId));
+    showToast('Removed from catalogue');
+    openCatalogueManager(bakeryName); // refresh
+    document.getElementById('catalogueManagerOverlay')?.remove();
+  } catch(e) { showToast('Could not remove'); }
 }
 
 // ─── QR CODE ──────────────────────────────────────────────────────────────────
