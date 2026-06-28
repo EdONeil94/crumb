@@ -1324,6 +1324,7 @@ nav::before {
   max-height: 92vh;
   overflow-y: auto;
   position: relative;
+  padding-top: env(safe-area-inset-top, 0px);
 }
 @media (min-width: 600px) {
   .modal { border-radius: var(--radius); max-height: 88vh; }
@@ -2529,8 +2530,9 @@ nav::before {
     </button>
     <div class="nav-avatar" id="navAvatar" onclick="toggleUserMenu()" style="display:none">?</div>
     <button class="nav-btn" onclick="openAuthModal()" id="signInBtn">Sign in</button>
-    <button class="nav-hamburger" onclick="toggleMobileMenu()" id="hamburgerBtn" aria-label="Menu">
+    <button class="nav-hamburger" onclick="toggleMobileMenu()" id="hamburgerBtn" aria-label="Menu" style="position:relative;">
       <span></span><span></span><span></span>
+      <span id="hamburgerPreorderBadge" style="display:none;position:absolute;top:-2px;right:-2px;background:#e74c3c;color:white;font-size:0.55rem;font-weight:700;min-width:14px;height:14px;border-radius:100px;display:none;align-items:center;justify-content:center;padding:0 3px;border:2px solid var(--espresso);"></span>
     </button>
   </div>
 </nav>
@@ -2562,6 +2564,9 @@ nav::before {
   <div class="mobile-menu-divider" id="mobileMenuDivider" style="display:none;"></div>
   <div class="mobile-menu-section-label" id="mobileAccountLabel" style="display:none;">Account</div>
   <button class="mobile-menu-item" id="mobileProfileBtn" onclick="closeMobileMenu(); setTimeout(()=>{if(currentUser)openProfileModal(currentUser.uid);},50);" style="display:none">👤 My profile</button>
+  <button class="mobile-menu-item" id="mobilePreordersBtn" onclick="closeMobileMenu(); openMyPreordersSheet();" style="display:none;">
+    🗓️ My pre-orders <span id="mobilePreordersBadge" style="display:none;background:#e74c3c;color:white;font-size:0.6rem;font-weight:700;padding:2px 6px;border-radius:100px;margin-left:6px;vertical-align:middle;"></span>
+  </button>
   <button class="mobile-menu-item" id="mobileEditProfileBtn" onclick="closeMobileMenu(); setTimeout(()=>showPage('settings'),50);" style="display:none">⚙️ Settings</button>
   <button class="mobile-menu-item" id="mobileSignOutBtn" onclick="fb.signOut(fb.auth); showToast('Signed out'); closeMobileMenu();" style="display:none; color:#e07070;">→ Sign out</button>
   <div class="mobile-menu-divider"></div>
@@ -2976,25 +2981,26 @@ nav::before {
     <h1 style="font-family:'Playfair Display',serif; font-size:clamp(1.8rem,4vw,2.6rem); color:var(--cream-white); font-weight:700; margin-bottom:10px;">🗓️ Pre-orders</h1>
     <p style="color:var(--honey-light); font-size:0.95rem; max-width:440px; margin:0 auto 24px; line-height:1.6;">Browse tomorrow's bakes and reserve your favourites before they sell out.</p>
 
-    <!-- Filters -->
-    <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-bottom:16px;">
-      <select id="poCountrySelect" class="explore-select" onchange="onPoCountryChange()">
-        <option value="">🌍 Detecting location…</option>
+    <!-- Filters row 1: country (locked) + city + nearest -->
+    <div style="display:flex; gap:8px; justify-content:center; flex-wrap:nowrap; margin-bottom:8px; max-width:480px; margin-left:auto; margin-right:auto;">
+      <select id="poCountrySelect" class="explore-select" onchange="onPoCountryChange()" style="flex:1; min-width:0;">
+        <option value="">🌍 Country</option>
       </select>
-      <select id="poCitySelect" class="explore-select" onchange="onPoCityChange()">
+      <select id="poCitySelect" class="explore-select" onchange="onPoCityChange()" style="flex:1.4; min-width:0;">
         <option value="">Select a city</option>
       </select>
-      <button class="explore-select" id="poNearestBtn" onclick="poDetectNearest()" style="cursor:pointer;min-width:auto;padding:9px 16px;">📍 Nearest</button>
+      <button class="explore-select" id="poNearestBtn" onclick="poDetectNearest()" style="cursor:pointer;flex-shrink:0;padding:9px 12px;white-space:nowrap;">📍</button>
     </div>
-    <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
-      <select id="poBakeryFilter" class="explore-select" onchange="renderPreorderPage()" style="min-width:180px;">
+    <!-- Filters row 2: bakery + sort -->
+    <div style="display:flex; gap:8px; justify-content:center; flex-wrap:nowrap; max-width:480px; margin-left:auto; margin-right:auto;">
+      <select id="poBakeryFilter" class="explore-select" onchange="renderPreorderPage()" style="flex:1; min-width:0;">
         <option value="">🏪 All bakeries</option>
       </select>
-      <select id="poSortFilter" class="explore-select" onchange="renderPreorderPage()">
-        <option value="slot">🕐 By collection time</option>
+      <select id="poSortFilter" class="explore-select" onchange="renderPreorderPage()" style="flex:1; min-width:0;">
+        <option value="slot">🕐 By time</option>
         <option value="bakery">🏪 By bakery</option>
-        <option value="price_asc">💰 Price: low to high</option>
-        <option value="price_desc">💰 Price: high to low</option>
+        <option value="price_asc">💰 Price ↑</option>
+        <option value="price_desc">💰 Price ↓</option>
       </select>
     </div>
   </div>
@@ -3012,6 +3018,7 @@ nav::before {
 </div>
 
 <!-- ─── SHOP PAGE ─────────────────────────────────────────────────────────────── -->
+<div class="page" id="page-shop">
   <div style="background:var(--espresso); padding:56px 24px 48px; text-align:center;">
     <div style="font-size:0.72rem; letter-spacing:4px; text-transform:uppercase; color:var(--honey); font-weight:600; margin-bottom:12px;">Marketplace</div>
     <h1 style="font-family:'Playfair Display',serif; font-size:clamp(2rem,5vw,3rem); color:var(--cream-white); font-weight:700; margin-bottom:12px;">The Crumbz <em style="color:var(--honey); font-style:italic;">Shop</em></h1>
@@ -3823,6 +3830,13 @@ window.addEventListener('crumb-firebase-ready', () => {
       await loadFollows();
       loadBookmarks();
       loadNotifications();
+      loadMyPreorders();
+      // Real-time listener for new follows — refreshes notification bell
+      const { db, collection, query, where, onSnapshot } = fb;
+      onSnapshot(
+        query(collection(db, 'follows'), where('followingId', '==', user.uid)),
+        () => loadNotifications()
+      );
     }
     updateNav();
     loadData();
@@ -7982,7 +7996,7 @@ async function loadFollows() {
 
 async function toggleFollow(targetUid) {
   if (!currentUser || targetUid === currentUser.uid) return;
-  const { db, doc, setDoc, deleteDoc, serverTimestamp } = fb;
+  const { db, doc, setDoc, deleteDoc, serverTimestamp, collection, addDoc } = fb;
   const followId = `${currentUser.uid}_${targetUid}`;
   const followRef = doc(db, 'follows', followId);
   try {
@@ -8001,7 +8015,6 @@ async function toggleFollow(targetUid) {
       myFollowing.add(targetUid);
       showToast('Following!');
     }
-    // Refresh any open profile
     refreshFollowButtons(targetUid);
   } catch(e) { showToast('Could not update follow'); console.error(e); }
 }
@@ -9158,6 +9171,122 @@ function closeBakeryModalIfOpen() {
   document.getElementById('bakeryModal')?.classList.remove('open');
 }
 
+// ─── MY PRE-ORDERS (burger menu) ─────────────────────────────────────────────
+let myPendingPreorders = [];
+
+async function loadMyPreorders() {
+  if (!currentUser || !fb) return;
+  const { db, collection, query, where, getDocs } = fb;
+  try {
+    const snap = await getDocs(query(
+      collection(db, 'reservations'),
+      where('userId', '==', currentUser.uid),
+      where('status', '==', 'pending')
+    ));
+    myPendingPreorders = snap.docs.map(d => ({id: d.id, ...d.data()}))
+      .filter(r => r.collectDate >= new Date().toISOString().split('T')[0])
+      .sort((a,b) => a.collectDate.localeCompare(b.collectDate));
+    updatePreorderBadge();
+  } catch(e) { console.warn('Preorders load error:', e); }
+}
+
+function updatePreorderBadge() {
+  const count = myPendingPreorders.length;
+  const hamburgerBadge = document.getElementById('hamburgerPreorderBadge');
+  const menuBadge = document.getElementById('mobilePreordersBadge');
+  const menuBtn = document.getElementById('mobilePreordersBtn');
+
+  if (hamburgerBadge) {
+    hamburgerBadge.textContent = count > 9 ? '9+' : count;
+    hamburgerBadge.style.display = count > 0 ? 'flex' : 'none';
+  }
+  if (menuBadge) {
+    menuBadge.textContent = count;
+    menuBadge.style.display = count > 0 ? 'inline' : 'none';
+  }
+  if (menuBtn) menuBtn.style.display = currentUser ? '' : 'none';
+}
+
+function openMyPreordersSheet() {
+  if (!currentUser) { openAuthModal(); return; }
+
+  const overlay = document.createElement('div');
+  overlay.id = 'myPreordersSheet';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:700;display:flex;align-items:flex-end;justify-content:center;';
+
+  const rows = myPendingPreorders.length ? myPendingPreorders.map(r => {
+    const collectDate = new Date(r.collectDate + 'T12:00:00').toLocaleDateString('en-GB', {weekday:'long', day:'numeric', month:'long'});
+    const ref = r.id.slice(-6).toUpperCase();
+    const qty = r.quantity > 1 ? `${r.quantity}× ` : '';
+    const daysUntil = Math.ceil((new Date(r.collectDate) - new Date()) / (1000*60*60*24));
+    const urgency = daysUntil === 0 ? '🔴 Today!' : daysUntil === 1 ? '🟡 Tomorrow' : `🟢 ${daysUntil} days`;
+    return `
+      <div style="padding:14px 0;border-bottom:1px solid var(--border);">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:6px;">
+          <div>
+            <div style="font-size:0.92rem;font-weight:700;color:var(--espresso);">${qty}${r.offeringName}</div>
+            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px;">📍 ${r.bakeryName}</div>
+          </div>
+          <span style="font-size:0.7rem;font-weight:600;white-space:nowrap;">${urgency}</span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div>
+            <div style="font-size:0.78rem;color:var(--caramel);font-weight:600;">🕐 ${r.slot}</div>
+            <div style="font-size:0.72rem;color:var(--text-muted);">${collectDate} · Ref: <strong>${ref}</strong></div>
+            <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">Pay in store · £${parseFloat(r.totalPrice || r.price || 0).toFixed(2)}</div>
+          </div>
+          <div id="miniQR_${r.id}" style="width:52px;height:52px;flex-shrink:0;"></div>
+        </div>
+      </div>`;
+  }).join('') : `<div class="empty-state" style="padding:24px 0;">
+    <div class="empty-state-icon">🗓️</div>
+    <div class="empty-state-title">No upcoming pre-orders</div>
+    <div class="empty-state-text">Browse the Pre-order page to reserve tomorrow's bakes.</div>
+  </div>`;
+
+  overlay.innerHTML = `
+    <div style="background:var(--cream-white);border-radius:var(--radius) var(--radius) 0 0;width:100%;max-width:520px;max-height:80vh;display:flex;flex-direction:column;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);flex-shrink:0;">
+        <div>
+          <div style="font-family:'Playfair Display',serif;font-size:1rem;font-weight:700;color:var(--espresso);">🗓️ My pre-orders</div>
+          ${myPendingPreorders.length ? `<div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">${myPendingPreorders.length} upcoming reservation${myPendingPreorders.length !== 1 ? 's' : ''}</div>` : ''}
+        </div>
+        <button onclick="document.getElementById('myPreordersSheet').remove()" style="background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--text-muted);">✕</button>
+      </div>
+      <div style="overflow-y:auto;flex:1;padding:0 20px 24px;">${rows}</div>
+      ${myPendingPreorders.length ? `
+        <div style="padding:12px 20px 28px;border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:10px;">
+          <button class="btn-ghost" style="flex:1;" onclick="document.getElementById('myPreordersSheet').remove(); showPage('preorders')">Browse more</button>
+          <button class="btn-espresso" style="flex:1;" onclick="document.getElementById('myPreordersSheet').remove(); openProfileModal(currentUser.uid).then(()=>switchProfileTab('orders',currentUser.uid))">View all orders</button>
+        </div>` : `
+        <div style="padding:12px 20px 28px;border-top:1px solid var(--border);flex-shrink:0;">
+          <button class="btn-espresso" style="width:100%;" onclick="document.getElementById('myPreordersSheet').remove(); showPage('preorders')">Browse pre-orders</button>
+        </div>`}
+    </div>`;
+
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  // Generate mini QR codes
+  requestAnimationFrame(() => {
+    myPendingPreorders.forEach(r => {
+      const el = document.getElementById(`miniQR_${r.id}`);
+      if (el && window.QRCode) {
+        try {
+          new QRCode(el, {
+            text: `crumbz:reservation:${r.id}`,
+            width: 52, height: 52,
+            colorDark: '#2c1810', colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.H
+          });
+        } catch(e) {
+          el.innerHTML = `<div style="font-size:0.5rem;font-family:monospace;font-weight:700;color:#2c1810;text-align:center;line-height:1.3;">${r.id.slice(-6).toUpperCase()}</div>`;
+        }
+      }
+    });
+  });
+}
+
 // ─── PRE-ORDER / RESERVATIONS ─────────────────────────────────────────────────
 const COLLECTION_TIMES = ['7:00am','7:30am','8:00am','8:30am','9:00am','9:30am','10:00am','10:30am','11:00am','11:30am','12:00pm','12:30pm','1:00pm','2:00pm','3:00pm','4:00pm','5:00pm'];
 // Legacy alias
@@ -9771,6 +9900,8 @@ async function reserveOffering(offeringId, bakeryName, offeringName, slot, colle
     ));
     if (!existingSnap.empty) { showToast('You already have a reservation for this item'); return; }
     await updateDoc(offeringRef, { remaining: remaining - quantity });
+    // Note: this updateDoc requires the Firestore rule to allow authenticated users to update 'remaining'
+    // Make sure your rules allow: allow update: if request.auth != null && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['remaining']);
     await addDoc(collection(db, 'reservations'), {
       userId: currentUser.uid,
       userName: currentUser.displayName || currentUser.email?.split('@')[0] || 'Customer',
@@ -9782,6 +9913,7 @@ async function reserveOffering(offeringId, bakeryName, offeringName, slot, colle
       createdAt: serverTimestamp()
     });
     showToast(`🎉 Reserved ${quantity > 1 ? quantity + '× ' : ''}${offeringName}! Collect ${slot}. Pay in store.`);
+    loadMyPreorders(); // Update burger menu badge
     const bakeryContent = document.getElementById('bakeryTabContent');
     if (bakeryContent) await renderPreorderTab(bakeryContent, bakeryName);
     const poResults = document.getElementById('preorderPageResults');
@@ -9883,6 +10015,7 @@ async function cancelReservation(reservationId, offeringId) {
       }
     }
     showToast('Reservation cancelled');
+    loadMyPreorders(); // Update burger menu badge
     const content = document.getElementById('profileTabContent');
     if (content) await renderOrdersTab(content);
   } catch(e) { showToast('Could not cancel'); console.error(e); }
