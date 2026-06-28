@@ -9444,18 +9444,21 @@ async function renderMpHistoric(panel, bakeryName, days) {
   const now = new Date();
   const cutoffDate = new Date(now); cutoffDate.setDate(cutoffDate.getDate() - days);
   const cutoffStr = cutoffDate.toISOString().split('T')[0];
+  // Include today AND the next few days (orders placed now for upcoming collection)
+  const upperDate = new Date(now); upperDate.setDate(upperDate.getDate() + days);
+  const upperStr = upperDate.toISOString().split('T')[0];
   const todayStr = now.toISOString().split('T')[0];
 
   const snap = await getDocs(query(collection(db, 'reservations'),
     where('bakeryName','==',bakeryName)));
   const reservations = snap.docs.map(d => ({id:d.id,...d.data()}))
-    .filter(r => r.collectDate >= cutoffStr && r.collectDate <= todayStr && r.status !== 'cancelled')
+    .filter(r => r.collectDate >= cutoffStr && r.collectDate <= upperStr && r.status !== 'cancelled')
     .sort((a,b) => b.collectDate.localeCompare(a.collectDate));
 
   if (!reservations.length) {
     panel.innerHTML = `<div class="empty-state" style="padding:24px 0;">
       <div class="empty-state-icon">📋</div>
-      <div class="empty-state-title">No orders in the last ${days} days</div>
+      <div class="empty-state-title">No orders in the last or next ${days} days</div>
     </div>`;
     return;
   }
@@ -9531,10 +9534,15 @@ async function renderMpHistoric(panel, bakeryName, days) {
       const dateLabel = new Date(date+'T12:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'short'});
       const dayRevenue = orders.reduce((s,r) => s + (r.totalPrice||r.price||0), 0);
       const dayCollected = orders.filter(r => r.status==='collected').length;
+      const isFuture = date > todayStr;
+      const isToday = date === todayStr;
       return `
         <div style="margin-bottom:16px;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-            <div style="font-size:0.82rem;font-weight:700;color:var(--espresso);">${dateLabel}</div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div style="font-size:0.82rem;font-weight:700;color:var(--espresso);">${dateLabel}</div>
+              ${isToday ? `<span style="font-size:0.62rem;font-weight:700;background:var(--honey);color:var(--espresso);padding:2px 7px;border-radius:100px;">Today</span>` : isFuture ? `<span style="font-size:0.62rem;font-weight:700;background:#d4edda;color:#155724;padding:2px 7px;border-radius:100px;">Upcoming</span>` : ''}
+            </div>
             <div style="display:flex;align-items:center;gap:8px;">
               <span style="font-size:0.68rem;color:var(--text-muted);">${dayCollected}/${orders.length} collected</span>
               <span style="font-size:0.82rem;font-weight:700;color:var(--caramel);">£${dayRevenue.toFixed(2)}</span>
