@@ -9455,7 +9455,7 @@ async function renderMpHistoric(panel, bakeryName, days) {
   if (!reservations.length) {
     panel.innerHTML = `<div class="empty-state" style="padding:24px 0;">
       <div class="empty-state-icon">📋</div>
-      <div class="empty-state-title">No completed orders in the last ${days} days</div>
+      <div class="empty-state-title">No orders in the last ${days} days</div>
     </div>`;
     return;
   }
@@ -9463,7 +9463,14 @@ async function renderMpHistoric(panel, bakeryName, days) {
   // Summary stats
   const totalRevenue = reservations.reduce((s,r) => s + (r.totalPrice || r.price || 0), 0);
   const totalItems = reservations.reduce((s,r) => s + (r.quantity || 1), 0);
-  const collected = reservations.filter(r => r.status === 'collected').length;
+  const collectedOrders = reservations.filter(r => r.status === 'collected');
+  const pendingOrders = reservations.filter(r => r.status !== 'collected');
+  const collected = collectedOrders.length;
+  const pending = pendingOrders.length;
+  const collectedRevenue = collectedOrders.reduce((s,r) => s + (r.totalPrice || r.price || 0), 0);
+  const pendingRevenue = pendingOrders.reduce((s,r) => s + (r.totalPrice || r.price || 0), 0);
+  const collectedItems = collectedOrders.reduce((s,r) => s + (r.quantity || 1), 0);
+  const pendingItems = pendingOrders.reduce((s,r) => s + (r.quantity || 1), 0);
 
   // Group by date
   const byDate = {};
@@ -9473,21 +9480,47 @@ async function renderMpHistoric(panel, bakeryName, days) {
   });
 
   panel.innerHTML = `
-    <!-- Summary strip -->
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:20px;">
-      <div style="background:var(--espresso);border-radius:var(--radius-sm);padding:12px;text-align:center;">
-        <div style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:700;color:var(--honey);">£${totalRevenue.toFixed(2)}</div>
-        <div style="font-size:0.65rem;color:var(--honey-light);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px;">Revenue</div>
+    <!-- Summary strip — top level -->
+    <div style="background:var(--espresso);border-radius:var(--radius-sm);padding:14px;margin-bottom:10px;text-align:center;">
+      <div style="font-family:'Playfair Display',serif;font-size:1.6rem;font-weight:700;color:var(--honey);">£${totalRevenue.toFixed(2)}</div>
+      <div style="font-size:0.65rem;color:var(--honey-light);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px;">Total revenue · ${totalItems} item${totalItems!==1?'s':''} · ${reservations.length} order${reservations.length!==1?'s':''}</div>
+    </div>
+
+    <!-- Collected vs Pending breakdown -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;">
+      <div style="border:2px solid #d4edda;border-radius:var(--radius-sm);padding:12px;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+          <span style="font-size:0.7rem;font-weight:700;color:#155724;background:#d4edda;padding:2px 8px;border-radius:100px;">✓ Collected</span>
+        </div>
+        <div style="font-family:'Playfair Display',serif;font-size:1.2rem;font-weight:700;color:var(--espresso);">${collected}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:1px;">${collectedItems} item${collectedItems!==1?'s':''}</div>
+        <div style="font-size:0.85rem;font-weight:700;color:#155724;margin-top:4px;">£${collectedRevenue.toFixed(2)}</div>
       </div>
-      <div style="background:var(--espresso);border-radius:var(--radius-sm);padding:12px;text-align:center;">
-        <div style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:700;color:var(--honey);">${totalItems}</div>
-        <div style="font-size:0.65rem;color:var(--honey-light);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px;">Items sold</div>
-      </div>
-      <div style="background:var(--espresso);border-radius:var(--radius-sm);padding:12px;text-align:center;">
-        <div style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:700;color:var(--honey);">${collected}</div>
-        <div style="font-size:0.65rem;color:var(--honey-light);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px;">Collected</div>
+      <div style="border:2px solid #fff3cd;border-radius:var(--radius-sm);padding:12px;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+          <span style="font-size:0.7rem;font-weight:700;color:#856404;background:#fff3cd;padding:2px 8px;border-radius:100px;">⏳ Pending</span>
+        </div>
+        <div style="font-family:'Playfair Display',serif;font-size:1.2rem;font-weight:700;color:var(--espresso);">${pending}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:1px;">${pendingItems} item${pendingItems!==1?'s':''}</div>
+        <div style="font-size:0.85rem;font-weight:700;color:#856404;margin-top:4px;">£${pendingRevenue.toFixed(2)}</div>
       </div>
     </div>
+
+    <!-- Collection rate bar -->
+    ${reservations.length > 0 ? `
+    <div style="background:var(--parchment);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+        <div style="font-size:0.72rem;font-weight:600;color:var(--espresso);">Collection rate</div>
+        <div style="font-size:0.72rem;font-weight:700;color:var(--espresso);">${Math.round((collected/reservations.length)*100)}%</div>
+      </div>
+      <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden;">
+        <div style="height:100%;width:${Math.round((collected/reservations.length)*100)}%;background:#27ae60;border-radius:4px;transition:width 0.5s;"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:4px;">
+        <div style="font-size:0.62rem;color:#155724;">✓ ${collected} collected</div>
+        <div style="font-size:0.62rem;color:#856404;">${pending} not yet collected</div>
+      </div>
+    </div>` : ''}
 
     <!-- Item breakdown -->
     ${mpItemBreakdownHTML(reservations, totalRevenue)}
@@ -9497,11 +9530,15 @@ async function renderMpHistoric(panel, bakeryName, days) {
     ${Object.entries(byDate).map(([date, orders]) => {
       const dateLabel = new Date(date+'T12:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'short'});
       const dayRevenue = orders.reduce((s,r) => s + (r.totalPrice||r.price||0), 0);
+      const dayCollected = orders.filter(r => r.status==='collected').length;
       return `
         <div style="margin-bottom:16px;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
             <div style="font-size:0.82rem;font-weight:700;color:var(--espresso);">${dateLabel}</div>
-            <div style="font-size:0.82rem;font-weight:700;color:var(--caramel);">£${dayRevenue.toFixed(2)}</div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:0.68rem;color:var(--text-muted);">${dayCollected}/${orders.length} collected</span>
+              <span style="font-size:0.82rem;font-weight:700;color:var(--caramel);">£${dayRevenue.toFixed(2)}</span>
+            </div>
           </div>
           ${orders.map(r => `
             <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);">
@@ -9548,6 +9585,10 @@ async function renderMpMonth(panel, bakeryName) {
   const totalRevenue = reservations.reduce((s,r) => s + (r.totalPrice||r.price||0), 0);
   const totalOrders = reservations.length;
   const totalItems = reservations.reduce((s,r) => s + (r.quantity||1), 0);
+  const collectedMo = reservations.filter(r => r.status === 'collected');
+  const pendingMo = reservations.filter(r => r.status !== 'collected');
+  const collectedRevMo = collectedMo.reduce((s,r) => s + (r.totalPrice||r.price||0), 0);
+  const pendingRevMo = pendingMo.reduce((s,r) => s + (r.totalPrice||r.price||0), 0);
 
   // Calendar grid
   const startDow = firstDay.getDay(); // 0=Sun
@@ -9575,20 +9616,34 @@ async function renderMpMonth(panel, bakeryName) {
   panel.innerHTML = `
     <!-- Month summary -->
     <div style="font-size:0.82rem;font-weight:700;color:var(--espresso);margin-bottom:12px;">${monthName}</div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:20px;">
-      <div style="background:var(--espresso);border-radius:var(--radius-sm);padding:12px;text-align:center;">
-        <div style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:700;color:var(--honey);">£${totalRevenue.toFixed(2)}</div>
-        <div style="font-size:0.62rem;color:var(--honey-light);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px;">Month revenue</div>
+    <div style="background:var(--espresso);border-radius:var(--radius-sm);padding:14px;margin-bottom:10px;text-align:center;">
+      <div style="font-family:'Playfair Display',serif;font-size:1.6rem;font-weight:700;color:var(--honey);">£${totalRevenue.toFixed(2)}</div>
+      <div style="font-size:0.65rem;color:var(--honey-light);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px;">Total revenue · ${totalItems} items · ${totalOrders} orders</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;">
+      <div style="border:2px solid #d4edda;border-radius:var(--radius-sm);padding:12px;">
+        <div style="margin-bottom:6px;"><span style="font-size:0.7rem;font-weight:700;color:#155724;background:#d4edda;padding:2px 8px;border-radius:100px;">✓ Collected</span></div>
+        <div style="font-family:'Playfair Display',serif;font-size:1.2rem;font-weight:700;color:var(--espresso);">${collectedMo.length}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);">${collectedMo.reduce((s,r)=>s+(r.quantity||1),0)} items</div>
+        <div style="font-size:0.85rem;font-weight:700;color:#155724;margin-top:4px;">£${collectedRevMo.toFixed(2)}</div>
       </div>
-      <div style="background:var(--espresso);border-radius:var(--radius-sm);padding:12px;text-align:center;">
-        <div style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:700;color:var(--honey);">${totalOrders}</div>
-        <div style="font-size:0.62rem;color:var(--honey-light);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px;">Orders</div>
-      </div>
-      <div style="background:var(--espresso);border-radius:var(--radius-sm);padding:12px;text-align:center;">
-        <div style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:700;color:var(--honey);">${totalItems}</div>
-        <div style="font-size:0.62rem;color:var(--honey-light);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px;">Items sold</div>
+      <div style="border:2px solid #fff3cd;border-radius:var(--radius-sm);padding:12px;">
+        <div style="margin-bottom:6px;"><span style="font-size:0.7rem;font-weight:700;color:#856404;background:#fff3cd;padding:2px 8px;border-radius:100px;">⏳ Pending</span></div>
+        <div style="font-family:'Playfair Display',serif;font-size:1.2rem;font-weight:700;color:var(--espresso);">${pendingMo.length}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);">${pendingMo.reduce((s,r)=>s+(r.quantity||1),0)} items</div>
+        <div style="font-size:0.85rem;font-weight:700;color:#856404;margin-top:4px;">£${pendingRevMo.toFixed(2)}</div>
       </div>
     </div>
+    ${totalOrders > 0 ? `
+    <div style="background:var(--parchment);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+        <div style="font-size:0.72rem;font-weight:600;color:var(--espresso);">Collection rate</div>
+        <div style="font-size:0.72rem;font-weight:700;color:var(--espresso);">${Math.round((collectedMo.length/totalOrders)*100)}%</div>
+      </div>
+      <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden;">
+        <div style="height:100%;width:${Math.round((collectedMo.length/totalOrders)*100)}%;background:#27ae60;border-radius:4px;"></div>
+      </div>
+    </div>` : ''}
 
     <!-- Item breakdown -->
     ${mpItemBreakdownHTML(reservations, totalRevenue)}
