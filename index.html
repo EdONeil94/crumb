@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 
 <!-- PWA meta — manifest and SW active on Firebase Hosting only -->
 <!-- <link rel="manifest" href="manifest.json"> -->
@@ -2690,7 +2693,7 @@ nav::before {
           <label class="form-label">Photo</label>
           <div id="photoUploadWrap">
             <div class="photo-upload" id="photoUploadArea">
-              <input type="file" accept="image/*" capture="environment" id="photoInput" onchange="handlePhotoChange(this)">
+              <input type="file" accept="image/*" id="photoInput" onchange="handlePhotoChange(this)">
               <div class="photo-upload-icon">📷</div>
               <div class="photo-upload-text">Tap to take a photo or <strong>upload from your camera roll</strong></div>
             </div>
@@ -3473,7 +3476,17 @@ const CATEGORY_TREE = {
       lemon_drizzle: 'Lemon Drizzle', chocolate_cake: 'Chocolate Cake',
       cheesecake: 'Cheesecake', banana_bread: 'Banana Bread',
       coffee_cake: 'Coffee & Walnut', red_velvet: 'Red Velvet',
-      fruit_cake: 'Fruit Cake', opera: 'Opera Cake'
+      fruit_cake: 'Fruit Cake', opera: 'Opera Cake',
+      bundt: 'Bundt Cake', swiss_roll: 'Swiss Roll'
+    }
+  },
+  cheesecake: {
+    label: 'Cheesecake', emoji: '🍰',
+    subs: {
+      baked_cheesecake: 'Baked Cheesecake', ny_cheesecake: 'New York Cheesecake',
+      no_bake_cheesecake: 'No-Bake Cheesecake', japanese_cheesecake: 'Japanese Cheesecake',
+      basque_cheesecake: 'Basque Burnt Cheesecake', fruit_cheesecake: 'Fruit Cheesecake',
+      chocolate_cheesecake: 'Chocolate Cheesecake', mini_cheesecake: 'Mini Cheesecake'
     }
   },
   tart: {
@@ -5436,7 +5449,7 @@ function resetAddModal() {
   if (catGroup) catGroup.style.display = 'block';
   document.getElementById('photoUploadWrap').innerHTML = `
     <div class="photo-upload" id="photoUploadArea">
-      <input type="file" accept="image/*" capture="environment" id="photoInput" onchange="handlePhotoChange(this)">
+      <input type="file" accept="image/*" id="photoInput" onchange="handlePhotoChange(this)">
       <div class="photo-upload-icon">📷</div>
       <div class="photo-upload-text">Tap to take a photo or <strong>upload from your camera roll</strong></div>
     </div>`;
@@ -5535,7 +5548,7 @@ function removePhoto() {
   photoFile = null; photoDataURL = null;
   document.getElementById('photoUploadWrap').innerHTML = `
     <div class="photo-upload" id="photoUploadArea">
-      <input type="file" accept="image/*" capture="environment" id="photoInput" onchange="handlePhotoChange(this)">
+      <input type="file" accept="image/*" id="photoInput" onchange="handlePhotoChange(this)">
       <div class="photo-upload-icon">📷</div>
       <div class="photo-upload-text">Tap to take a photo or <strong>upload from your camera roll</strong></div>
     </div>`;
@@ -7342,7 +7355,7 @@ function openEditModal(id) {
         <button class="photo-preview-remove" onclick="clearEditPhoto()">✕</button>
        </div>`
     : `<div class="photo-upload" id="editPhotoWrap">
-        <input type="file" accept="image/*" capture="environment" id="editPhotoInput" onchange="handleEditPhoto(this)">
+        <input type="file" accept="image/*" id="editPhotoInput" onchange="handleEditPhoto(this)">
         <div class="photo-upload-icon">📷</div>
         <div class="photo-upload-text">Tap to add a photo</div>
        </div>`;
@@ -7353,7 +7366,7 @@ function openEditModal(id) {
         <label class="form-label">Photo</label>
         ${photoSection}
         <label class="form-label" style="font-size:0.72rem;cursor:pointer;color:var(--caramel);margin-top:8px;display:inline-block;">
-          <input type="file" accept="image/*" capture="environment" style="display:none;" onchange="handleEditPhoto(this)"> 🔄 Replace photo
+          <input type="file" accept="image/*" style="display:none;" onchange="handleEditPhoto(this)"> 🔄 Replace photo
         </label>
       </div>
       <div class="form-group" style="margin:0;">
@@ -8987,6 +9000,57 @@ function renderAdminUsers() {
     applyStatusBarHeight();
   }
   window.addEventListener('resize', applyStatusBarHeight);
+})();
+
+// ─── PULL TO REFRESH ──────────────────────────────────────────────────────────
+(function() {
+  let startY = 0, pulling = false;
+  const threshold = 80;
+
+  // Indicator element
+  const indicator = document.createElement('div');
+  indicator.id = 'pullRefreshIndicator';
+  indicator.style.cssText = `
+    position: fixed; top: 0; left: 50%; transform: translateX(-50%) translateY(-60px);
+    background: var(--espresso); color: var(--honey); border-radius: 0 0 20px 20px;
+    padding: 8px 20px; font-size: 0.78rem; font-weight: 600;
+    z-index: 500; transition: transform 0.2s; pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  `;
+  indicator.textContent = '↓ Pull to refresh';
+  document.body.appendChild(indicator);
+
+  document.addEventListener('touchstart', e => {
+    if (window.scrollY === 0) {
+      startY = e.touches[0].clientY;
+      pulling = true;
+    }
+  }, { passive: true });
+
+  document.addEventListener('touchmove', e => {
+    if (!pulling) return;
+    const dist = e.touches[0].clientY - startY;
+    if (dist > 10 && dist < threshold + 40) {
+      const progress = Math.min(dist / threshold, 1);
+      indicator.style.transform = `translateX(-50%) translateY(${-60 + dist * 0.6}px)`;
+      indicator.textContent = dist > threshold ? '↑ Release to refresh' : '↓ Pull to refresh';
+    }
+  }, { passive: true });
+
+  document.addEventListener('touchend', e => {
+    if (!pulling) return;
+    pulling = false;
+    const dist = e.changedTouches[0].clientY - startY;
+    indicator.style.transform = 'translateX(-50%) translateY(-60px)';
+    indicator.textContent = '↓ Pull to refresh';
+    if (dist > threshold) {
+      indicator.textContent = '🔄 Refreshing…';
+      indicator.style.transform = 'translateX(-50%) translateY(0px)';
+      setTimeout(() => {
+        window.location.reload(true); // force bypass cache
+      }, 400);
+    }
+  }, { passive: true });
 })();
 
 // ─── PWA INSTALL ──────────────────────────────────────────────────────────────
