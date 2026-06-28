@@ -9298,9 +9298,54 @@ async function openManagePreordersModal(bakeryName) {
   const modal = document.getElementById('managePreordersModal');
   document.getElementById('managePreordersTitle').textContent = `🗓️ Pre-orders — ${bakeryName}`;
   modal.classList.add('open'); lockScroll();
-  document.getElementById('managePreordersContent').innerHTML =
-    '<div style="text-align:center;padding:32px;"><div class="spinner" style="margin:0 auto;"></div></div>';
-  await renderManagePreorders(bakeryName);
+
+  // Tab bar
+  document.getElementById('managePreordersContent').innerHTML = `
+    <div style="display:flex;border-bottom:1px solid var(--border);margin:-24px -24px 20px;padding:0 24px;">
+      <button class="dm-stat-tab active" id="mpTab_upcoming" onclick="switchMpTab('upcoming','${escJS(bakeryName)}')"
+        style="flex:1;padding:12px 4px;font-size:0.8rem;font-weight:600;border:none;background:none;cursor:pointer;color:var(--espresso);border-bottom:2px solid var(--honey);">Upcoming</button>
+      <button class="dm-stat-tab" id="mpTab_week" onclick="switchMpTab('week','${escJS(bakeryName)}')"
+        style="flex:1;padding:12px 4px;font-size:0.8rem;font-weight:500;border:none;background:none;cursor:pointer;color:var(--text-muted);border-bottom:2px solid transparent;">Last 7 days</button>
+      <button class="dm-stat-tab" id="mpTab_month" onclick="switchMpTab('month','${escJS(bakeryName)}')"
+        style="flex:1;padding:12px 4px;font-size:0.8rem;font-weight:500;border:none;background:none;cursor:pointer;color:var(--text-muted);border-bottom:2px solid transparent;">This month</button>
+    </div>
+    <div id="mpTabContent"><div style="text-align:center;padding:32px;"><div class="spinner" style="margin:0 auto;"></div></div></div>`;
+
+  await renderMpTab('upcoming', bakeryName);
+}
+
+function switchMpTab(tab, bakeryName) {
+  document.querySelectorAll('[id^="mpTab_"]').forEach(btn => {
+    const isActive = btn.id === `mpTab_${tab}`;
+    btn.classList.toggle('active', isActive);
+    btn.style.fontWeight = isActive ? '600' : '500';
+    btn.style.color = isActive ? 'var(--espresso)' : 'var(--text-muted)';
+    btn.style.borderBottom = isActive ? '2px solid var(--honey)' : '2px solid transparent';
+  });
+  const content = document.getElementById('mpTabContent');
+  if (content) content.innerHTML = '<div style="text-align:center;padding:32px;"><div class="spinner" style="margin:0 auto;"></div></div>';
+  renderMpTab(tab, bakeryName);
+}
+
+async function renderMpTab(tab, bakeryName) {
+  const content = document.getElementById('mpTabContent');
+  if (!content || !fb) return;
+  const { db, collection, query, where, getDocs } = fb;
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+
+  try {
+    if (tab === 'upcoming') {
+      await renderMpUpcoming(content, bakeryName);
+    } else if (tab === 'week') {
+      await renderMpHistoric(content, bakeryName, 7);
+    } else {
+      await renderMpMonth(content, bakeryName);
+    }
+  } catch(e) {
+    content.innerHTML = '<div style="padding:16px;color:var(--text-muted);">Could not load data.</div>';
+    console.error(e);
+  }
 }
 
 function closeManagePreordersModal() {
@@ -9308,9 +9353,9 @@ function closeManagePreordersModal() {
   unlockScroll();
 }
 
-async function renderManagePreorders(bakeryName) {
+async function renderMpUpcoming(panel, bakeryName) {
+  if (!panel) panel = document.getElementById('mpTabContent');
   const { db, collection, query, where, getDocs } = fb;
-  const panel = document.getElementById('managePreordersContent');
   try {
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
@@ -9387,6 +9432,204 @@ async function renderManagePreorders(bakeryName) {
     panel.innerHTML = '<div style="padding:16px;color:var(--text-muted);">Could not load pre-orders.</div>';
     console.error(e);
   }
+}
+
+async function renderMpHistoric(panel, bakeryName, days) {
+  if (!panel) panel = document.getElementById('mpTabContent');
+  const { db, collection, query, where, getDocs } = fb;
+  const now = new Date();
+  const cutoffDate = new Date(now); cutoffDate.setDate(cutoffDate.getDate() - days);
+  const cutoffStr = cutoffDate.toISOString().split('T')[0];
+  const todayStr = now.toISOString().split('T')[0];
+
+  const snap = await getDocs(query(collection(db, 'reservations'),
+    where('bakeryName','==',bakeryName)));
+  const reservations = snap.docs.map(d => ({id:d.id,...d.data()}))
+    .filter(r => r.collectDate >= cutoffStr && r.collectDate <= todayStr && r.status !== 'cancelled')
+    .sort((a,b) => b.collectDate.localeCompare(a.collectDate));
+
+  if (!reservations.length) {
+    panel.innerHTML = `<div class="empty-state" style="padding:24px 0;">
+      <div class="empty-state-icon">📋</div>
+      <div class="empty-state-title">No completed orders in the last ${days} days</div>
+    </div>`;
+    return;
+  }
+
+  // Summary stats
+  const totalRevenue = reservations.reduce((s,r) => s + (r.totalPrice || r.price || 0), 0);
+  const totalItems = reservations.reduce((s,r) => s + (r.quantity || 1), 0);
+  const collected = reservations.filter(r => r.status === 'collected').length;
+
+  // Group by date
+  const byDate = {};
+  reservations.forEach(r => {
+    if (!byDate[r.collectDate]) byDate[r.collectDate] = [];
+    byDate[r.collectDate].push(r);
+  });
+
+  panel.innerHTML = `
+    <!-- Summary strip -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:20px;">
+      <div style="background:var(--espresso);border-radius:var(--radius-sm);padding:12px;text-align:center;">
+        <div style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:700;color:var(--honey);">£${totalRevenue.toFixed(2)}</div>
+        <div style="font-size:0.65rem;color:var(--honey-light);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px;">Revenue</div>
+      </div>
+      <div style="background:var(--espresso);border-radius:var(--radius-sm);padding:12px;text-align:center;">
+        <div style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:700;color:var(--honey);">${totalItems}</div>
+        <div style="font-size:0.65rem;color:var(--honey-light);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px;">Items sold</div>
+      </div>
+      <div style="background:var(--espresso);border-radius:var(--radius-sm);padding:12px;text-align:center;">
+        <div style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:700;color:var(--honey);">${collected}</div>
+        <div style="font-size:0.65rem;color:var(--honey-light);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px;">Collected</div>
+      </div>
+    </div>
+
+    <!-- Orders by date -->
+    ${Object.entries(byDate).map(([date, orders]) => {
+      const dateLabel = new Date(date+'T12:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'short'});
+      const dayRevenue = orders.reduce((s,r) => s + (r.totalPrice||r.price||0), 0);
+      return `
+        <div style="margin-bottom:16px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <div style="font-size:0.82rem;font-weight:700;color:var(--espresso);">${dateLabel}</div>
+            <div style="font-size:0.82rem;font-weight:700;color:var(--caramel);">£${dayRevenue.toFixed(2)}</div>
+          </div>
+          ${orders.map(r => `
+            <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);">
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:0.82rem;font-weight:600;color:var(--espresso);">${r.offeringName}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted);">${r.userName||'Customer'} · ${r.slot} · ${r.quantity>1?`${r.quantity}× `:''}#${r.id.slice(-6).toUpperCase()}</div>
+              </div>
+              <div style="text-align:right;flex-shrink:0;">
+                <div style="font-size:0.82rem;font-weight:700;color:var(--caramel);">£${parseFloat(r.totalPrice||r.price||0).toFixed(2)}</div>
+                <div style="font-size:0.65rem;${r.status==='collected'?'color:#155724;background:#d4edda;':'color:#856404;background:#fff3cd;'}padding:1px 6px;border-radius:100px;display:inline-block;margin-top:2px;">${r.status==='collected'?'✓ Collected':'Pending'}</div>
+              </div>
+            </div>`).join('')}
+        </div>`;
+    }).join('')}`;
+}
+
+async function renderMpMonth(panel, bakeryName) {
+  if (!panel) panel = document.getElementById('mpTabContent');
+  const { db, collection, query, where, getDocs } = fb;
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const firstStr = firstDay.toISOString().split('T')[0];
+  const lastStr = lastDay.toISOString().split('T')[0];
+  const monthName = firstDay.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+
+  const snap = await getDocs(query(collection(db, 'reservations'),
+    where('bakeryName','==',bakeryName)));
+  const reservations = snap.docs.map(d => ({id:d.id,...d.data()}))
+    .filter(r => r.collectDate >= firstStr && r.collectDate <= lastStr && r.status !== 'cancelled');
+
+  // Build date map
+  const dateMap = {};
+  reservations.forEach(r => {
+    if (!dateMap[r.collectDate]) dateMap[r.collectDate] = { count:0, revenue:0, items:[] };
+    dateMap[r.collectDate].count++;
+    dateMap[r.collectDate].revenue += r.totalPrice || r.price || 0;
+    dateMap[r.collectDate].items.push(r);
+  });
+
+  // Month totals
+  const totalRevenue = reservations.reduce((s,r) => s + (r.totalPrice||r.price||0), 0);
+  const totalOrders = reservations.length;
+  const totalItems = reservations.reduce((s,r) => s + (r.quantity||1), 0);
+
+  // Calendar grid
+  const startDow = firstDay.getDay(); // 0=Sun
+  const daysInMonth = lastDay.getDate();
+  const dayLabels = ['S','M','T','W','T','F','S'];
+  const maxRevDay = Math.max(...Object.values(dateMap).map(d => d.revenue), 1);
+
+  let cells = '';
+  for (let i = 0; i < startDow; i++) cells += `<div></div>`;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const data = dateMap[dateStr];
+    const isToday = d === now.getDate() && month === now.getMonth() && year === now.getFullYear();
+    const intensity = data ? Math.max(0.15, data.revenue / maxRevDay) : 0;
+    cells += `<div onclick="${data ? `showMpDayDetail('${dateStr}','${escJS(bakeryName)}')` : ''}"
+      style="aspect-ratio:1;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:${data?'pointer':'default'};
+        background:${data ? `rgba(44,24,16,${intensity})` : 'transparent'};
+        border:${isToday?'2px solid var(--honey)':'1px solid transparent'};
+        transition:transform 0.1s;" ${data?'onmouseover="this.style.transform=\'scale(1.08)\'"onmouseout="this.style.transform=\'scale(1)\'"':''}>
+      <div style="font-size:0.72rem;font-weight:${data?'700':'400'};color:${data?'var(--cream-white)':'var(--text-muted)'};">${d}</div>
+      ${data ? `<div style="font-size:0.52rem;color:var(--honey);font-weight:600;margin-top:1px;">£${data.revenue.toFixed(0)}</div>` : ''}
+    </div>`;
+  }
+
+  panel.innerHTML = `
+    <!-- Month summary -->
+    <div style="font-size:0.82rem;font-weight:700;color:var(--espresso);margin-bottom:12px;">${monthName}</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:20px;">
+      <div style="background:var(--espresso);border-radius:var(--radius-sm);padding:12px;text-align:center;">
+        <div style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:700;color:var(--honey);">£${totalRevenue.toFixed(2)}</div>
+        <div style="font-size:0.62rem;color:var(--honey-light);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px;">Month revenue</div>
+      </div>
+      <div style="background:var(--espresso);border-radius:var(--radius-sm);padding:12px;text-align:center;">
+        <div style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:700;color:var(--honey);">${totalOrders}</div>
+        <div style="font-size:0.62rem;color:var(--honey-light);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px;">Orders</div>
+      </div>
+      <div style="background:var(--espresso);border-radius:var(--radius-sm);padding:12px;text-align:center;">
+        <div style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:700;color:var(--honey);">${totalItems}</div>
+        <div style="font-size:0.62rem;color:var(--honey-light);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px;">Items sold</div>
+      </div>
+    </div>
+
+    <!-- Calendar heatmap -->
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px;">
+      ${dayLabels.map(l=>`<div style="text-align:center;font-size:0.62rem;font-weight:600;color:var(--text-muted);padding-bottom:4px;">${l}</div>`).join('')}
+      ${cells}
+    </div>
+    <div style="font-size:0.68rem;color:var(--text-muted);margin-top:8px;">Tap a day to see its orders. Darker = more revenue.</div>`;
+}
+
+function showMpDayDetail(dateStr, bakeryName) {
+  // Build reservation list for this day
+  const { db, collection, query, where, getDocs } = fb;
+  const dateLabel = new Date(dateStr+'T12:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
+
+  getDocs(query(collection(db, 'reservations'),
+    where('bakeryName','==',bakeryName), where('collectDate','==',dateStr)))
+    .then(snap => {
+      const orders = snap.docs.map(d=>({id:d.id,...d.data()})).filter(r=>r.status!=='cancelled');
+      const revenue = orders.reduce((s,r)=>s+(r.totalPrice||r.price||0),0);
+
+      const overlay = document.createElement('div');
+      overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:800;display:flex;align-items:flex-end;justify-content:center;';
+      overlay.innerHTML=`
+        <div style="background:var(--cream-white);border-radius:var(--radius) var(--radius) 0 0;width:100%;max-width:520px;max-height:70vh;overflow-y:auto;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--cream-white);">
+            <div>
+              <div style="font-family:'Playfair Display',serif;font-size:0.95rem;font-weight:700;color:var(--espresso);">${dateLabel}</div>
+              <div style="font-size:0.75rem;color:var(--caramel);font-weight:600;margin-top:2px;">${orders.length} order${orders.length!==1?'s':''} · £${revenue.toFixed(2)} total</div>
+            </div>
+            <button onclick="this.closest('div[style]').remove()" style="background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--text-muted);">✕</button>
+          </div>
+          <div style="padding:16px 20px 32px;">
+            ${!orders.length?'<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:20px 0;">No orders this day</div>':
+              orders.map(r=>`
+                <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
+                  <div style="flex:1;min-width:0;">
+                    <div style="font-size:0.85rem;font-weight:600;color:var(--espresso);">${r.offeringName}</div>
+                    <div style="font-size:0.72rem;color:var(--text-muted);">${r.userName||'Customer'} · ${r.slot}${r.quantity>1?` · ${r.quantity}×`:''} · #${r.id.slice(-6).toUpperCase()}</div>
+                  </div>
+                  <div style="text-align:right;flex-shrink:0;">
+                    <div style="font-size:0.85rem;font-weight:700;color:var(--caramel);">£${parseFloat(r.totalPrice||r.price||0).toFixed(2)}</div>
+                    <span style="font-size:0.62rem;padding:2px 7px;border-radius:100px;${r.status==='collected'?'background:#d4edda;color:#155724;':'background:#fff3cd;color:#856404;'}">${r.status==='collected'?'✓ Collected':'Pending'}</span>
+                  </div>
+                </div>`).join('')}
+          </div>
+        </div>`;
+      document.body.appendChild(overlay);
+      overlay.addEventListener('click',e=>{if(e.target===overlay)overlay.remove();});
+    });
 }
 
 async function uploadItemPhoto(file) {
