@@ -3549,6 +3549,26 @@ const CATEGORY_TREE = {
       madeleine: 'Madeleine', chouquette: 'Chouquette'
     }
   },
+  british_classic: {
+    label: 'British Classics', emoji: '🫖',
+    subs: {
+      bread_butter_pudding: 'Bread & Butter Pudding',
+      spotted_dick: 'Spotted Dick',
+      cornflake_tart: 'Cornflake Tart',
+      jam_roly_poly: 'Jam Roly-Poly',
+      treacle_sponge: 'Treacle Sponge',
+      rice_pudding: 'Rice Pudding',
+      eton_mess: 'Eton Mess',
+      summer_pudding: 'Summer Pudding',
+      trifle: 'Trifle',
+      syllabub: 'Syllabub',
+      bakewell_pudding: 'Bakewell Pudding',
+      apple_crumble: 'Apple Crumble',
+      bread_pudding: 'Bread Pudding',
+      manchester_tart: 'Manchester Tart',
+      chelsea_bun_pudding: 'Steamed Sponge Pudding',
+    }
+  },
   other: {
     label: 'Other', emoji: '✦',
     subs: { other: 'Other / Not listed' }
@@ -7360,6 +7380,17 @@ function openEditModal(id) {
         <div class="photo-upload-text">Tap to add a photo</div>
        </div>`;
 
+  // Build category selects
+  const parentOptions = Object.entries(CATEGORY_TREE).map(([key, cat]) =>
+    `<option value="${key}" ${(item.category || '') === key ? 'selected' : ''}>${cat.emoji} ${cat.label}</option>`
+  ).join('');
+
+  const currentParent = item.category || 'other';
+  const currentSubs = CATEGORY_TREE[currentParent]?.subs || {};
+  const subOptions = Object.entries(currentSubs).map(([key, label]) =>
+    `<option value="${key}" ${(item.subCategory || '') === key ? 'selected' : ''}>${label}</option>`
+  ).join('');
+
   document.getElementById('editModalBody').innerHTML = `
     <div style="padding:0 24px 24px;display:flex;flex-direction:column;gap:20px;">
       <div class="form-group" style="margin:0;">
@@ -7372,6 +7403,19 @@ function openEditModal(id) {
       <div class="form-group" style="margin:0;">
         <label class="form-label">Name</label>
         <input type="text" class="form-input" id="editName" value="${item.name || ''}">
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Category</label>
+        <select class="form-select" id="editCategory" onchange="updateEditSubCategory()">
+          ${parentOptions}
+        </select>
+      </div>
+      <div class="form-group" style="margin:0;" id="editSubCategoryGroup">
+        <label class="form-label">Type</label>
+        <select class="form-select" id="editSubCategory">
+          <option value="">— Select type —</option>
+          ${subOptions}
+        </select>
       </div>
       <div class="form-group" style="margin:0;">
         <label class="form-label">Price paid</label>
@@ -7399,6 +7443,15 @@ function openEditModal(id) {
 
   document.getElementById('editModal').classList.add('open');
   lockScroll();
+}
+
+function updateEditSubCategory() {
+  const parentKey = document.getElementById('editCategory')?.value;
+  const subSel = document.getElementById('editSubCategory');
+  if (!subSel || !parentKey) return;
+  const subs = CATEGORY_TREE[parentKey]?.subs || {};
+  subSel.innerHTML = '<option value="">— Select type —</option>' +
+    Object.entries(subs).map(([k, label]) => `<option value="${k}">${label}</option>`).join('');
 }
 
 function closeEditModal() {
@@ -7436,9 +7489,10 @@ async function saveEdit() {
       photoURL = await getDownloadURL(snap.ref);
     }
     const item = allItems.find(i => i.id === editingItemId);
-    const category = item?.category || 'other';
+    const newCategory = document.getElementById('editCategory')?.value || item?.category || 'other';
+    const newSubCategory = document.getElementById('editSubCategory')?.value || item?.subCategory || '';
     const overallRating = parseFloat(document.getElementById('editOverallRating').value);
-    const editSaveDims = getTastingDims(category);
+    const editSaveDims = getTastingDims(newCategory);
     const dimData = {};
     editSaveDims.forEach(d => {
       const el = document.getElementById('edit_' + d.key);
@@ -7446,6 +7500,8 @@ async function saveEdit() {
     });
     const updates = {
       name: document.getElementById('editName').value,
+      category: newCategory,
+      subCategory: newSubCategory,
       price: document.getElementById('editPrice').value ? parseFloat(document.getElementById('editPrice').value) : null,
       overallRating,
       communityAvg: overallRating,
@@ -9002,12 +9058,11 @@ function renderAdminUsers() {
   window.addEventListener('resize', applyStatusBarHeight);
 })();
 
-// ─── PULL TO REFRESH ──────────────────────────────────────────────────────────
+// ─── PULL TO REFRESH (home page only) ────────────────────────────────────────
 (function() {
   let startY = 0, pulling = false;
   const threshold = 80;
 
-  // Indicator element
   const indicator = document.createElement('div');
   indicator.id = 'pullRefreshIndicator';
   indicator.style.cssText = `
@@ -9020,8 +9075,15 @@ function renderAdminUsers() {
   indicator.textContent = '↓ Pull to refresh';
   document.body.appendChild(indicator);
 
+  function isHomePage() {
+    // Only active when the home page is visible and no modal is open
+    const homePage = document.getElementById('page-home');
+    const anyModalOpen = document.querySelector('.modal-overlay.open');
+    return homePage && homePage.style.display !== 'none' && !anyModalOpen;
+  }
+
   document.addEventListener('touchstart', e => {
-    if (window.scrollY === 0) {
+    if (window.scrollY === 0 && isHomePage()) {
       startY = e.touches[0].clientY;
       pulling = true;
     }
@@ -9031,7 +9093,6 @@ function renderAdminUsers() {
     if (!pulling) return;
     const dist = e.touches[0].clientY - startY;
     if (dist > 10 && dist < threshold + 40) {
-      const progress = Math.min(dist / threshold, 1);
       indicator.style.transform = `translateX(-50%) translateY(${-60 + dist * 0.6}px)`;
       indicator.textContent = dist > threshold ? '↑ Release to refresh' : '↓ Pull to refresh';
     }
@@ -9046,9 +9107,7 @@ function renderAdminUsers() {
     if (dist > threshold) {
       indicator.textContent = '🔄 Refreshing…';
       indicator.style.transform = 'translateX(-50%) translateY(0px)';
-      setTimeout(() => {
-        window.location.reload(true); // force bypass cache
-      }, 400);
+      setTimeout(() => { window.location.reload(true); }, 400);
     }
   }, { passive: true });
 })();
