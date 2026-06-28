@@ -31,7 +31,7 @@
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
   import { getAuth, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-  import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, where, getDoc, setDoc, increment, onSnapshot, serverTimestamp, limit } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+  import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, where, getDoc, setDoc, increment, onSnapshot, serverTimestamp, limit, runTransaction } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
   import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 
   // ─── FIREBASE CONFIG ───────────────────────────────────────────────────────
@@ -52,7 +52,7 @@
   const googleProvider = new GoogleAuthProvider();
 
   // Expose to global scope for non-module usage
-  window._crumb = { auth, db, storage, googleProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, where, getDoc, setDoc, increment, onSnapshot, serverTimestamp, limit, ref, uploadBytes, getDownloadURL, deleteObject };
+  window._crumb = { auth, db, storage, googleProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, where, getDoc, setDoc, increment, onSnapshot, serverTimestamp, limit, runTransaction, ref, uploadBytes, getDownloadURL, deleteObject };
   window.dispatchEvent(new Event('crumb-firebase-ready'));
 </script>
 
@@ -2515,6 +2515,7 @@ nav::before {
     <button class="nav-btn" onclick="showPage('leaderboard')">Top Picks</button>
     <button class="nav-btn" onclick="showPage('bakeries')">Bakeries</button>
     <button class="nav-btn" onclick="showPage('explore')">Explore</button>
+    <button class="nav-btn" onclick="showPage('preorders')">Pre-order</button>
     <button class="nav-btn" onclick="showPage('shop')">Shop</button>
     <div style="width:1px;height:18px;background:rgba(255,255,255,0.12);margin:0 4px;"></div>
     <button class="nav-btn" id="desktopPeopleBtn" onclick="showPage('people')" style="display:none">People</button>
@@ -2554,6 +2555,7 @@ nav::before {
   <button class="mobile-menu-item" onclick="closeMobileMenu(); setTimeout(()=>showPage('leaderboard'),50)">🏆 Top Picks</button>
   <button class="mobile-menu-item" onclick="closeMobileMenu(); setTimeout(()=>showPage('bakeries'),50)">🏪 Bakeries</button>
   <button class="mobile-menu-item" onclick="closeMobileMenu(); setTimeout(()=>showPage('explore'),50)">🗺️ Explore</button>
+  <button class="mobile-menu-item" onclick="closeMobileMenu(); setTimeout(()=>showPage('preorders'),50)">🗓️ Pre-order</button>
   <button class="mobile-menu-item" onclick="closeMobileMenu(); setTimeout(()=>showPage('shop'),50)">🛍️ Shop</button>
   <button class="mobile-menu-item" id="peopleNavBtn" onclick="closeMobileMenu(); setTimeout(()=>showPage('people'),50)" style="display:none">👥 People</button>
   <button class="mobile-menu-item" id="feedNavBtn" onclick="closeMobileMenu(); setTimeout(()=>showPage('feed'),50)" style="display:none">📋 Feed</button>
@@ -2967,7 +2969,49 @@ nav::before {
 </div>
 
 <!-- ─── SHOP PAGE ────────────────────────────────────────────────────────────── -->
-<div class="page" id="page-shop">
+<!-- ─── PRE-ORDER DISCOVERY PAGE ─────────────────────────────────────────────── -->
+<div class="page" id="page-preorders">
+  <div style="background:var(--espresso); padding:40px 24px 32px; text-align:center;">
+    <div style="font-size:0.72rem; letter-spacing:4px; text-transform:uppercase; color:var(--honey); font-weight:600; margin-bottom:10px;">Reserve ahead</div>
+    <h1 style="font-family:'Playfair Display',serif; font-size:clamp(1.8rem,4vw,2.6rem); color:var(--cream-white); font-weight:700; margin-bottom:10px;">🗓️ Pre-orders</h1>
+    <p style="color:var(--honey-light); font-size:0.95rem; max-width:440px; margin:0 auto 24px; line-height:1.6;">Browse tomorrow's bakes and reserve your favourites before they sell out.</p>
+
+    <!-- Filters -->
+    <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-bottom:16px;">
+      <select id="poCountrySelect" class="explore-select" onchange="onPoCountryChange()">
+        <option value="">🌍 Detecting location…</option>
+      </select>
+      <select id="poCitySelect" class="explore-select" onchange="onPoCityChange()">
+        <option value="">Select a city</option>
+      </select>
+      <button class="explore-select" id="poNearestBtn" onclick="poDetectNearest()" style="cursor:pointer;min-width:auto;padding:9px 16px;">📍 Nearest</button>
+    </div>
+    <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
+      <select id="poBakeryFilter" class="explore-select" onchange="renderPreorderPage()" style="min-width:180px;">
+        <option value="">🏪 All bakeries</option>
+      </select>
+      <select id="poSortFilter" class="explore-select" onchange="renderPreorderPage()">
+        <option value="slot">🕐 By collection time</option>
+        <option value="bakery">🏪 By bakery</option>
+        <option value="price_asc">💰 Price: low to high</option>
+        <option value="price_desc">💰 Price: high to low</option>
+      </select>
+    </div>
+  </div>
+  <div class="torn" style="margin-bottom:0;"></div>
+
+  <div class="section">
+    <div id="preorderPageResults">
+      <div class="empty-state">
+        <div class="empty-state-icon">🗓️</div>
+        <div class="empty-state-title">Select a city to browse pre-orders</div>
+        <div class="empty-state-text">Or tap "Nearest" to find bakeries near you.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── SHOP PAGE ─────────────────────────────────────────────────────────────── -->
   <div style="background:var(--espresso); padding:56px 24px 48px; text-align:center;">
     <div style="font-size:0.72rem; letter-spacing:4px; text-transform:uppercase; color:var(--honey); font-weight:600; margin-bottom:12px;">Marketplace</div>
     <h1 style="font-family:'Playfair Display',serif; font-size:clamp(2rem,5vw,3rem); color:var(--cream-white); font-weight:700; margin-bottom:12px;">The Crumbz <em style="color:var(--honey); font-style:italic;">Shop</em></h1>
@@ -3802,6 +3846,7 @@ function showPage(name) {
   if (name === 'feed') renderFeed();
   if (name === 'bakeries') { bakeryViewMode = 'all'; renderBakeries(); }
   if (name === 'explore') initExplorePage();
+  if (name === 'preorders') initPreorderPage();
   if (name === 'shop') renderShopPage();
   if (name === 'people') {
     populateRankingLocationFilter();
@@ -8908,8 +8953,215 @@ async function renderSavedTab(container) {
     }).join('')}</div>`;
 }
 
+// ─── PRE-ORDER DISCOVERY PAGE ─────────────────────────────────────────────────
+let poActiveCountry = 'United Kingdom';
+let poActiveCity = null;
+let poUserCoords = null;
+let poNearestCity = null;
+
+function initPreorderPage() {
+  // Determine user's country — profile setting takes priority, then geolocation, then UK
+  const profileCountry = allProfiles[currentUser?.uid]?.country || '';
+  const detectedCountry = poNearestCity?.country || '';
+  const country = profileCountry || detectedCountry || 'United Kingdom';
+  poActiveCountry = country;
+
+  // Country display (read-only — locked to home country)
+  const countryDisplay = document.getElementById('poCountrySelect');
+  if (countryDisplay) {
+    countryDisplay.innerHTML = `<option value="${country}">${country}</option>`;
+    countryDisplay.disabled = true;
+    countryDisplay.title = 'Showing pre-orders in your home country. Update in Settings → Profile.';
+  }
+
+  populatePoCityDropdown(poActiveCountry, poActiveCity);
+  if (poActiveCity) renderPreorderPage();
+
+  // Auto-detect nearest city if not yet done
+  if (!poNearestCity) poDetectNearest();
+}
+
+function onPoCountryChange() {
+  // No-op — country is locked to user's home country
+}
+
+function onPoCityChange() {
+  poActiveCity = document.getElementById('poCitySelect').value;
+  if (poActiveCity) renderPreorderPage();
+}
+
+function populatePoCityDropdown(country, selectedCity) {
+  const sel = document.getElementById('poCitySelect');
+  if (!sel) return;
+  const cities = (EXPLORE_COUNTRIES[country] || []).slice().sort((a,b) => a.name.localeCompare(b.name));
+  const nearestName = poNearestCity?.country === country ? poNearestCity?.name : null;
+  sel.innerHTML = '<option value="">Select a city…</option>' +
+    cities.map(c => {
+      const label = c.name === nearestName ? `📍 ${c.name} (nearest)` : c.name;
+      return `<option value="${c.name}" ${c.name === selectedCity ? 'selected' : ''}>${label}</option>`;
+    }).join('');
+  if (selectedCity) sel.value = selectedCity;
+}
+
+function poDetectNearest() {
+  const btn = document.getElementById('poNearestBtn');
+  if (btn) btn.textContent = '📍 Detecting…';
+  navigator.geolocation?.getCurrentPosition(pos => {
+    const { latitude, longitude } = pos.coords;
+    poUserCoords = { lat: latitude, lng: longitude };
+    const countryCities = EXPLORE_COUNTRIES[poActiveCountry] || [];
+    let nearest = null, nearestDist = Infinity;
+    (countryCities.length ? countryCities : ALL_CITIES).forEach(city => {
+      const d = distKm(latitude, longitude, city.lat, city.lng);
+      if (d < nearestDist) { nearestDist = d; nearest = city; }
+    });
+    poNearestCity = nearest ? { ...nearest, country: poActiveCountry } : null;
+    poActiveCity = nearest?.name || null;
+    populatePoCityDropdown(poActiveCountry, poActiveCity);
+    if (btn) btn.textContent = '📍 Nearest';
+    if (poActiveCity) renderPreorderPage();
+  }, () => {
+    if (btn) btn.textContent = '📍 Nearest';
+    showToast('Location access denied');
+  }, { timeout: 6000 });
+}
+
+
+async function renderPreorderPage() {
+  if (!fb) return;
+  const results = document.getElementById('preorderPageResults');
+  const city = poActiveCity;
+  if (!city) return;
+
+  results.innerHTML = '<div style="text-align:center;padding:40px;"><div class="spinner" style="margin:0 auto 12px;"></div><div style="font-size:0.82rem;color:var(--text-muted);">Finding pre-orders near ' + city + '…</div></div>';
+
+  const { db, collection, query, where, getDocs } = fb;
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+
+  try {
+    // Find bakeries in this city by matching address
+    const cityObj = ALL_CITIES.find(c => c.name === city && c.country === poActiveCountry)
+      || ALL_CITIES.find(c => c.name === city);
+
+    // Get all active offerings (filter by city/bakery client-side)
+    const snap = await getDocs(query(collection(db, 'preorderOfferings'), where('active','==',true)));
+    let offerings = snap.docs.map(d => ({id:d.id,...d.data()}))
+      .filter(o => {
+        if (o.collectDate < todayStr) return false;
+        // Go-live check
+        const goLive = o.goLiveAt ? new Date(o.goLiveAt) : (() => {
+          const d = new Date(o.collectDate + 'T00:00:00');
+          d.setDate(d.getDate()-1); d.setHours(8,0,0,0); return d;
+        })();
+        return now >= goLive;
+      });
+
+    // Filter by city using Crumbz item data for that bakery
+    const bakeriesInCity = new Set(
+      allItems
+        .filter(item => {
+          const itemCity = extractCity(item.bakeryAddress || '');
+          return itemCity.toLowerCase() === city.toLowerCase();
+        })
+        .map(i => i.bakeryName)
+    );
+
+    // Also try matching by bakeryName against Explore city data if no address match
+    offerings = offerings.filter(o => bakeriesInCity.has(o.bakeryName) || offerings.length < 5);
+
+    // If we got no city-matched offerings, fall back to showing all for now
+    // with a message — bakeries without Crumbz reviews won't match by address
+    const bakeryFilter = document.getElementById('poBakeryFilter')?.value || '';
+    if (bakeryFilter) offerings = offerings.filter(o => o.bakeryName === bakeryFilter);
+
+    // Populate bakery filter dropdown
+    const bakeryNames = [...new Set(offerings.map(o => o.bakeryName).filter(Boolean))].sort();
+    const poBakeryFilter = document.getElementById('poBakeryFilter');
+    if (poBakeryFilter) {
+      const current = poBakeryFilter.value;
+      poBakeryFilter.innerHTML = '<option value="">🏪 All bakeries</option>' +
+        bakeryNames.map(n => `<option value="${n}" ${n===current?'selected':''}>${n}</option>`).join('');
+    }
+
+    // Sort
+    const sort = document.getElementById('poSortFilter')?.value || 'slot';
+    if (sort === 'slot') offerings.sort((a,b) => (a.collectDate+a.slot).localeCompare(b.collectDate+b.slot));
+    else if (sort === 'bakery') offerings.sort((a,b) => (a.bakeryName||'').localeCompare(b.bakeryName||''));
+    else if (sort === 'price_asc') offerings.sort((a,b) => (a.price||0)-(b.price||0));
+    else if (sort === 'price_desc') offerings.sort((a,b) => (b.price||0)-(a.price||0));
+
+    if (!offerings.length) {
+      results.innerHTML = `<div class="empty-state">
+        <div class="empty-state-icon">🗓️</div>
+        <div class="empty-state-title">No pre-orders in ${city} yet</div>
+        <div class="empty-state-text">Check back later — bakeries update their listings daily.</div>
+      </div>`;
+      return;
+    }
+
+    // Group by date then bakery
+    const byDate = {};
+    offerings.forEach(o => {
+      if (!byDate[o.collectDate]) byDate[o.collectDate] = {};
+      if (!byDate[o.collectDate][o.bakeryName]) byDate[o.collectDate][o.bakeryName] = [];
+      byDate[o.collectDate][o.bakeryName].push(o);
+    });
+
+    results.innerHTML = `
+      <div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:16px;">${offerings.length} item${offerings.length!==1?'s':''} available in ${city}</div>
+      ${Object.entries(byDate).map(([date, bakeries]) => {
+        const dateLabel = new Date(date+'T12:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
+        return `<div style="margin-bottom:28px;">
+          <div style="font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:700;color:var(--espresso);margin-bottom:14px;padding-bottom:8px;border-bottom:2px solid var(--border);">Collection: ${dateLabel}</div>
+          ${Object.entries(bakeries).map(([bakeryName, items]) => `
+            <div style="margin-bottom:20px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                <div style="font-size:0.88rem;font-weight:600;color:var(--caramel);cursor:pointer;" onclick="closeBakeryModalIfOpen(); openBakeryProfile('${escJS(bakeryName)}')">🏪 ${bakeryName} ↗</div>
+                <div style="font-size:0.72rem;color:var(--text-muted);">${items.length} item${items.length!==1?'s':''}</div>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;">
+                ${items.map(o => {
+                  const remaining = o.remaining ?? o.quantity ?? 0;
+                  const soldOut = remaining <= 0;
+                  return `<div class="preorder-card">
+                    ${o.photoURL ? `<img src="${o.photoURL}" class="preorder-img" alt="${o.name}">` : `<div class="preorder-img">🥐</div>`}
+                    <div class="preorder-body">
+                      <div class="preorder-name">${o.name}</div>
+                      ${o.description ? `<div class="preorder-desc">${o.description}</div>` : ''}
+                      <div class="preorder-meta">
+                        <span class="preorder-slot">🕐 ${o.slot}</span>
+                        <span class="preorder-qty${remaining<=2&&!soldOut?' low':''}">${soldOut?'Sold out':`${remaining} left`}</span>
+                      </div>
+                      <div style="display:flex;align-items:center;justify-content:space-between;">
+                        <span class="preorder-price">£${parseFloat(o.price||0).toFixed(2)}</span>
+                        ${soldOut
+                          ? `<button class="btn-ghost" disabled style="opacity:0.4;font-size:0.78rem;">Sold out</button>`
+                          : currentUser
+                            ? `<button class="btn-espresso" style="font-size:0.78rem;padding:7px 14px;" onclick="reserveOffering('${o.id}','${escJS(o.bakeryName)}','${escJS(o.name)}','${escJS(o.slot)}','${o.collectDate}')">Reserve</button>`
+                            : `<button class="btn-espresso" style="font-size:0.78rem;padding:7px 14px;" onclick="openAuthModal()">Sign in</button>`}
+                      </div>
+                    </div>
+                  </div>`;
+                }).join('')}
+              </div>
+            </div>`).join('')}
+        </div>`;
+      }).join('')}`;
+  } catch(e) {
+    results.innerHTML = '<div style="padding:16px;color:var(--text-muted);">Could not load pre-orders.</div>';
+    console.error(e);
+  }
+}
+
+function closeBakeryModalIfOpen() {
+  document.getElementById('bakeryModal')?.classList.remove('open');
+}
+
 // ─── PRE-ORDER / RESERVATIONS ─────────────────────────────────────────────────
-const COLLECTION_SLOTS = ['7:00am','7:30am','8:00am','8:30am','9:00am','9:30am','10:00am','10:30am','11:00am','11:30am','12:00pm'];
+const COLLECTION_TIMES = ['7:00am','7:30am','8:00am','8:30am','9:00am','9:30am','10:00am','10:30am','11:00am','11:30am','12:00pm','12:30pm','1:00pm','2:00pm','3:00pm','4:00pm','5:00pm'];
+// Legacy alias
+const COLLECTION_SLOTS = COLLECTION_TIMES;
 
 // ── Baker: manage offerings ────────────────────────────────────────────────────
 async function openManagePreordersModal(bakeryName) {
@@ -9005,6 +9257,14 @@ async function renderManagePreorders(bakeryName) {
   }
 }
 
+async function uploadItemPhoto(file) {
+  const { storage, ref, uploadBytes, getDownloadURL } = fb;
+  const ext = file.name.split('.').pop() || 'jpg';
+  const storageRef = ref(storage, `offerings/${currentUser.uid}_${Date.now()}.${ext}`);
+  const snap = await uploadBytes(storageRef, file, { contentType: file.type || 'image/jpeg' });
+  return await getDownloadURL(snap.ref);
+}
+
 function showAddOfferingForm(bakeryName) {
   // Build date options: next 7 days (collection dates)
   const dateOptions = [];
@@ -9037,8 +9297,21 @@ function showAddOfferingForm(bakeryName) {
       <select class="form-select" id="offeringDate">${dateOptions.join('')}</select>
       <div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">⏰ Pre-orders go live at 8am the day before</div>
     </div>
-    <div class="form-group"><label class="form-label">Collection slot <span style="color:#e74c3c;">*</span></label>
-      <select class="form-select" id="offeringSlot">${slotOptions}</select></div>
+    <div class="form-group"><label class="form-label">Collection window <span style="color:#e74c3c;">*</span></label>
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <button type="button" id="slotModeRange" class="bakery-view-btn active" style="flex:1;border-radius:8px;" onclick="setSlotMode('range')">Time range</button>
+        <button type="button" id="slotModeBy" class="bakery-view-btn" style="flex:1;border-radius:8px;" onclick="setSlotMode('by')">Collect by</button>
+      </div>
+      <div id="slotRangeInputs" style="display:flex;align-items:center;gap:8px;">
+        <select class="form-select" id="offeringSlotFrom" style="flex:1;">${COLLECTION_TIMES.map(t=>`<option value="${t}">${t}</option>`).join('')}</select>
+        <span style="color:var(--text-muted);font-size:0.85rem;flex-shrink:0;">to</span>
+        <select class="form-select" id="offeringSlotTo" style="flex:1;">${COLLECTION_TIMES.map((t,i)=>`<option value="${t}" ${i===4?'selected':''}>${t}</option>`).join('')}</select>
+      </div>
+      <div id="slotByInput" style="display:none;">
+        <select class="form-select" id="offeringSlotBy">${COLLECTION_TIMES.map(t=>`<option value="${t}">${t}</option>`).join('')}</select>
+        <div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">Customer can collect any time before this</div>
+      </div>
+    </div>
     <div class="form-group"><label class="form-label">Photo</label>
       <div id="offeringPhotoPreview" style="margin-bottom:6px;"></div>
       <input type="file" accept="image/*" id="offeringPhoto" style="font-size:0.82rem;" onchange="previewOfferingPhoto(this)"></div>
@@ -9127,12 +9400,31 @@ async function saveToCatalogue(bakeryName, name, description, price, photoURL) {
   } catch(e) { console.warn('Catalogue save error:', e); }
 }
 
+function setSlotMode(mode) {
+  document.getElementById('slotModeRange').classList.toggle('active', mode === 'range');
+  document.getElementById('slotModeBy').classList.toggle('active', mode === 'by');
+  document.getElementById('slotRangeInputs').style.display = mode === 'range' ? 'flex' : 'none';
+  document.getElementById('slotByInput').style.display = mode === 'by' ? 'block' : 'none';
+}
+
+function getSlotValue() {
+  const modeRange = document.getElementById('slotModeRange')?.classList.contains('active');
+  if (modeRange) {
+    const from = document.getElementById('offeringSlotFrom')?.value;
+    const to = document.getElementById('offeringSlotTo')?.value;
+    return from && to ? `${from} – ${to}` : from || '';
+  } else {
+    const by = document.getElementById('offeringSlotBy')?.value;
+    return by ? `Collect by ${by}` : '';
+  }
+}
+
 async function saveOffering(bakeryName) {
   if (!fb || !currentUser) return;
   const name = document.getElementById('offeringName').value.trim();
   const price = parseFloat(document.getElementById('offeringPrice').value);
   const qty = parseInt(document.getElementById('offeringQty').value);
-  const slot = document.getElementById('offeringSlot').value;
+  const slot = getSlotValue();
   const collectDate = document.getElementById('offeringDate').value;
   if (!name || !price || !qty || !slot || !collectDate) { showToast('Please fill in all required fields'); return; }
 
@@ -9282,7 +9574,7 @@ async function renderPreorderTab(container, bakeryName) {
 
 async function reserveOffering(offeringId, bakeryName, offeringName, slot, collectDate) {
   if (!currentUser || !fb) { openAuthModal(); return; }
-  const { db, doc, getDoc, runTransaction, collection, addDoc, serverTimestamp } = fb;
+  const { db, doc, getDoc, collection, addDoc, serverTimestamp } = fb;
 
   try {
     const offeringRef = doc(db, 'preorderOfferings', offeringId);
