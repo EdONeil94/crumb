@@ -11106,10 +11106,11 @@ function renderAdminUsers() {
   document.body.appendChild(indicator);
 
   function isHomePage() {
-    // Only active when the home page is visible and no modal is open
     const homePage = document.getElementById('page-home');
-    const anyModalOpen = document.querySelector('.modal-overlay.open');
-    return homePage && homePage.style.display !== 'none' && !anyModalOpen;
+    if (!homePage || !homePage.classList.contains('active')) return false;
+    if (document.querySelector('.modal-overlay.open')) return false;
+    if (document.getElementById('qrScannerOverlay')) return false;
+    return true;
   }
 
   document.addEventListener('touchstart', e => {
@@ -11139,6 +11140,12 @@ function renderAdminUsers() {
       indicator.style.transform = 'translateX(-50%) translateY(0px)';
       setTimeout(() => { window.location.reload(true); }, 400);
     }
+  }, { passive: true });
+
+  document.addEventListener('touchcancel', () => {
+    pulling = false;
+    indicator.style.transform = 'translateX(-50%) translateY(-60px)';
+    indicator.textContent = '↓ Pull to refresh';
   }, { passive: true });
 })();
 
