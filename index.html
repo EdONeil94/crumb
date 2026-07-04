@@ -7434,7 +7434,7 @@ async function fetchGoogleBakeries(city) {
   });
   const data = await res.json();
   return (data.places || [])
-    .filter(p => p.rating && p.rating >= 4.0)
+    .filter(p => p.rating && p.rating >= 3.5)
     .sort((a, b) => {
       // Score = rating * log(reviews) to balance quality and popularity
       const scoreA = (a.rating || 0) * Math.log10((a.userRatingCount || 1) + 1);
