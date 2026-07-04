@@ -7441,7 +7441,7 @@ async function fetchGoogleBakeries(city) {
       const scoreB = (b.rating || 0) * Math.log10((b.userRatingCount || 1) + 1);
       return scoreB - scoreA;
     })
-    .slice(0, 10);
+    .slice(0, 20);
 }
 
 function renderExploreResults(city, crumbBakeries, googleResults) {
@@ -7478,7 +7478,7 @@ function renderExploreResults(city, crumbBakeries, googleResults) {
     return;
   }
 
-  list.innerHTML = combined.slice(0, 10).map((b, i) => {
+  list.innerHTML = combined.slice(0, 20).map((b, i) => {
     const rank = i + 1;
     const rankClass = rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : '';
 
