@@ -5919,16 +5919,31 @@ async function fetchBakeryPlaces(query) {
     return;
   }
   try {
-    // Build request body — include location bias if we have the user's position
-    const reqBody = { textQuery: query };
+    // Determine best location bias
+    const profileCountry = allProfiles[currentUser?.uid]?.country || '';
+    // Country bounding boxes for common cases
+    const countryBoxes = {
+      'United Kingdom':    { low: { latitude: 49.9, longitude: -8.2  }, high: { latitude: 60.9, longitude: 1.8  } },
+      'France':            { low: { latitude: 41.3, longitude: -5.1  }, high: { latitude: 51.1, longitude: 9.6  } },
+      'Germany':           { low: { latitude: 47.3, longitude:  5.9  }, high: { latitude: 55.1, longitude: 15.0 } },
+      'Spain':             { low: { latitude: 36.0, longitude: -9.3  }, high: { latitude: 43.8, longitude: 4.3  } },
+      'Italy':             { low: { latitude: 36.6, longitude:  6.6  }, high: { latitude: 47.1, longitude: 18.5 } },
+      'Netherlands':       { low: { latitude: 50.8, longitude:  3.4  }, high: { latitude: 53.5, longitude: 7.2  } },
+      'Australia':         { low: { latitude:-43.6, longitude: 113.3 }, high: { latitude:-10.7, longitude:153.6 } },
+      'United States':     { low: { latitude: 24.5, longitude:-124.8 }, high: { latitude: 49.4, longitude:-66.9 } },
+    };
+
+    let locationBias;
     if (userLatLng) {
-      reqBody.locationBias = {
-        circle: {
-          center: { latitude: userLatLng.lat, longitude: userLatLng.lng },
-          radius: 5000 // 5km radius bias
-        }
-      };
+      locationBias = { circle: { center: { latitude: userLatLng.lat, longitude: userLatLng.lng }, radius: 25000 } };
+    } else if (countryBoxes[profileCountry]) {
+      locationBias = { rectangle: countryBoxes[profileCountry] };
+    } else {
+      // Default to UK
+      locationBias = { rectangle: { low: { latitude: 49.9, longitude: -8.2 }, high: { latitude: 60.9, longitude: 1.8 } } };
     }
+
+    const reqBody = { textQuery: query, locationBias };
     const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
       method: 'POST',
       headers: {
