@@ -5023,11 +5023,25 @@ function buildBakeryMapHTML(placeId, lat, lng, name) {
 
 let bakeryActiveCatFilter = '';
 
-async function openBakeryProfile(bakeryName, catFilter) {
+async function openBakeryProfile(bakeryName, catFilter, googleData) {
   buildBakeryIndex();
-  const b = allBakeries[bakeryName];
+  let b = allBakeries[bakeryName];
+
+  if (!b && googleData) {
+    // Not yet reviewed on Crumbz — build a synthetic bakery record from Google data
+    b = {
+      name: bakeryName,
+      address: googleData.address || '',
+      placeId: googleData.placeId || null,
+      lat: googleData.lat || null,
+      lng: googleData.lng || null,
+      items: [],
+      totalScore: 0
+    };
+  }
+
   if (!b) {
-    // Bakery exists in name but has no items — show empty state
+    // Bakery exists in name but has no items and no Google data — show basic empty state
     document.getElementById('bakeryModalTitle').textContent = bakeryName;
     document.getElementById('bakeryModal').classList.add('open');
     lockScroll();
@@ -5053,7 +5067,7 @@ async function openBakeryProfile(bakeryName, catFilter) {
     if (snap.exists()) blurb = snap.data().blurb || '';
   } catch(e) {}
 
-  const avg = (b.totalScore / b.items.length).toFixed(1);
+  const avg = b.items.length ? (b.totalScore / b.items.length).toFixed(1) : '–';
   const sortedItems = [...b.items].sort((x,y) => (y.communityAvg||y.overallRating||0) - (x.communityAvg||x.overallRating||0));
   const canEdit = !!currentUser;
   const isOwner = ownsBakery(bakeryName);
@@ -5146,9 +5160,11 @@ async function openBakeryProfile(bakeryName, catFilter) {
     </div>`);
   }
   if (b.address) {
+    const directionsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(bakeryName + ' ' + b.address)}${placeId ? `&query_place_id=${placeId}` : ''}`;
     infoPanelRows.push(`<div class="bakery-info-row">
       <span class="bakery-info-icon">📍</span>
       <span style="color:var(--text-muted);">${b.address}</span>
+      <a href="${directionsUrl}" target="_blank" rel="noopener" style="margin-left:8px;font-size:0.78rem;color:var(--caramel);font-weight:600;text-decoration:none;">Directions ↗</a>
     </div>`);
   }
   if (hoursHTML) infoPanelRows.push(hoursHTML);
@@ -5211,7 +5227,14 @@ async function openBakeryProfile(bakeryName, catFilter) {
       <div id="bakeryTabContent">
       ${catFilterBar}
       <div class="bakery-items-title">${bakeryActiveCatFilter ? CATEGORY_TREE[bakeryActiveCatFilter]?.label + ' reviews' : 'All reviews'} (${filtered.length})</div>
-      <div>${itemsHTML || '<div class="empty-state" style="padding:24px 0;"><div class="empty-state-icon">🥐</div><div class="empty-state-title">No reviews in this category</div></div>'}</div>
+      ${b.items.length === 0
+        ? `<div class="empty-state" style="padding:32px 0;">
+            <div class="empty-state-icon">🥐</div>
+            <div class="empty-state-title">Not yet reviewed on Crumbz</div>
+            <div class="empty-state-text">Be the first to try something here and share your rating.</div>
+            <button class="btn-espresso" style="margin-top:14px;" onclick="closeBakeryModal(); openAddModalForBakery('${escJS(bakeryName)}','${escJS(b.address||'')}','${b.placeId||''}','${b.lat||''}','${b.lng||''}')">+ Be first to review</button>
+          </div>`
+        : `<div>${itemsHTML || '<div class="empty-state" style="padding:24px 0;"><div class="empty-state-icon">🥐</div><div class="empty-state-title">No reviews in this category</div></div>'}</div>`}
       </div>
     </div>`; } catch(err) { console.error('Bakery render error:', err); document.getElementById('bakeryModalContent').innerHTML = '<div style="padding:24px;">Error loading bakery. Check console.</div>'; }
 }
@@ -7516,9 +7539,10 @@ function renderExploreResults(city, crumbBakeries, googleResults) {
           ${topItemHTML}
         </div>`;
     } else {
-      // Google-sourced bakery
+      // Google-sourced bakery — not yet reviewed on Crumbz
       const stars = '★'.repeat(Math.round(b.googleRating || 0));
-      const mapsUrl = `https://www.google.com/maps/place/?q=place_id:${b.placeId}`;
+      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(b.name + ' ' + (b.address || ''))}&query_place_id=${b.placeId}`;
+      const googleDataJS = `{address:'${escJS(b.address||'')}',placeId:'${b.placeId||''}',lat:${b.lat||'null'},lng:${b.lng||'null'},googleRating:${b.googleRating||'null'},googleReviews:${b.googleReviews||'null'}}`;
       return `
         <div class="explore-bakery-card">
           <div class="explore-bakery-header">
@@ -7533,12 +7557,12 @@ function renderExploreResults(city, crumbBakeries, googleResults) {
             </div>
             <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
               ${currentUser ? `<button class="bookmark-btn${isBookmarked(b.name) ? ' saved' : ''}" onclick="event.stopPropagation(); toggleBookmark('${escJS(b.name)}','${escJS(b.address||'')}',this)" title="Save bakery">🔖</button>` : ''}
-              <a href="${mapsUrl}" target="_blank" rel="noopener" class="admin-btn" style="font-size:0.78rem;text-decoration:none;">Maps ↗</a>
+              <button class="admin-btn primary" onclick="openBakeryProfile('${escJS(b.name)}', '', ${googleDataJS})" style="font-size:0.78rem;">View →</button>
             </div>
           </div>
           <div class="explore-no-crumb">
             <span>Not yet reviewed on Crumbz</span>
-            <button class="admin-btn primary" style="font-size:0.75rem;" onclick="openAddModalForBakery('${escJS(b.name)}','${escJS(b.address)}','${b.placeId||''}','${b.lat||''}','${b.lng||''}')">+ Be first to review</button>
+            <button class="admin-btn primary" style="font-size:0.75rem;" onclick="event.stopPropagation(); openAddModalForBakery('${escJS(b.name)}','${escJS(b.address)}','${b.placeId||''}','${b.lat||''}','${b.lng||''}')">+ Be first to review</button>
           </div>
         </div>`;
     }
