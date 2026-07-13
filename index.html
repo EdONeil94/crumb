@@ -568,6 +568,77 @@ nav::before {
 .bookmark-card-address { font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bookmark-card-actions { display: flex; gap: 6px; flex-shrink: 0; }
 
+/* ─── ITEM SAVE / SHARE ──────────────────────────────────────────────────────── */
+.detail-action-row {
+  display: flex;
+  gap: 8px;
+  margin: 14px 0 18px;
+}
+.detail-action-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border-radius: 100px;
+  border: 1.5px solid var(--border);
+  background: var(--parchment);
+  color: var(--text-body);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.detail-action-btn:hover { border-color: var(--honey); background: var(--parchment-dark); }
+.detail-action-btn.saved { background: var(--espresso); color: var(--honey); border-color: var(--espresso); }
+
+.share-user-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.share-user-row:last-child { border-bottom: none; }
+.share-user-avatar {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  background: var(--caramel);
+  color: white;
+  font-weight: 600;
+  font-size: 0.85rem;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.share-user-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.share-user-name { flex: 1; font-size: 0.88rem; font-weight: 600; color: var(--espresso); }
+
+.saved-item-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+.saved-item-card:last-child { border-bottom: none; }
+.saved-item-thumb {
+  width: 44px; height: 44px;
+  border-radius: var(--radius-sm);
+  background: var(--parchment-dark);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.saved-item-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.saved-item-body { flex: 1; min-width: 0; }
+.saved-item-name { font-size: 0.9rem; font-weight: 600; color: var(--espresso); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.saved-item-bakery { font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.saved-item-from { font-size: 0.7rem; color: var(--caramel); margin-top: 2px; }
+
 /* ─── EXPLORE SELECTS ────────────────────────────────────────────────────────── */
 .explore-select {
   appearance: none;
@@ -3501,6 +3572,17 @@ nav::before {
 </div>
 
 <!-- ─── MANAGE PRE-ORDERS MODAL ───────────────────────────────────────────────── -->
+<!-- ─── SHARE REVIEW MODAL ─────────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="shareReviewModal">
+  <div class="modal" style="max-width:440px;" role="dialog">
+    <div class="modal-header">
+      <div class="modal-title">📤 Share this review</div>
+      <button class="modal-close" onclick="closeShareReviewModal()">✕</button>
+    </div>
+    <div class="modal-body" id="shareReviewContent" style="max-height:60vh;overflow-y:auto;"></div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="managePreordersModal">
   <div class="modal" style="max-width:560px;" role="dialog">
     <div class="modal-header">
@@ -3830,6 +3912,7 @@ window.addEventListener('crumb-firebase-ready', () => {
       await loadUserRole();
       await loadFollows();
       loadBookmarks();
+      loadSavedItems();
       loadNotifications();
       loadMyPreorders();
       // Real-time listener for new follows — refreshes notification bell
@@ -5583,6 +5666,13 @@ async function openDetail(id) {
       <div class="detail-name">${item.name || 'Unknown bake'}</div>
       <div class="detail-bakery" style="cursor:pointer;" onclick="closeDetailModal(); openBakeryProfile('${escJS(item.bakeryName || 'Unknown bakery')}')">${item.bakeryName || 'Unknown bakery'} →</div>
       ${item.bakeryAddress ? `<div class="detail-address">📍 ${item.bakeryAddress}</div>` : ''}
+      ${currentUser ? `
+      <div class="detail-action-row">
+        <button class="detail-action-btn${isSavedItem(item.id) ? ' saved' : ''}" id="saveItemBtn_${item.id}" onclick="toggleSaveItem('${item.id}')">
+          ${isSavedItem(item.id) ? '🔖 Saved to try' : '🔖 Save to try'}
+        </button>
+        <button class="detail-action-btn" onclick="openShareReviewModal('${item.id}')">📤 Share</button>
+      </div>` : ''}
       ${(() => {
         const detailRecord = item.itemRecordId ? allItemRecords.find(r => r.id === item.itemRecordId) : null;
         const avgP = detailRecord?.avgPrice ?? item.price ?? null;
@@ -8971,39 +9061,214 @@ async function toggleBookmark(bakeryName, address, btnEl) {
   }
 }
 
+// ─── SAVED ITEMS (want to try) ────────────────────────────────────────────────
+let userSavedItems = {}; // itemId -> { docId, name, bakeryName, bakeryAddress, category, photoURL, price }
+
+async function loadSavedItems() {
+  if (!currentUser || !fb) return;
+  const { db, collection, query, where, getDocs } = fb;
+  try {
+    const snap = await getDocs(query(collection(db, 'savedItems'), where('userId', '==', currentUser.uid)));
+    userSavedItems = {};
+    snap.docs.forEach(d => {
+      const data = d.data();
+      userSavedItems[data.itemId] = { docId: d.id, ...data };
+    });
+  } catch(e) { console.warn('Saved items load error:', e); }
+}
+
+function isSavedItem(itemId) {
+  return !!userSavedItems[itemId];
+}
+
+async function toggleSaveItem(itemId) {
+  if (!currentUser) { openAuthModal(); return; }
+  if (!fb) return;
+  const { db, collection, addDoc, doc, deleteDoc, serverTimestamp } = fb;
+  const btn = document.getElementById(`saveItemBtn_${itemId}`);
+
+  const already = userSavedItems[itemId];
+  if (already) {
+    try {
+      await deleteDoc(doc(db, 'savedItems', already.docId));
+      delete userSavedItems[itemId];
+      if (btn) { btn.classList.remove('saved'); btn.innerHTML = '🔖 Save to try'; }
+      showToast('Removed from saved items');
+    } catch(e) { showToast('Could not remove'); }
+  } else {
+    const item = allItems.find(i => i.id === itemId);
+    if (!item) return;
+    try {
+      const docRef = await addDoc(collection(db, 'savedItems'), {
+        userId: currentUser.uid,
+        itemId,
+        name: item.name || 'Unknown bake',
+        bakeryName: item.bakeryName || '',
+        bakeryAddress: item.bakeryAddress || '',
+        category: item.category || '',
+        photoURL: item.photoURL || null,
+        price: item.price || null,
+        createdAt: serverTimestamp()
+      });
+      userSavedItems[itemId] = { docId: docRef.id, itemId, name: item.name, bakeryName: item.bakeryName, bakeryAddress: item.bakeryAddress, category: item.category, photoURL: item.photoURL, price: item.price };
+      if (btn) { btn.classList.add('saved'); btn.innerHTML = '🔖 Saved to try'; }
+      showToast('🔖 Saved — find it in your profile');
+    } catch(e) { showToast('Could not save item'); console.error(e); }
+  }
+}
+
+async function removeSavedItem(itemId) {
+  if (!fb) return;
+  const { db, doc, deleteDoc } = fb;
+  const already = userSavedItems[itemId];
+  if (!already) return;
+  try {
+    await deleteDoc(doc(db, 'savedItems', already.docId));
+    delete userSavedItems[itemId];
+    showToast('Removed');
+    if (currentUser) switchProfileTab('saved', currentUser.uid);
+  } catch(e) { showToast('Could not remove'); }
+}
+
+// ─── SHARE REVIEW WITH A FOLLOWED USER ────────────────────────────────────────
+async function openShareReviewModal(itemId) {
+  if (!currentUser) { openAuthModal(); return; }
+  const item = allItems.find(i => i.id === itemId);
+  if (!item) return;
+
+  const modal = document.getElementById('shareReviewModal');
+  const content = document.getElementById('shareReviewContent');
+  modal.classList.add('open');
+  lockScroll();
+  content.innerHTML = '<div style="text-align:center;padding:24px;"><div class="spinner" style="margin:0 auto;"></div></div>';
+
+  // Load the list of people I follow
+  if (!fb) return;
+  const { db, collection, query, where, getDocs } = fb;
+  try {
+    const snap = await getDocs(query(collection(db, 'follows'), where('followerId', '==', currentUser.uid)));
+    const followingIds = snap.docs.map(d => d.data().followingId);
+
+    if (!followingIds.length) {
+      content.innerHTML = `<div class="empty-state" style="padding:24px 0;">
+        <div class="empty-state-icon">👥</div>
+        <div class="empty-state-title">You're not following anyone yet</div>
+        <div class="empty-state-text">Follow other bakers to share reviews with them.</div>
+      </div>`;
+      return;
+    }
+
+    const rows = followingIds.map(uid => {
+      const p = allProfiles[uid] || {};
+      const name = p.displayName || 'Anonymous';
+      const initials = name.charAt(0).toUpperCase();
+      const avatarInner = p.photoURL ? `<img src="${p.photoURL}" alt="${name}">` : initials;
+      return `<div class="share-user-row">
+        <div class="share-user-avatar">${avatarInner}</div>
+        <div class="share-user-name">${name}</div>
+        <button class="btn-espresso" style="font-size:0.78rem;padding:6px 14px;" onclick="sendSharedReview('${itemId}','${uid}','${escJS(name)}',this)">Send</button>
+      </div>`;
+    }).join('');
+
+    content.innerHTML = `
+      <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px;">Sharing <strong style="color:var(--espresso);">${item.name || 'this review'}</strong> from ${item.bakeryName || 'this bakery'}</div>
+      ${rows}`;
+  } catch(e) {
+    content.innerHTML = '<div style="padding:16px;color:var(--text-muted);">Could not load your following list.</div>';
+    console.error(e);
+  }
+}
+
+function closeShareReviewModal() {
+  document.getElementById('shareReviewModal').classList.remove('open');
+  unlockScroll();
+}
+
+async function sendSharedReview(itemId, toUserId, toUserName, btnEl) {
+  if (!currentUser || !fb) return;
+  const item = allItems.find(i => i.id === itemId);
+  if (!item) return;
+  const { db, collection, addDoc, serverTimestamp } = fb;
+
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Sending…'; }
+  try {
+    await addDoc(collection(db, 'sharedReviews'), {
+      fromUserId: currentUser.uid,
+      fromUserName: currentUser.displayName || 'Someone',
+      fromUserPhoto: currentUser.photoURL || null,
+      toUserId,
+      itemId,
+      itemName: item.name || 'Unknown bake',
+      bakeryName: item.bakeryName || '',
+      photoURL: item.photoURL || null,
+      createdAt: serverTimestamp()
+    });
+    if (btnEl) { btnEl.textContent = '✓ Sent'; btnEl.style.opacity = '0.6'; }
+    showToast(`Shared with ${toUserName}!`);
+  } catch(e) {
+    if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Send'; }
+    showToast('Could not share');
+    console.error(e);
+  }
+}
+
 async function renderSavedTab(container) {
   if (!currentUser) {
     container.innerHTML = '<div class="empty-state" style="padding:32px 0;"><div class="empty-state-icon">🔖</div><div class="empty-state-title">Sign in to see saved bakeries</div></div>';
     return;
   }
   await loadBookmarks();
+  await loadSavedItems();
   const saved = Object.entries(userBookmarks);
-  if (!saved.length) {
-    container.innerHTML = `
-      <div class="empty-state" style="padding:32px 0;">
-        <div class="empty-state-icon">🔖</div>
+  const savedItemsList = Object.values(userSavedItems);
+
+  const bakeriesSectionHTML = !saved.length
+    ? `<div class="empty-state" style="padding:24px 0;">
+        <div class="empty-state-icon">🏪</div>
         <div class="empty-state-title">No saved bakeries yet</div>
         <div class="empty-state-text">Tap the 🔖 on any bakery to save it for later</div>
-      </div>`;
-    return;
-  }
+      </div>`
+    : `<div>${saved.map(([name, data]) => {
+        const hasReviews = !!allBakeries[name];
+        return `
+          <div class="bookmark-card">
+            <div class="bookmark-card-icon">🏪</div>
+            <div class="bookmark-card-body">
+              <div class="bookmark-card-name">${name}</div>
+              ${data.address ? `<div class="bookmark-card-address">📍 ${data.address}</div>` : ''}
+            </div>
+            <div class="bookmark-card-actions">
+              ${hasReviews ? `<button class="admin-btn primary" style="font-size:0.75rem;" onclick="closeProfileModal(); openBakeryProfile('${escJS(name)}')">View →</button>` : ''}
+              <button class="admin-btn" style="font-size:0.75rem;color:#e74c3c;" onclick="toggleBookmark('${escJS(name)}','${escJS(data.address)}',null).then(()=>switchProfileTab('saved','${currentUser.uid}'))">Remove</button>
+            </div>
+          </div>`;
+      }).join('')}</div>`;
+
+  const itemsSectionHTML = !savedItemsList.length
+    ? `<div class="empty-state" style="padding:24px 0;">
+        <div class="empty-state-icon">🥐</div>
+        <div class="empty-state-title">No items saved to try</div>
+        <div class="empty-state-text">Tap 🔖 Save to try on any review you'd like to remember</div>
+      </div>`
+    : `<div>${savedItemsList.map(s => {
+        const catDisp = CATEGORY_TREE[s.category]?.emoji || '🥐';
+        const thumb = s.photoURL ? `<img src="${s.photoURL}" alt="${s.name}">` : catDisp;
+        return `
+          <div class="saved-item-card" onclick="closeProfileModal(); openDetail('${s.itemId}')">
+            <div class="saved-item-thumb">${s.photoURL ? `<img src="${s.photoURL}" alt="${s.name}">` : catDisp}</div>
+            <div class="saved-item-body">
+              <div class="saved-item-name">${s.name}</div>
+              <div class="saved-item-bakery">📍 ${s.bakeryName}</div>
+            </div>
+            <button class="admin-btn" style="font-size:0.72rem;color:#e74c3c;flex-shrink:0;" onclick="event.stopPropagation(); removeSavedItem('${s.itemId}')">Remove</button>
+          </div>`;
+      }).join('')}</div>`;
+
   container.innerHTML = `
-    <div style="margin-bottom:12px;font-size:0.82rem;color:var(--text-muted);">${saved.length} saved baker${saved.length !== 1 ? 'ies' : 'y'}</div>
-    <div>${saved.map(([name, data]) => {
-      const hasReviews = !!allBakeries[name];
-      return `
-        <div class="bookmark-card">
-          <div class="bookmark-card-icon">🏪</div>
-          <div class="bookmark-card-body">
-            <div class="bookmark-card-name">${name}</div>
-            ${data.address ? `<div class="bookmark-card-address">📍 ${data.address}</div>` : ''}
-          </div>
-          <div class="bookmark-card-actions">
-            ${hasReviews ? `<button class="admin-btn primary" style="font-size:0.75rem;" onclick="closeProfileModal(); openBakeryProfile('${escJS(name)}')">View →</button>` : ''}
-            <button class="admin-btn" style="font-size:0.75rem;color:#e74c3c;" onclick="toggleBookmark('${escJS(name)}','${escJS(data.address)}',null).then(()=>switchProfileTab('saved','${currentUser.uid}'))">Remove</button>
-          </div>
-        </div>`;
-    }).join('')}</div>`;
+    <div style="font-size:0.78rem;font-weight:700;color:var(--espresso);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">🏪 Saved bakeries</div>
+    ${bakeriesSectionHTML}
+    <div style="font-size:0.78rem;font-weight:700;color:var(--espresso);text-transform:uppercase;letter-spacing:0.5px;margin:24px 0 10px;">🥐 Items to try</div>
+    ${itemsSectionHTML}`;
 }
 
 // ─── PRE-ORDER DISCOVERY PAGE ─────────────────────────────────────────────────
@@ -10903,6 +11168,30 @@ async function loadNotifications() {
     });
   } catch(e) { console.warn('Notif reactions error:', e); }
 
+  // 3. Shared reviews
+  try {
+    const shareSnap = await getDocs(
+      query(collection(db, 'sharedReviews'), where('toUserId', '==', currentUser.uid))
+    );
+    shareSnap.docs.forEach(d => {
+      const data = d.data();
+      const ts = data.createdAt?.toDate();
+      if (!ts || ts < cutoff) return;
+      notifications.push({
+        id: d.id,
+        type: 'shared',
+        actorId: data.fromUserId,
+        actorName: data.fromUserName || 'Someone',
+        actorPhoto: data.fromUserPhoto || null,
+        itemName: data.itemName || 'a review',
+        text: `shared <em>${data.itemName || 'a review'}</em> from ${data.bakeryName || 'a bakery'} with you`,
+        ts,
+        unread: !notifLastSeen || ts > notifLastSeen,
+        onClick: () => openDetail(data.itemId)
+      });
+    });
+  } catch(e) { console.warn('Notif shared reviews error:', e); }
+
   // Sort newest first
   notifications.sort((a, b) => b.ts - a.ts);
   notifItems = notifications;
@@ -11075,6 +11364,7 @@ document.getElementById('myProfileModal').addEventListener('click', e => { if (e
 document.getElementById('settingsModal').addEventListener('click', e => { if (e.target === document.getElementById('settingsModal')) closeSettingsModal(); });
 document.getElementById('adminModal').addEventListener('click', e => { if (e.target === document.getElementById('adminModal')) closeAdminModal(); });
 document.getElementById('manageBakeryModal').addEventListener('click', e => { if (e.target === document.getElementById('manageBakeryModal')) closeManageBakeryModal(); });
+document.getElementById('shareReviewModal').addEventListener('click', e => { if (e.target === document.getElementById('shareReviewModal')) closeShareReviewModal(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeAddModal(); closeAuthModal(); closeDetailModal(); closeBakeryModal(); closeEditModal(); closeProfileModal(); closeMyProfileModal(); closeBakeryEditModal(); } });
 
 // Init tasting dims and category chips
