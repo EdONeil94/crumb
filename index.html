@@ -5181,7 +5181,6 @@ async function openBakeryProfile(bakeryName, catFilter, googleData) {
     const rec2 = item.itemRecordId ? allItemRecords.find(r => r.id === item.itemRecordId) : null;
     const avgP2 = rec2?.avgPrice ?? item.price ?? null;
     const avgPStr = avgP2 !== null ? ('£' + parseFloat(avgP2).toFixed(2) + (rec2 && rec2.priceCount > 1 ? ' avg' : '')) : '';
-    const canFlag = isOwner && currentUser && item.userId !== currentUser.uid;
     return `
       <div class="bakery-item-row" onclick="closeBakeryModal(); openDetail('${item.id}')">
         ${thumb}
@@ -5191,7 +5190,6 @@ async function openBakeryProfile(bakeryName, catFilter, googleData) {
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
           <div class="bakery-item-score">${score}</div>
-          ${canFlag ? `<button class="flag-btn" onclick="event.stopPropagation(); flagReview('${item.id}','${escJS(item.userName||'Anonymous')}')">🚩</button>` : ''}
         </div>
       </div>`;
   }).join('');
@@ -5712,6 +5710,7 @@ async function openDetail(id) {
             const revScore = rev.overallRating ? rev.overallRating.toFixed(1) : '–';
             const revDate = rev.createdAt ? new Date(rev.createdAt.toDate ? rev.createdAt.toDate() : rev.createdAt).toLocaleDateString('en-GB', {day:'numeric',month:'long',year:'numeric'}) : '';
             const isOwn = currentUser && currentUser.uid === rev.userId;
+            const canFlagRev = !isOwn && currentUser && ownsBakery(rev.bakeryName);
             return `<div class="review-item">
               <div class="review-avatar">${(rev.userName || 'A').charAt(0).toUpperCase()}</div>
               <div class="review-content">
@@ -5723,7 +5722,10 @@ async function openDetail(id) {
                 ${rev.notes ? `<div class="review-text">${rev.notes}</div>` : '<div class="review-text" style="color:var(--text-muted);font-style:italic;">No notes added.</div>'}
                 <div style="display:flex; align-items:center; justify-content:space-between; margin-top:4px;">
                   <div class="review-date">${revDate}</div>
-                  ${isOwn ? `<button class="btn-ghost" style="font-size:0.75rem; padding:4px 8px; color:var(--caramel);" onclick="closeDetailModal(); openEditModal('${rev.id}');">✏️ Edit</button>` : ''}
+                  <div style="display:flex; align-items:center; gap:10px;">
+                    ${canFlagRev ? `<button class="btn-ghost" style="font-size:0.72rem; padding:4px 8px; color:#c0392b;" onclick="flagReview('${rev.id}','${escJS(rev.bakeryName||'')}')">🚩 Report</button>` : ''}
+                    ${isOwn ? `<button class="btn-ghost" style="font-size:0.75rem; padding:4px 8px; color:var(--caramel);" onclick="closeDetailModal(); openEditModal('${rev.id}');">✏️ Edit</button>` : ''}
+                  </div>
                 </div>
               </div>
             </div>`;
@@ -6826,21 +6828,6 @@ function closeBakeryEditModal() {
 }
 
 // ─── REVIEW FLAGGING ──────────────────────────────────────────────────────────
-async function flagReview(itemId, reviewerName) {
-  if (!currentUser) return;
-  if (!confirm(`Report this review by ${reviewerName} as inappropriate?`)) return;
-  try {
-    const { db, doc, setDoc, serverTimestamp } = fb;
-    await setDoc(doc(db, 'flags', itemId), {
-      itemId,
-      reviewerName,
-      reportedBy: currentUser.uid,
-      reportedAt: serverTimestamp(),
-      status: 'pending'
-    }, { merge: true });
-    showToast('Review reported — an admin will review it');
-  } catch(e) { showToast('Could not submit report'); }
-}
 
 // ─── ADMIN PANEL ──────────────────────────────────────────────────────────────
 async function showAdminTab(tab) {
@@ -6993,7 +6980,8 @@ async function saveBakeryProfile() {
 // ─── FLAG REVIEW ──────────────────────────────────────────────────────────────
 async function flagReview(itemId, bakeryName) {
   if (!currentUser) return;
-  const reason = prompt('Reason for flagging this review (optional):') ?? '';
+  const reason = prompt('Reason for reporting this review (optional):');
+  if (reason === null) return; // user cancelled — don't submit anything
   const { db, collection, addDoc, serverTimestamp } = fb;
   try {
     await addDoc(collection(db, 'flaggedReviews'), {
@@ -7003,7 +6991,7 @@ async function flagReview(itemId, bakeryName) {
       reason,
       createdAt: serverTimestamp()
     });
-    showToast('Review flagged — admin will review it');
+    showToast('Review reported — an admin will review it');
   } catch(e) { showToast('Could not flag review'); }
 }
 
