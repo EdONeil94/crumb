@@ -1396,6 +1396,8 @@ nav::before {
   overflow-y: auto;
   position: relative;
   padding-top: env(safe-area-inset-top, 0px);
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 @media (min-width: 600px) {
   .modal { border-radius: var(--radius); max-height: 88vh; }
@@ -1409,9 +1411,16 @@ nav::before {
   position: sticky;
   top: 0;
   background: var(--cream-white);
-  z-index: 1;
+  z-index: 5;
 }
 .modal-title { font-family: 'Playfair Display', serif; font-size: 1.2rem; font-weight: 600; color: var(--espresso); }
+
+/* Contain scroll bounce on any scrollable sheet/panel so it can't rubber-band
+   and reveal content above sticky headers (iOS Safari quirk) */
+[style*="overflow-y:auto"], [style*="overflow-y: auto"] {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
 .modal-close { width: 32px; height: 32px; border-radius: 50%; background: var(--parchment); display: flex; align-items: center; justify-content: center; font-size: 1.1rem; color: var(--text-muted); transition: background 0.2s; }
 .modal-close:hover { background: var(--border); }
 .modal-body { padding: 24px; }
@@ -1681,6 +1690,7 @@ nav::before {
   max-width: calc(100vw - 32px);
   text-overflow: ellipsis;
   overflow: hidden;
+  pointer-events: none;
 }
 #toast.show { transform: translateX(-50%) translateY(0); }
 
@@ -3920,10 +3930,19 @@ window.addEventListener('crumb-firebase-ready', () => {
       loadSavedItems();
       loadNotifications();
       loadMyPreorders();
-      // Real-time listener for new follows — refreshes notification bell
+      // Real-time listeners — refresh notifications the moment new activity arrives,
+      // so the bell badge updates live without needing to reopen the app.
       const { db, collection, query, where, onSnapshot } = fb;
       onSnapshot(
         query(collection(db, 'follows'), where('followingId', '==', user.uid)),
+        () => loadNotifications()
+      );
+      onSnapshot(
+        query(collection(db, 'sharedReviews'), where('toUserId', '==', user.uid)),
+        () => loadNotifications()
+      );
+      onSnapshot(
+        query(collection(db, 'reactions'), where('targetUserId', '==', user.uid)),
         () => loadNotifications()
       );
     }
@@ -11363,7 +11382,10 @@ function toggleNotifPanel() {
   if (isOpen) {
     closeNotifPanel();
   } else {
-    renderNotifPanel();
+    // Always fetch the latest notifications when opening — don't rely on
+    // whatever was cached at login, since shares/reactions have no live push.
+    loadNotifications().then(renderNotifPanel);
+    renderNotifPanel(); // show cached data immediately while the refresh runs
     panel.classList.add('open');
     backdrop.style.display = 'block';
     // Mark as seen after a short delay
