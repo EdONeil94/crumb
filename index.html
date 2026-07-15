@@ -3238,7 +3238,7 @@ nav::before {
     <p style="color:var(--honey-light); font-size:1rem; max-width:480px; margin:0 auto 28px; line-height:1.6; font-weight:300;">Pick a city and discover the top-rated bakeries. Where Crumbz community reviews exist, they take priority.</p>
 
     <!-- Country + city + sort filters -->
-    <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-bottom:20px;">
+    <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-bottom:14px;">
       <select id="exploreCountrySelect" class="explore-select" onchange="onExploreCountryChange()">
         <option value="">🌍 Detecting location…</option>
       </select>
@@ -3248,6 +3248,18 @@ nav::before {
       <select id="exploreSortSelect" class="explore-select" onchange="onExploreSortChange()">
         <option value="top">⭐ Top rated</option>
         <option value="trending">🔥 Trending</option>
+      </select>
+    </div>
+
+    <!-- Nearby mode — not a city, purely radius-based around the user's current location -->
+    <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-bottom:20px; align-items:center;">
+      <span style="font-size:0.78rem; color:var(--honey-light);">or</span>
+      <button class="explore-select" id="exploreNearbyBtn" onclick="toggleExploreNearby()" style="cursor:pointer; font-weight:600;">📍 Nearby</button>
+      <select id="exploreNearbyRadius" class="explore-select" onchange="onExploreRadiusChange()" style="display:none;">
+        <option value="2">Within 2 miles</option>
+        <option value="5" selected>Within 5 miles</option>
+        <option value="10">Within 10 miles</option>
+        <option value="15">Within 15 miles</option>
       </select>
     </div>
 
@@ -7413,6 +7425,140 @@ let exploreActiveCity = null;
 let exploreActiveCountry = 'United Kingdom';
 let exploreSortMode = 'top';
 let exploreNearestCity = null;
+let exploreNearbyActive = false;
+let exploreNearbyRadiusMiles = 5;
+let exploreNearbyCoords = null;
+
+// ─── EXPLORE: NEARBY MODE (radius-based, not tied to any city) ────────────────
+function toggleExploreNearby() {
+  exploreNearbyActive = !exploreNearbyActive;
+  const btn = document.getElementById('exploreNearbyBtn');
+  const radiusSel = document.getElementById('exploreNearbyRadius');
+
+  if (exploreNearbyActive) {
+    btn.classList.add('active');
+    btn.style.background = 'var(--honey)';
+    btn.style.color = 'var(--espresso)';
+    radiusSel.style.display = 'inline-block';
+    // Deselect any city — nearby and city selection are mutually exclusive
+    exploreActiveCity = null;
+    document.getElementById('exploreCitySelect').value = '';
+    runExploreNearbySearch();
+  } else {
+    btn.classList.remove('active');
+    btn.style.background = '';
+    btn.style.color = '';
+    radiusSel.style.display = 'none';
+    document.getElementById('exploreResults').style.display = 'none';
+  }
+}
+
+function onExploreRadiusChange() {
+  exploreNearbyRadiusMiles = parseInt(document.getElementById('exploreNearbyRadius').value);
+  if (exploreNearbyActive) runExploreNearbySearch();
+}
+
+async function runExploreNearbySearch() {
+  const resultsEl = document.getElementById('exploreResults');
+  const btn = document.getElementById('exploreNearbyBtn');
+  const originalLabel = '📍 Nearby';
+  btn.textContent = '📍 Locating…';
+
+  const coords = await new Promise(resolve => {
+    if (!navigator.geolocation) { resolve(null); return; }
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => resolve(null),
+      { timeout: 8000 }
+    );
+  });
+
+  btn.textContent = originalLabel;
+
+  if (!coords) {
+    showToast('Could not get your location');
+    resultsEl.style.display = 'block';
+    document.getElementById('exploreEyebrow').textContent = '📍 Nearby';
+    document.getElementById('exploreTitle').textContent = 'Location unavailable';
+    document.getElementById('exploreCrumbBanner').style.display = 'none';
+    document.getElementById('exploreBakeryList').innerHTML = `<div class="empty-state"><div class="empty-state-icon">📍</div><div class="empty-state-title">Couldn't get your location</div><div class="empty-state-text">Check your device's location permissions and try again.</div></div>`;
+    return;
+  }
+
+  exploreNearbyCoords = coords;
+  const radiusKm = exploreNearbyRadiusMiles * 1.60934;
+
+  resultsEl.style.display = 'block';
+  document.getElementById('exploreEyebrow').textContent = '📍 Nearby';
+  document.getElementById('exploreTitle').textContent = `Within ${exploreNearbyRadiusMiles} mile${exploreNearbyRadiusMiles !== 1 ? 's' : ''} of you`;
+  document.getElementById('exploreBakeryList').innerHTML = '<div style="text-align:center;padding:40px;"><div class="spinner" style="margin:0 auto;"></div></div>';
+  resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  const crumbBakeries = getCrumbBakeriesNearPoint(coords.lat, coords.lng, radiusKm);
+
+  const crumbBanner = document.getElementById('exploreCrumbBanner');
+  const crumbBannerText = document.getElementById('exploreCrumbBannerText');
+  if (crumbBakeries.length > 0) {
+    crumbBanner.style.display = 'flex';
+    crumbBannerText.textContent = `${crumbBakeries.length} bakeries reviewed by the Crumbz community nearby`;
+  } else {
+    crumbBanner.style.display = 'none';
+  }
+
+  let googleResults = [];
+  try {
+    googleResults = await fetchGoogleBakeriesNearPoint(coords.lat, coords.lng, radiusKm);
+  } catch(e) {
+    console.warn('Google Places nearby error:', e);
+  }
+
+  renderExploreResults({ name: 'this area' }, crumbBakeries, googleResults);
+}
+
+function getCrumbBakeriesNearPoint(lat, lng, radiusKm) {
+  const results = {};
+  allItems.forEach(item => {
+    if (!item.bakeryName || !item.bakeryLat) return;
+    const dist = distKm(lat, lng, item.bakeryLat, item.bakeryLng);
+    if (dist > radiusKm) return;
+    const key = item.bakeryName;
+    if (!results[key]) results[key] = { name: key, address: item.bakeryAddress || '', lat: item.bakeryLat, lng: item.bakeryLng, items: [], totalScore: 0, dist };
+    results[key].items.push(item);
+    results[key].totalScore += (item.communityAvg || item.overallRating || 0);
+  });
+  return Object.values(results)
+    .map(b => ({ ...b, communityAvg: b.items.length ? b.totalScore / b.items.length : 0, topItem: [...b.items].sort((a,b) => (b.communityAvg||b.overallRating||0) - (a.communityAvg||a.overallRating||0))[0] }))
+    .sort((a, b) => b.communityAvg - a.communityAvg)
+    .slice(0, 20);
+}
+
+async function fetchGoogleBakeriesNearPoint(lat, lng, radiusKm) {
+  if (!GOOGLE_MAPS_KEY) return [];
+  const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': GOOGLE_MAPS_KEY,
+      'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.location,places.websiteUri,places.regularOpeningHours'
+    },
+    body: JSON.stringify({
+      textQuery: 'bakery cafe patisserie',
+      locationBias: {
+        circle: { center: { latitude: lat, longitude: lng }, radius: Math.min(radiusKm * 1000, 50000) }
+      },
+      maxResultCount: 20
+    })
+  });
+  const data = await res.json();
+  return (data.places || [])
+    .filter(p => p.rating && p.rating >= 3.5)
+    .sort((a, b) => {
+      const scoreA = (a.rating || 0) * Math.log10((a.userRatingCount || 1) + 1);
+      const scoreB = (b.rating || 0) * Math.log10((b.userRatingCount || 1) + 1);
+      return scoreB - scoreA;
+    })
+    .slice(0, 20);
+}
 
 // ─── EXPLORE: DROPDOWNS ───────────────────────────────────────────────────────
 function populateExploreCountryDropdown(selectedCountry) {
@@ -7436,6 +7582,7 @@ function populateExploreCityDropdown(country, selectedCity) {
 }
 
 function onExploreCountryChange() {
+  deactivateExploreNearby();
   exploreActiveCountry = document.getElementById('exploreCountrySelect').value;
   exploreActiveCity = null;
   document.getElementById('exploreResults').style.display = 'none';
@@ -7444,7 +7591,19 @@ function onExploreCountryChange() {
 
 function onExploreCityChange() {
   const city = document.getElementById('exploreCitySelect').value;
-  if (city) selectExploreCity(city);
+  if (city) {
+    deactivateExploreNearby();
+    selectExploreCity(city);
+  }
+}
+
+function deactivateExploreNearby() {
+  if (!exploreNearbyActive) return;
+  exploreNearbyActive = false;
+  const btn = document.getElementById('exploreNearbyBtn');
+  const radiusSel = document.getElementById('exploreNearbyRadius');
+  if (btn) { btn.classList.remove('active'); btn.style.background = ''; btn.style.color = ''; }
+  if (radiusSel) radiusSel.style.display = 'none';
 }
 
 function onExploreSortChange() {
