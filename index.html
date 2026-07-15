@@ -3275,6 +3275,7 @@ nav::before {
       <div>
         <div class="section-eyebrow" id="exploreEyebrow">Top bakeries in</div>
         <h2 class="section-title" id="exploreTitle">Loading…</h2>
+        <div id="exploreResultCount" style="font-size:0.82rem; color:var(--text-muted); margin-top:4px;"></div>
       </div>
       <button class="btn-ghost" onclick="document.getElementById('exploreResults').style.display='none';" style="font-size:0.85rem; color:var(--caramel);">← All cities</button>
     </div>
@@ -7512,7 +7513,7 @@ async function runExploreNearbySearch() {
     console.warn('Google Places nearby error:', e);
   }
 
-  renderExploreResults({ name: 'this area' }, crumbBakeries, googleResults);
+  renderExploreResults({ name: 'this area' }, crumbBakeries, googleResults, true);
 }
 
 function getCrumbBakeriesNearPoint(lat, lng, radiusKm) {
@@ -7552,6 +7553,12 @@ async function fetchGoogleBakeriesNearPoint(lat, lng, radiusKm) {
   const data = await res.json();
   return (data.places || [])
     .filter(p => p.rating && p.rating >= 3.5)
+    // locationBias is only a soft preference for the Places API — it does NOT
+    // exclude results outside the radius, so enforce the actual distance ourselves.
+    .filter(p => {
+      if (!p.location?.latitude || !p.location?.longitude) return false;
+      return distKm(lat, lng, p.location.latitude, p.location.longitude) <= radiusKm;
+    })
     .sort((a, b) => {
       const scoreA = (a.rating || 0) * Math.log10((a.userRatingCount || 1) + 1);
       const scoreB = (b.rating || 0) * Math.log10((b.userRatingCount || 1) + 1);
@@ -7803,7 +7810,7 @@ async function fetchGoogleBakeries(city) {
     .slice(0, 20);
 }
 
-function renderExploreResults(city, crumbBakeries, googleResults) {
+function renderExploreResults(city, crumbBakeries, googleResults, isNearby) {
   const list = document.getElementById('exploreBakeryList');
 
   // Merge: Crumbz bakeries take priority, then Google fills the rest
@@ -7833,8 +7840,18 @@ function renderExploreResults(city, crumbBakeries, googleResults) {
   });
 
   if (!combined.length) {
-    list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🏪</div><div class="empty-state-title">No bakeries found yet</div><div class="empty-state-text">Be the first to review a bakery in ${city.name} on Crumbz!</div></div>`;
+    const nearbyHint = isNearby ? ' Try a wider radius to see more options.' : '';
+    list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🏪</div><div class="empty-state-title">No bakeries found ${isNearby ? 'within this radius' : 'yet'}</div><div class="empty-state-text">Be the first to review a bakery in ${city.name} on Crumbz!${nearbyHint}</div></div>`;
+    const countEl = document.getElementById('exploreResultCount');
+    if (countEl) countEl.textContent = '';
     return;
+  }
+
+  const countEl = document.getElementById('exploreResultCount');
+  if (countEl) {
+    countEl.textContent = isNearby
+      ? `${combined.length} bakeries found within this radius`
+      : '';
   }
 
   list.innerHTML = combined.slice(0, 20).map((b, i) => {
