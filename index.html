@@ -8086,14 +8086,50 @@ async function deleteReview() {
   if (!item || item.userId !== currentUser.uid) return;
   if (!confirm(`Delete your review of "${item.name || 'this item'}"? This cannot be undone.`)) return;
   try {
-    const { db, storage, doc, deleteDoc, ref, deleteObject } = fb;
+    const { db, storage, doc, deleteDoc, updateDoc, ref, deleteObject } = fb;
     if (item.photoURL && item.photoURL.includes('firebasestorage')) {
       try { await deleteObject(ref(storage, item.photoURL)); } catch(e) {}
     }
+
+    const itemRecordId = item.itemRecordId;
     await deleteDoc(doc(db, 'items', editingItemId));
+
+    // Clean up the shared itemRecord so a deleted review doesn't leave stale
+    // orphaned data lingering on the leaderboard / bakery pages.
+    if (itemRecordId) {
+      const remaining = allItems.filter(i => i.itemRecordId === itemRecordId && i.id !== editingItemId);
+      try {
+        if (!remaining.length) {
+          // That was the only review for this item — remove the record entirely
+          await deleteDoc(doc(db, 'itemRecords', itemRecordId));
+        } else {
+          // Recalculate every aggregate fresh from whatever reviews remain,
+          // rather than trying to subtract the deleted one incrementally
+          const reviewCount = remaining.length;
+          const communityAvg = remaining.reduce((s, r) => s + (r.overallRating || 0), 0) / reviewCount;
+          const withPrice = remaining.filter(r => r.price !== null && r.price !== undefined);
+          const avgPrice = withPrice.length ? withPrice.reduce((s, r) => s + r.price, 0) / withPrice.length : null;
+          const dims = getTastingDims(item.category || 'other');
+          const dimData = {};
+          dims.forEach(d => {
+            const vals = remaining.map(r => r[d.key] || 0);
+            dimData[d.key] = vals.reduce((s, v) => s + v, 0) / vals.length;
+          });
+          await updateDoc(doc(db, 'itemRecords', itemRecordId), {
+            communityAvg: Math.round(communityAvg * 10) / 10,
+            reviewCount,
+            avgPrice: avgPrice !== null ? Math.round(avgPrice * 100) / 100 : null,
+            priceCount: withPrice.length,
+            ...dimData
+          });
+        }
+      } catch(e) { console.warn('Could not clean up itemRecord after delete:', e); }
+    }
+
     closeEditModal();
     showToast('Review deleted');
     await loadData();
+    await loadItemRecords();
     renderLeaderboard(lbCurrentTab);
   } catch(e) {
     showToast('Could not delete — try again');
