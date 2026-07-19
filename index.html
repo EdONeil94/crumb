@@ -3327,64 +3327,11 @@ nav::before {
     <div class="modal-header">
       <div class="modal-title" id="profileModalTitle">Profile</div>
       <div style="display:flex; align-items:center; gap:6px;">
-        <button class="modal-close" id="profileEditBtn" onclick="closeProfileModal(); openMyProfileModal();" title="Edit profile" style="display:none;">✏️</button>
+        <button class="modal-close" id="profileEditBtn" onclick="closeProfileModal(); showPage('settings');" title="Edit profile" style="display:none;">✏️</button>
         <button class="modal-close" onclick="closeProfileModal()">✕</button>
       </div>
     </div>
     <div id="profileModalContent"></div>
-  </div>
-</div>
-
-<!-- ─── MY PROFILE EDIT MODAL ────────────────────────────────────────────────── -->
-<div class="modal-overlay" id="myProfileModal">
-  <div class="modal" style="max-width:520px;" role="dialog" aria-label="Edit profile">
-    <div class="modal-header">
-      <div class="modal-title">My profile</div>
-      <button class="modal-close" onclick="closeMyProfileModal()">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="form-group">
-        <label class="form-label">Display name</label>
-        <input type="text" class="form-input" id="profileName" placeholder="Your name">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Location <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">(optional)</span></label>
-        <input type="text" class="form-input" id="profileLocation" placeholder="e.g. York, UK">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Home country <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">(used for rankings)</span></label>
-        <select class="form-select" id="profileCountry">
-          <option value="">Select your country…</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Bio <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">(optional)</span></label>
-        <textarea class="form-textarea" id="profileBio" placeholder="A few words about you and your love of baked goods…" style="min-height:90px;"></textarea>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Favourite category <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">(optional)</span></label>
-        <select class="form-select" id="profileFavCategory">
-          <option value="">Auto — based on my reviews</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Avatar</label>
-        <div style="display:flex; align-items:center; gap:14px;">
-          <div id="profileAvatarPreview" style="width:56px;height:56px;border-radius:50%;background:var(--caramel);display:flex;align-items:center;justify-content:center;font-size:1.4rem;font-weight:700;color:white;overflow:hidden;flex-shrink:0;"></div>
-          <div>
-            <label style="cursor:pointer; display:inline-block; padding:8px 14px; border:1.5px solid var(--border); border-radius:var(--radius-sm); font-size:0.82rem; color:var(--caramel); font-weight:500; background:var(--parchment);">
-              📷 Upload photo
-              <input type="file" accept="image/*" style="display:none;" id="profilePhotoInput" onchange="handleProfilePhoto(this)">
-            </label>
-            <div style="font-size:0.72rem; color:var(--text-muted); margin-top:6px;">Or your Google avatar will be used if signed in with Google.</div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-ghost" onclick="closeMyProfileModal()">Cancel</button>
-      <button class="btn-espresso" onclick="saveMyProfile()">Save profile</button>
-    </div>
   </div>
 </div>
 
@@ -3527,35 +3474,6 @@ nav::before {
         <button class="btn-ghost" onclick="closeEditModal()">Cancel</button>
         <button class="btn-caramel" id="editSaveBtn" onclick="saveEdit()">Save changes</button>
       </div>
-    </div>
-  </div>
-</div>
-
-<!-- ─── SETTINGS MODAL ──────────────────────────────────────────────────────────── -->
-<div class="modal-overlay" id="settingsModal">
-  <div class="modal" style="max-width:540px;" role="dialog" aria-label="Settings">
-    <div class="modal-header">
-      <div class="modal-title">Settings</div>
-      <button class="modal-close" onclick="closeSettingsModal()">✕</button>
-    </div>
-    <div class="modal-body" id="settingsBody"></div>
-  </div>
-</div>
-
-<!-- ─── ADMIN PANEL MODAL ─────────────────────────────────────────────────────── -->
-<div class="modal-overlay" id="adminModal">
-  <div class="modal" style="max-width:640px;" role="dialog" aria-label="Admin panel">
-    <div class="modal-header">
-      <div class="modal-title">⚙️ Admin Panel</div>
-      <button class="modal-close" onclick="closeAdminModal()">✕</button>
-    </div>
-    <div class="modal-body" id="adminBody">
-      <div class="auth-tabs" id="adminTabs">
-        <div class="auth-tab active" onclick="switchAdminTab('users')">Users</div>
-        <div class="auth-tab" onclick="switchAdminTab('flags')">Flagged reviews</div>
-      </div>
-      <div id="adminUsersPanel"></div>
-      <div id="adminFlagsPanel" style="display:none;"></div>
     </div>
   </div>
 </div>
@@ -3725,6 +3643,47 @@ async function loadAllUserRoles() {
   } catch(e) {}
 }
 
+async function refreshAdminUsersPanel() {
+  await loadAllUserRoles();
+  const panel = document.getElementById('adminUsersPanel');
+  if (panel) panel.innerHTML = renderAdminUsersHTML();
+}
+
+async function promoteUser(uid, role, bakeryName) {
+  if (!isAdmin() || !fb) return;
+  if (!confirm(`Make this user an admin? They will get full admin access.`)) return;
+  const { db, doc, setDoc } = fb;
+  try {
+    await setDoc(doc(db, 'userRoles', uid), { role, bakeryName: bakeryName || '' }, { merge: true });
+    showToast('✅ User promoted to admin');
+    await refreshAdminUsersPanel();
+  } catch(e) { showToast('Could not update role'); console.error(e); }
+}
+
+async function promptAssignBakery(uid, name) {
+  if (!isAdmin() || !fb) return;
+  const bakeryName = prompt(`Assign which bakery to ${name}? (Enter the exact bakery name as it appears on Crumbz)`);
+  if (bakeryName === null) return; // cancelled
+  if (!bakeryName.trim()) { showToast('Bakery name cannot be empty'); return; }
+  const { db, doc, setDoc } = fb;
+  try {
+    await setDoc(doc(db, 'userRoles', uid), { role: 'business', bakeryName: bakeryName.trim() }, { merge: true });
+    showToast(`✅ ${name} assigned to ${bakeryName.trim()}`);
+    await refreshAdminUsersPanel();
+  } catch(e) { showToast('Could not assign bakery'); console.error(e); }
+}
+
+async function removeUserRole(uid) {
+  if (!isAdmin() || !fb) return;
+  if (!confirm('Remove this user\'s admin/business role? They will go back to being a regular member.')) return;
+  const { db, doc, deleteDoc } = fb;
+  try {
+    await deleteDoc(doc(db, 'userRoles', uid));
+    showToast('Role removed');
+    await refreshAdminUsersPanel();
+  } catch(e) { showToast('Could not remove role'); console.error(e); }
+}
+
 // ─── STATE ────────────────────────────────────────────────────────────────────
 let currentUser = null;
 let fb = null;
@@ -3755,7 +3714,7 @@ const CATEGORY_TREE = {
       danish: 'Danish', almond_croissant: 'Almond Croissant',
       pain_aux_raisins: 'Pain aux Raisins', kouign_amann: 'Kouign-Amann',
       eclair: 'Éclair', profiterole: 'Profiterole', mille_feuille: 'Mille-feuille',
-      vol_au_vent: 'Vol-au-vent', galette: 'Galette', cruffin: 'Cruffin'
+      vol_au_vent: 'Vol-au-vent', galette: 'Galette', cruffin: 'Cruffin', palmera: 'Palmera'
     }
   },
   cake: {
@@ -3928,6 +3887,27 @@ const TASTING_DIMS = ['Appearance', 'Texture', 'Flavour', 'Value', 'dim5'];
 const GOOGLE_MAPS_KEY = 'AIzaSyCQa9SwvrPmdnk5S2-q8Mem2ZP22GVB1Yo';
 
 
+// Guarantees every signed-in user has at least a minimal profile doc, so they
+// show up as a "member" immediately — even before their first review or
+// their first visit to Settings → Profile.
+async function ensureProfileExists(user) {
+  if (!fb) return;
+  const { db, doc, getDoc, setDoc, serverTimestamp } = fb;
+  try {
+    const ref = doc(db, 'profiles', user.uid);
+    const snap = await getDoc(ref);
+    if (snap.exists()) return; // already has a profile — never overwrite it here
+    await setDoc(ref, {
+      displayName: user.displayName || user.email?.split('@')[0] || 'Anonymous',
+      photoURL: user.photoURL || null,
+      location: '',
+      bio: '',
+      country: '',
+      createdAt: serverTimestamp()
+    });
+  } catch(e) { console.warn('ensureProfileExists error:', e); }
+}
+
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 window.addEventListener('crumb-firebase-ready', () => {
   fb = window._crumb;
@@ -3937,6 +3917,7 @@ window.addEventListener('crumb-firebase-ready', () => {
     currentUserRole = null;
     currentUserBakery = null;
     if (user) {
+      await ensureProfileExists(user);
       await loadUserRole();
       await loadFollows();
       loadBookmarks();
@@ -5387,21 +5368,6 @@ async function switchBakeryTab(tab, bakeryName, tabEl) {
   content.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;padding-top:8px;">${bakeryProducts.map(p => productCardHTML(p, false)).join('')}</div>`;
 }
 
-function closeManageShopModal() {
-  document.getElementById('manageShopModal').classList.remove('open');
-  unlockScroll();
-}
-
-function closeProductModal() {
-  document.getElementById('productModal').classList.remove('open');
-  unlockScroll();
-}
-
-function closeProductDetailModal() {
-  document.getElementById('productDetailModal').classList.remove('open');
-  unlockScroll();
-}
-
 function editBakeryBlurb(bakeryName, currentBlurb) {
   const section = document.getElementById('bakeryBlurbSection');
   section.innerHTML = `
@@ -5815,7 +5781,8 @@ function resetAddModal() {
   document.getElementById('overallRatingDisplay').textContent = '–';
   document.getElementById('locationSelected').classList.remove('visible');
   document.getElementById('bakeryResultsKnown').innerHTML = ''; document.getElementById('bakeryResultsGoogle').innerHTML = '';
-  document.getElementById('photoInput').value = '';
+  const photoInputEl = document.getElementById('photoInput');
+  if (photoInputEl) photoInputEl.value = '';
   const matchResults = document.getElementById('itemMatchResults');
   const matchSelected = document.getElementById('itemMatchSelected');
   const catGroup = document.getElementById('categoryGroup');
@@ -7089,7 +7056,7 @@ function renderAdminBakeriesHTML() {
         </div>
         <div class="admin-user-actions">
           <button class="admin-btn" onclick="openBakeryProfile('${escJS(name)}')">View page</button>
-          ${isAdmin() ? `<button class="admin-btn primary" onclick="closeAdminModal(); openManageBakeryModal('${escJS(name)}')">Edit page</button>` : ''}
+          ${isAdmin() ? `<button class="admin-btn primary" onclick="openManageBakeryModal('${escJS(name)}')">Edit page</button>` : ''}
         </div>
       </div>`;
   }).join('');
@@ -9663,7 +9630,7 @@ function populatePoCityDropdown(country, selectedCity) {
 
 function poDetectNearest() {
   const btn = document.getElementById('poNearestBtn');
-  if (btn) btn.textContent = '📍 Detecting…';
+  if (btn) { btn.disabled = true; btn.textContent = '📍 Detecting…'; }
   navigator.geolocation?.getCurrentPosition(pos => {
     const { latitude, longitude } = pos.coords;
     poUserCoords = { lat: latitude, lng: longitude };
@@ -9676,10 +9643,15 @@ function poDetectNearest() {
     poNearestCity = nearest ? { ...nearest, country: poActiveCountry } : null;
     poActiveCity = nearest?.name || null;
     populatePoCityDropdown(poActiveCountry, poActiveCity);
-    if (btn) btn.textContent = '📍 Nearest';
-    if (poActiveCity) renderPreorderPage();
+    if (btn) { btn.disabled = false; btn.textContent = '📍 Nearest'; }
+    if (poActiveCity) {
+      showToast(`📍 Nearest: ${poActiveCity}`);
+      renderPreorderPage();
+    } else {
+      showToast('Could not find a nearby city');
+    }
   }, () => {
-    if (btn) btn.textContent = '📍 Nearest';
+    if (btn) { btn.disabled = false; btn.textContent = '📍 Nearest'; }
     showToast('Location access denied');
   }, { timeout: 6000 });
 }
@@ -11703,12 +11675,9 @@ document.getElementById('bakeryModal').addEventListener('click', e => { if (e.ta
 document.getElementById('editModal').addEventListener('click', e => { if (e.target === document.getElementById('editModal')) closeEditModal(); });
 document.getElementById('bakeryEditModal').addEventListener('click', e => { if (e.target === document.getElementById('bakeryEditModal')) closeBakeryEditModal(); });
 document.getElementById('profileModal').addEventListener('click', e => { if (e.target === document.getElementById('profileModal')) closeProfileModal(); });
-document.getElementById('myProfileModal').addEventListener('click', e => { if (e.target === document.getElementById('myProfileModal')) closeMyProfileModal(); });
-document.getElementById('settingsModal').addEventListener('click', e => { if (e.target === document.getElementById('settingsModal')) closeSettingsModal(); });
-document.getElementById('adminModal').addEventListener('click', e => { if (e.target === document.getElementById('adminModal')) closeAdminModal(); });
 document.getElementById('manageBakeryModal').addEventListener('click', e => { if (e.target === document.getElementById('manageBakeryModal')) closeManageBakeryModal(); });
 document.getElementById('shareReviewModal').addEventListener('click', e => { if (e.target === document.getElementById('shareReviewModal')) closeShareReviewModal(); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeAddModal(); closeAuthModal(); closeDetailModal(); closeBakeryModal(); closeEditModal(); closeProfileModal(); closeMyProfileModal(); closeBakeryEditModal(); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeAddModal(); closeAuthModal(); closeDetailModal(); closeBakeryModal(); closeEditModal(); closeProfileModal(); closeBakeryEditModal(); } });
 
 // Init tasting dims and category chips
 buildTastingDims();
