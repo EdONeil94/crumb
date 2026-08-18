@@ -7,6 +7,13 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 
+<!-- App version — bumped on every delivered update. Used purely for the
+     in-app "update available" banner (see UPDATE CHECK script near the end
+     of the file). Home-screen PWAs on iOS cache far more aggressively than
+     a normal browser tab, so this is the reliable way to tell someone a
+     newer build exists rather than relying on them to notice on their own. -->
+<meta name="app-version" content="2026.08.18.1">
+
 <!-- PWA meta — manifest and SW active on Firebase Hosting only -->
 <!-- <link rel="manifest" href="manifest.json"> -->
 <meta name="theme-color" content="#2c1810">
@@ -2589,6 +2596,11 @@ nav::before {
 
 <!-- ─── NAV ──────────────────────────────────────────────────────────────────── -->
 <div id="statusBarSpacer" style="height:0px;background:#2c1810;position:fixed;top:0;left:0;right:0;z-index:102;pointer-events:none;transition:height 0.1s;"></div>
+
+<!-- ─── UPDATE AVAILABLE BANNER ─────────────────────────────────────────────── -->
+<div id="updateBanner" style="display:none;position:fixed;top:env(safe-area-inset-top, 0px);left:0;right:0;z-index:2050;background:var(--honey);color:var(--espresso);padding:10px 16px;font-size:0.82rem;font-weight:600;text-align:center;box-shadow:0 2px 10px rgba(0,0,0,0.25);cursor:pointer;" onclick="applyAppUpdate()">
+  🆕 A new version of Crumbz is ready — tap to update
+</div>
 <nav style="margin-top:0px;" id="mainNav">
   <div class="nav-logo" onclick="showPage('home')">
     Crumbz
@@ -12010,6 +12022,82 @@ function renderAdminUsers() {
     window.visualViewport.addEventListener('resize', setVvh);
     setVvh();
   }
+})();
+
+// ─── APP UPDATE CHECK ─────────────────────────────────────────────────────────
+// Home-screen PWAs (especially on iOS) cache far more aggressively and
+// persistently than a normal browser tab — a user can be stuck on a build
+// from weeks ago with no obvious way to tell. This periodically re-fetches
+// the page's own HTML with caching fully disabled, reads the <meta
+// name="app-version"> tag out of the fresh copy, and compares it against
+// the version actually running. If they differ, a banner appears; tapping
+// it forces a genuinely fresh reload (cache-busted, not a normal reload).
+(function() {
+  const CURRENT_VERSION = document.querySelector('meta[name="app-version"]')?.content || '';
+  let bannerShown = false;
+
+  function showUpdateBanner() {
+    if (bannerShown) return;
+    bannerShown = true;
+    const banner = document.getElementById('updateBanner');
+    if (!banner) return;
+    banner.style.display = 'block';
+
+    // Push the nav bar down so the banner doesn't sit on top of it — both for
+    // its initial (unscrolled) position and for its sticky "stuck" position
+    // once the page is scrolled, since those are computed independently.
+    requestAnimationFrame(() => {
+      const bannerHeight = banner.offsetHeight;
+      const nav = document.getElementById('mainNav');
+      if (nav) {
+        const currentMargin = parseInt(nav.style.marginTop || '0', 10) || 0;
+        nav.style.marginTop = (currentMargin + bannerHeight) + 'px';
+        nav.style.top = bannerHeight + 'px';
+      }
+      const spacer = document.getElementById('statusBarSpacer');
+      if (spacer) spacer.style.marginTop = bannerHeight + 'px';
+    });
+  }
+
+  window.applyAppUpdate = function() {
+    const banner = document.getElementById('updateBanner');
+    if (banner) banner.textContent = '🔄 Updating…';
+    // A cache-busting navigation is the most reliable way to force a truly
+    // fresh copy on iOS home-screen PWAs — plain reload() isn't always enough.
+    const url = new URL(location.href);
+    url.searchParams.set('_v', Date.now().toString());
+    location.href = url.toString();
+  };
+
+  async function checkForAppUpdate() {
+    if (!CURRENT_VERSION) return; // meta tag missing — nothing to compare against
+    try {
+      const url = new URL(location.href);
+      url.hash = '';
+      url.searchParams.set('_check', Date.now().toString()); // bypass any HTTP caching
+      const res = await fetch(url.toString(), { cache: 'no-store' });
+      if (!res.ok) return;
+      const text = await res.text();
+      const match = text.match(/<meta\s+name=["']app-version["']\s+content=["']([^"']+)["']/i);
+      const latestVersion = match ? match[1] : null;
+      if (latestVersion && latestVersion !== CURRENT_VERSION) {
+        showUpdateBanner();
+      }
+    } catch(e) {
+      // Silent — a failed check just means we try again later, no need to
+      // bother the user about it.
+    }
+  }
+
+  // Check shortly after load (give the app time to finish its own init first),
+  // periodically while the app stays open, and — most importantly — whenever
+  // the app comes back into the foreground, since that's exactly the moment
+  // someone reopens it from their home screen after an update was shipped.
+  setTimeout(checkForAppUpdate, 4000);
+  setInterval(checkForAppUpdate, 10 * 60 * 1000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkForAppUpdate();
+  });
 })();
 
 // ─── MOBILE STATUS BAR FIX ────────────────────────────────────────────────────
