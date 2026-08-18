@@ -3300,7 +3300,7 @@ nav::before {
     <div id="exploreMapWrap" style="display:none;">
       <div id="exploreMapEl" style="height:420px; width:100%; border-radius:var(--radius); overflow:hidden; background:var(--parchment-dark); position:relative;">
         <div id="exploreMapLoading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--parchment);z-index:500;font-size:0.82rem;color:var(--text-muted);">
-          <div style="text-align:center;"><div class="spinner" style="margin:0 auto 8px;"></div>Loading map…</div>
+          <div style="text-align:center;"><div class="spinner" style="margin:0 auto 8px;"></div><span id="exploreMapLoadingText">Loading map…</span></div>
         </div>
       </div>
       <div style="display:flex; gap:14px; margin-top:10px; flex-wrap:wrap;">
@@ -7436,11 +7436,28 @@ function setExploreViewMode(mode) {
 async function renderExploreMap(bakeries) {
   const el = document.getElementById('exploreMapEl');
   const loader = document.getElementById('exploreMapLoading');
+  const loaderText = document.getElementById('exploreMapLoadingText');
   if (!el) return;
   if (loader) loader.style.display = 'flex';
+  if (loaderText) loaderText.textContent = 'Loading map…';
 
-  // Only plot bakeries we actually have coordinates for
-  const points = bakeries.filter(b => b.lat && b.lng);
+  // Many bakeries — especially older Crumbz reviews added before Places-based
+  // selection was the norm — never had lat/lng stored at all. Rather than
+  // silently dropping them from the map, geocode the ones that are missing it
+  // (same approach already used for the profile "My Map" and Bakeries→Nearest).
+  const withCoords = bakeries.filter(b => b.lat && b.lng);
+  const missingCoords = bakeries.filter(b => !b.lat || !b.lng);
+
+  if (missingCoords.length && loaderText) {
+    loaderText.textContent = `Locating ${missingCoords.length} bakery${missingCoords.length !== 1 ? 'ies' : ''}…`;
+  }
+
+  const geocoded = await Promise.all(missingCoords.map(async b => {
+    const coords = await geocodeBakeryAddress(b.name, b.address);
+    return coords ? { ...b, lat: coords.lat, lng: coords.lng } : null;
+  }));
+
+  const points = [...withCoords, ...geocoded.filter(Boolean)];
 
   function setupMap() {
     if (loader) loader.style.display = 'none';
