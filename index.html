@@ -7452,102 +7452,137 @@ async function renderExploreMap(bakeries) {
     loaderText.textContent = `Locating ${missingCoords.length} bakery${missingCoords.length !== 1 ? 'ies' : ''}…`;
   }
 
-  const geocoded = await Promise.all(missingCoords.map(async b => {
-    const coords = await geocodeBakeryAddress(b.name, b.address);
-    return coords ? { ...b, lat: coords.lat, lng: coords.lng } : null;
-  }));
-
-  const points = [...withCoords, ...geocoded.filter(Boolean)];
+  let points;
+  try {
+    const geocoded = await Promise.all(missingCoords.map(async b => {
+      const coords = await geocodeBakeryAddress(b.name, b.address);
+      return coords ? { ...b, lat: coords.lat, lng: coords.lng } : null;
+    }));
+    points = [...withCoords, ...geocoded.filter(Boolean)];
+  } catch(geoErr) {
+    console.warn('Geocoding step failed, showing bakeries with existing coordinates only:', geoErr);
+    points = withCoords;
+  }
 
   function setupMap() {
-    if (loader) loader.style.display = 'none';
-    if (exploreMapInstance) { exploreMapInstance.remove(); exploreMapInstance = null; }
+    try {
+      if (loader) loader.style.display = 'none';
+      if (exploreMapInstance) { exploreMapInstance.remove(); exploreMapInstance = null; }
 
-    const L = window.L;
-    exploreMapInstance = L.map('exploreMapEl', { center: [54, -1], zoom: 6, zoomControl: true, scrollWheelZoom: false, tap: true, touchZoom: true, dragging: true });
+      const L = window.L;
+      exploreMapInstance = L.map('exploreMapEl', { center: [54, -1], zoom: 6, zoomControl: true, scrollWheelZoom: false, tap: true, touchZoom: true, dragging: true });
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-      attribution: '© OpenStreetMap © CARTO', subdomains: 'abcd', maxZoom: 19
-    }).addTo(exploreMapInstance);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        attribution: '© OpenStreetMap © CARTO', subdomains: 'abcd', maxZoom: 19
+      }).addTo(exploreMapInstance);
 
-    // Same visual language as the profile "My Map" — espresso/honey SVG circles,
-    // with Google-only (not yet reviewed) bakeries shown in a muted grey instead.
-    function makeIcon(label, isCrumb) {
-      const fill = isCrumb ? '#2c1810' : '#8a8a8a';
-      const stroke = isCrumb ? '#d4a574' : '#cfcfcf';
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34">
-        <circle cx="17" cy="17" r="15" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
-        <text x="17" y="21" font-family="sans-serif" font-size="9" font-weight="700" fill="${stroke}" text-anchor="middle">${label}</text>
-      </svg>`;
-      return L.divIcon({ html: svg, className: '', iconSize: [34, 34], iconAnchor: [17, 17] });
-    }
-
-    const clusters = L.markerClusterGroup({
-      maxClusterRadius: 60,
-      iconCreateFunction: cluster => {
-        const n = cluster.getChildCount();
-        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="38" height="38" viewBox="0 0 38 38">
-          <circle cx="19" cy="19" r="17" fill="#2c1810" stroke="#d4a574" stroke-width="2"/>
-          <text x="19" y="23" font-family="sans-serif" font-size="10" font-weight="700" fill="#d4a574" text-anchor="middle">${n}🥐</text>
+      // Same visual language as the profile "My Map" — espresso/honey SVG circles,
+      // with Google-only (not yet reviewed) bakeries shown in a muted grey instead.
+      function makeIcon(label, isCrumb) {
+        const fill = isCrumb ? '#2c1810' : '#8a8a8a';
+        const stroke = isCrumb ? '#d4a574' : '#cfcfcf';
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34">
+          <circle cx="17" cy="17" r="15" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+          <text x="17" y="21" font-family="sans-serif" font-size="9" font-weight="700" fill="${stroke}" text-anchor="middle">${label}</text>
         </svg>`;
-        return L.divIcon({ html: svg, className: '', iconSize: [38, 38], iconAnchor: [19, 19] });
+        return L.divIcon({ html: svg, className: '', iconSize: [34, 34], iconAnchor: [17, 17] });
       }
-    });
 
-    if (!points.length) {
-      el.insertAdjacentHTML('beforeend', `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:400;"><div style="background:rgba(250,246,240,0.92);border-radius:8px;padding:12px 20px;font-size:0.82rem;color:var(--text-muted);text-align:center;">📍 No mappable bakeries in this result set</div></div>`);
-    }
+      // Try to use marker clustering, but if the plugin isn't available or
+      // throws for any reason, fall back to a plain layer group so markers
+      // still show — degraded but working beats a silently blank map.
+      let markerLayer;
+      let clusteringWorked = true;
+      try {
+        markerLayer = L.markerClusterGroup({
+          maxClusterRadius: 60,
+          iconCreateFunction: cluster => {
+            const n = cluster.getChildCount();
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="38" height="38" viewBox="0 0 38 38">
+              <circle cx="19" cy="19" r="17" fill="#2c1810" stroke="#d4a574" stroke-width="2"/>
+              <text x="19" y="23" font-family="sans-serif" font-size="10" font-weight="700" fill="#d4a574" text-anchor="middle">${n}🥐</text>
+            </svg>`;
+            return L.divIcon({ html: svg, className: '', iconSize: [38, 38], iconAnchor: [19, 19] });
+          }
+        });
+      } catch(clusterErr) {
+        console.warn('Marker clustering unavailable, falling back to plain markers:', clusterErr);
+        clusteringWorked = false;
+        markerLayer = L.layerGroup();
+      }
 
-    points.forEach(b => {
-      const isCrumb = b.source === 'crumb';
-      const scoreLabel = isCrumb ? (b.communityAvg || 0).toFixed(1) : (b.googleRating || '–');
-      const marker = L.marker([b.lat, b.lng], { icon: makeIcon(scoreLabel, isCrumb) });
+      if (!points.length) {
+        el.insertAdjacentHTML('beforeend', `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:400;"><div style="background:rgba(250,246,240,0.92);border-radius:8px;padding:12px 20px;font-size:0.82rem;color:var(--text-muted);text-align:center;">📍 No mappable bakeries in this result set</div></div>`);
+      }
 
-      const cardOnclick = isCrumb
-        ? `closeExplorePopupAnd(()=>openBakeryProfile('${escJS(b.name)}'))`
-        : '';
-      const actionHtml = isCrumb
-        ? `<button onclick="event.stopPropagation(); closeExplorePopupAnd(()=>openBakeryProfile('${escJS(b.name)}'))" style="margin-top:6px;width:100%;background:#2c1810;color:#d4a574;border:none;border-radius:100px;padding:8px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;">View bakery →</button>`
-        : `<button onclick="event.stopPropagation(); closeExplorePopupAnd(()=>openAddModalForBakery('${escJS(b.name)}','${escJS(b.address||'')}','${b.placeId||''}','${b.lat||''}','${b.lng||''}'))" style="margin-top:6px;width:100%;background:#2c1810;color:#d4a574;border:none;border-radius:100px;padding:8px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;">+ Be first to review</button>`;
+      let markersAdded = 0;
+      points.forEach(b => {
+        try {
+          const isCrumb = b.source === 'crumb';
+          const scoreLabel = isCrumb ? (b.communityAvg || 0).toFixed(1) : (b.googleRating || '–');
+          const marker = L.marker([b.lat, b.lng], { icon: makeIcon(scoreLabel, isCrumb) });
 
-      // For reviewed bakeries, the whole card is tappable (not just the small
-      // button) — much easier to hit accurately on a touchscreen. Google-only
-      // cards keep just the explicit "+ Be first to review" button, since
-      // that's a deliberate add action rather than a passive drill-through.
-      marker.bindPopup(`
-        <div style="font-family:sans-serif;min-width:170px;${isCrumb ? 'cursor:pointer;' : ''}" ${cardOnclick ? `onclick="${cardOnclick}"` : ''}>
-          <div style="font-weight:700;font-size:0.88rem;margin-bottom:3px;">${b.name}</div>
-          <div style="font-size:0.74rem;color:#888;margin-bottom:4px;">${b.address || ''}</div>
-          <div style="font-size:0.8rem;">${isCrumb ? `<strong>${b.reviewCount || 1}</strong> review${(b.reviewCount||1) !== 1 ? 's' : ''} &nbsp;·&nbsp; <strong style="color:#2c1810;">⭐ ${scoreLabel}</strong>` : `<strong style="color:#2c1810;">★ ${scoreLabel} Google</strong>${b.googleReviews ? ` &nbsp;·&nbsp; ${b.googleReviews.toLocaleString()} reviews` : ''}`}</div>
-          ${actionHtml}
-        </div>`, { maxWidth: 220 });
-      clusters.addLayer(marker);
-    });
+          const cardOnclick = isCrumb
+            ? `closeExplorePopupAnd(()=>openBakeryProfile('${escJS(b.name)}'))`
+            : '';
+          const actionHtml = isCrumb
+            ? `<button onclick="event.stopPropagation(); closeExplorePopupAnd(()=>openBakeryProfile('${escJS(b.name)}'))" style="margin-top:6px;width:100%;background:#2c1810;color:#d4a574;border:none;border-radius:100px;padding:8px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;">View bakery →</button>`
+            : `<button onclick="event.stopPropagation(); closeExplorePopupAnd(()=>openAddModalForBakery('${escJS(b.name)}','${escJS(b.address||'')}','${b.placeId||''}','${b.lat||''}','${b.lng||''}'))" style="margin-top:6px;width:100%;background:#2c1810;color:#d4a574;border:none;border-radius:100px;padding:8px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;">+ Be first to review</button>`;
 
-    exploreMapInstance.addLayer(clusters);
-
-    if (points.length) {
-      const group = L.featureGroup(points.map(b => L.marker([b.lat, b.lng])));
-      try { exploreMapInstance.fitBounds(group.getBounds().pad(0.3), { maxZoom: 14 }); } catch(e) {}
-    }
-
-    // Leaflet measures its container's pixel size at the moment it initialises.
-    // Since #exploreMapWrap goes from display:none to visible right before this
-    // runs, the browser may not have finished laying it out yet — on slower
-    // mobile devices in particular, a fixed setTimeout delay isn't always long
-    // enough. A ResizeObserver is the robust fix: it fires whenever the
-    // container's actual rendered size changes, however long that takes.
-    if (window.ResizeObserver) {
-      const ro = new ResizeObserver(() => {
-        if (exploreMapInstance) exploreMapInstance.invalidateSize();
+          // For reviewed bakeries, the whole card is tappable (not just the small
+          // button) — much easier to hit accurately on a touchscreen. Google-only
+          // cards keep just the explicit "+ Be first to review" button, since
+          // that's a deliberate add action rather than a passive drill-through.
+          marker.bindPopup(`
+            <div style="font-family:sans-serif;min-width:170px;${isCrumb ? 'cursor:pointer;' : ''}" ${cardOnclick ? `onclick="${cardOnclick}"` : ''}>
+              <div style="font-weight:700;font-size:0.88rem;margin-bottom:3px;">${b.name}</div>
+              <div style="font-size:0.74rem;color:#888;margin-bottom:4px;">${b.address || ''}</div>
+              <div style="font-size:0.8rem;">${isCrumb ? `<strong>${b.reviewCount || 1}</strong> review${(b.reviewCount||1) !== 1 ? 's' : ''} &nbsp;·&nbsp; <strong style="color:#2c1810;">⭐ ${scoreLabel}</strong>` : `<strong style="color:#2c1810;">★ ${scoreLabel} Google</strong>${b.googleReviews ? ` &nbsp;·&nbsp; ${b.googleReviews.toLocaleString()} reviews` : ''}`}</div>
+              ${actionHtml}
+            </div>`, { maxWidth: 220 });
+          markerLayer.addLayer(marker);
+          markersAdded++;
+        } catch(markerErr) {
+          console.warn('Could not add marker for', b.name, markerErr);
+        }
       });
-      ro.observe(el);
-      // Stop observing once the map is torn down again
-      exploreMapInstance.on('unload', () => ro.disconnect());
-    } else {
-      // Fallback for older browsers without ResizeObserver support
-      setTimeout(() => { if (exploreMapInstance) exploreMapInstance.invalidateSize(); }, 100);
-      setTimeout(() => { if (exploreMapInstance) exploreMapInstance.invalidateSize(); }, 500);
+
+      exploreMapInstance.addLayer(markerLayer);
+
+      if (points.length) {
+        const group = L.featureGroup(points.map(b => L.marker([b.lat, b.lng])));
+        try { exploreMapInstance.fitBounds(group.getBounds().pad(0.3), { maxZoom: 14 }); } catch(e) {}
+      }
+
+      // Leaflet measures its container's pixel size at the moment it initialises.
+      // Since #exploreMapWrap goes from display:none to visible right before this
+      // runs, the browser may not have finished laying it out yet — on slower
+      // mobile devices in particular, a fixed setTimeout delay isn't always long
+      // enough. A ResizeObserver is the robust fix: it fires whenever the
+      // container's actual rendered size changes, however long that takes.
+      if (window.ResizeObserver) {
+        const ro = new ResizeObserver(() => {
+          if (exploreMapInstance) exploreMapInstance.invalidateSize();
+        });
+        ro.observe(el);
+        // Stop observing once the map is torn down again
+        exploreMapInstance.on('unload', () => ro.disconnect());
+      } else {
+        // Fallback for older browsers without ResizeObserver support
+        setTimeout(() => { if (exploreMapInstance) exploreMapInstance.invalidateSize(); }, 100);
+        setTimeout(() => { if (exploreMapInstance) exploreMapInstance.invalidateSize(); }, 500);
+      }
+
+      if (!clusteringWorked && markersAdded > 0) {
+        showToast('Map loaded (clustering unavailable, showing all pins individually)');
+      }
+      if (markersAdded === 0 && points.length > 0) {
+        el.insertAdjacentHTML('beforeend', `<div style="position:absolute;top:8px;left:8px;right:8px;z-index:600;background:#c0392b;color:white;border-radius:8px;padding:10px 14px;font-size:0.78rem;">⚠️ Found ${points.length} location${points.length!==1?'s':''} but couldn't place any pins — please screenshot this and let Ed know.</div>`);
+      }
+    } catch(fatalErr) {
+      console.error('Explore map failed to render:', fatalErr);
+      if (loader) loader.style.display = 'none';
+      el.insertAdjacentHTML('beforeend', `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--parchment);z-index:600;padding:20px;text-align:center;"><div><div style="font-size:1.5rem;margin-bottom:8px;">⚠️</div><div style="font-size:0.85rem;color:var(--text-body);margin-bottom:6px;font-weight:600;">Map couldn't load</div><div style="font-size:0.72rem;color:var(--text-muted);word-break:break-word;">${(fatalErr && fatalErr.message) || 'Unknown error'}</div></div></div>`);
     }
   }
 
@@ -7557,6 +7592,10 @@ async function renderExploreMap(bakeries) {
     const s = document.createElement('script');
     s.src = 'https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js';
     s.onload = setupMap;
+    s.onerror = () => {
+      console.warn('Marker cluster plugin failed to load — rendering without clustering');
+      setupMap(); // still try — the fallback inside setupMap handles a missing plugin
+    };
     document.head.appendChild(s);
   } else {
     const s1 = document.createElement('script');
@@ -7565,7 +7604,12 @@ async function renderExploreMap(bakeries) {
       const s2 = document.createElement('script');
       s2.src = 'https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js';
       s2.onload = setupMap;
+      s2.onerror = () => { console.warn('Marker cluster plugin failed to load'); setupMap(); };
       document.head.appendChild(s2);
+    };
+    s1.onerror = () => {
+      if (loader) loader.style.display = 'none';
+      el.insertAdjacentHTML('beforeend', `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--parchment);z-index:600;padding:20px;text-align:center;"><div><div style="font-size:1.5rem;margin-bottom:8px;">⚠️</div><div style="font-size:0.85rem;color:var(--text-body);font-weight:600;">Couldn't load the map library</div><div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;">Check your connection and try again</div></div></div>`);
     };
     document.head.appendChild(s1);
   }
