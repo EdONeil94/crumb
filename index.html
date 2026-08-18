@@ -3323,6 +3323,14 @@ nav::before {
           <div style="width:14px;height:14px;border-radius:50%;background:#8a8a8a;border:2px solid #cfcfcf;"></div> Google only — not yet reviewed
         </div>
       </div>
+
+      <!-- TEMPORARY diagnostic panel — remove once the mobile map bug is found.
+           Shows exactly what the map-loading code is doing, step by step,
+           directly on screen (no devtools/console needed). -->
+      <div style="margin-top:14px; border:1.5px dashed var(--border); border-radius:var(--radius-sm); padding:10px;">
+        <div style="font-size:0.7rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">🔍 Debug log (screenshot this if the map is empty)</div>
+        <div id="exploreMapDebugLog" style="display:none; max-height:220px; overflow-y:auto; font-family:monospace; font-size:0.68rem; line-height:1.5; color:var(--text-body); background:var(--parchment); border-radius:6px; padding:8px;"></div>
+      </div>
     </div>
   </div>
 
@@ -7445,11 +7453,28 @@ function setExploreViewMode(mode) {
   if (mode === 'map') renderExploreMap(exploreLastResults);
 }
 
+// ─── EXPLORE MAP DIAGNOSTICS (temporary — remove once mobile bug is found) ────
+function exploreMapLog(msg) {
+  const panel = document.getElementById('exploreMapDebugLog');
+  if (!panel) return;
+  panel.style.display = 'block';
+  const line = document.createElement('div');
+  const t = new Date().toLocaleTimeString();
+  line.textContent = `[${t}] ${msg}`;
+  panel.appendChild(line);
+  panel.scrollTop = panel.scrollHeight;
+}
+
 async function renderExploreMap(bakeries) {
+  const debugPanel = document.getElementById('exploreMapDebugLog');
+  if (debugPanel) { debugPanel.innerHTML = ''; debugPanel.style.display = 'block'; }
+  exploreMapLog(`Start. ${bakeries.length} bakeries passed in. UA: ${navigator.userAgent.slice(0,60)}`);
+  exploreMapLog(`GOOGLE_MAPS_KEY present: ${!!GOOGLE_MAPS_KEY}. window.L present: ${!!window.L}. markerClusterGroup present: ${!!(window.L && window.L.markerClusterGroup)}`);
+
   const el = document.getElementById('exploreMapEl');
   const loader = document.getElementById('exploreMapLoading');
   const loaderText = document.getElementById('exploreMapLoadingText');
-  if (!el) return;
+  if (!el) { exploreMapLog('FATAL: #exploreMapEl not found in DOM'); return; }
   if (loader) loader.style.display = 'flex';
   if (loaderText) loaderText.textContent = 'Loading map…';
 
@@ -7459,6 +7484,7 @@ async function renderExploreMap(bakeries) {
   // (same approach already used for the profile "My Map" and Bakeries→Nearest).
   const withCoords = bakeries.filter(b => b.lat && b.lng);
   const missingCoords = bakeries.filter(b => !b.lat || !b.lng);
+  exploreMapLog(`withCoords: ${withCoords.length}, missingCoords (need geocoding): ${missingCoords.length}`);
 
   if (missingCoords.length && loaderText) {
     loaderText.textContent = `Locating ${missingCoords.length} bakery${missingCoords.length !== 1 ? 'ies' : ''}…`;
@@ -7466,27 +7492,33 @@ async function renderExploreMap(bakeries) {
 
   let points;
   try {
+    exploreMapLog('Starting geocode step…');
     const geocoded = await Promise.all(missingCoords.map(async b => {
       const coords = await geocodeBakeryAddress(b.name, b.address);
+      exploreMapLog(`  geocode "${b.name}": ${coords ? `OK (${coords.lat.toFixed(3)}, ${coords.lng.toFixed(3)})` : 'FAILED / no result'}`);
       return coords ? { ...b, lat: coords.lat, lng: coords.lng } : null;
     }));
     points = [...withCoords, ...geocoded.filter(Boolean)];
+    exploreMapLog(`Geocode step complete. Total plottable points: ${points.length}`);
   } catch(geoErr) {
-    console.warn('Geocoding step failed, showing bakeries with existing coordinates only:', geoErr);
+    exploreMapLog(`Geocode step THREW: ${geoErr.message || geoErr}`);
     points = withCoords;
   }
 
   function setupMap() {
+    exploreMapLog('setupMap() called');
     try {
       if (loader) loader.style.display = 'none';
       if (exploreMapInstance) { exploreMapInstance.remove(); exploreMapInstance = null; }
 
       const L = window.L;
       exploreMapInstance = L.map('exploreMapEl', { center: [54, -1], zoom: 6, zoomControl: true, scrollWheelZoom: false, tap: true, touchZoom: true, dragging: true });
+      exploreMapLog('L.map() created OK');
 
       L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
         attribution: '© OpenStreetMap © CARTO', subdomains: 'abcd', maxZoom: 19
       }).addTo(exploreMapInstance);
+      exploreMapLog('Tile layer added OK');
 
       // Same visual language as the profile "My Map" — espresso/honey SVG circles,
       // with Google-only (not yet reviewed) bakeries shown in a muted grey instead.
@@ -7518,12 +7550,14 @@ async function renderExploreMap(bakeries) {
           }
         });
       } catch(clusterErr) {
-        console.warn('Marker clustering unavailable, falling back to plain markers:', clusterErr);
+        exploreMapLog(`markerClusterGroup THREW: ${clusterErr.message || clusterErr} — falling back to plain layerGroup`);
         clusteringWorked = false;
         markerLayer = L.layerGroup();
       }
+      exploreMapLog(`Marker layer ready (clustering: ${clusteringWorked}). About to add ${points.length} point(s)…`);
 
       if (!points.length) {
+        exploreMapLog('points.length is 0 — showing "no mappable bakeries" message, nothing to plot');
         el.insertAdjacentHTML('beforeend', `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:400;"><div style="background:rgba(250,246,240,0.92);border-radius:8px;padding:12px 20px;font-size:0.82rem;color:var(--text-muted);text-align:center;">📍 No mappable bakeries in this result set</div></div>`);
       }
 
@@ -7555,15 +7589,22 @@ async function renderExploreMap(bakeries) {
           markerLayer.addLayer(marker);
           markersAdded++;
         } catch(markerErr) {
-          console.warn('Could not add marker for', b.name, markerErr);
+          exploreMapLog(`Marker FAILED for "${b.name}": ${markerErr.message || markerErr}`);
         }
       });
+      exploreMapLog(`Marker loop done. ${markersAdded}/${points.length} added successfully.`);
 
       exploreMapInstance.addLayer(markerLayer);
+      exploreMapLog('markerLayer added to map');
 
       if (points.length) {
         const group = L.featureGroup(points.map(b => L.marker([b.lat, b.lng])));
-        try { exploreMapInstance.fitBounds(group.getBounds().pad(0.3), { maxZoom: 14 }); } catch(e) {}
+        try {
+          exploreMapInstance.fitBounds(group.getBounds().pad(0.3), { maxZoom: 14 });
+          exploreMapLog('fitBounds OK');
+        } catch(fbErr) {
+          exploreMapLog(`fitBounds THREW: ${fbErr.message || fbErr}`);
+        }
       }
 
       // Leaflet measures its container's pixel size at the moment it initialises.
@@ -7591,7 +7632,9 @@ async function renderExploreMap(bakeries) {
       if (markersAdded === 0 && points.length > 0) {
         el.insertAdjacentHTML('beforeend', `<div style="position:absolute;top:8px;left:8px;right:8px;z-index:600;background:#c0392b;color:white;border-radius:8px;padding:10px 14px;font-size:0.78rem;">⚠️ Found ${points.length} location${points.length!==1?'s':''} but couldn't place any pins — please screenshot this and let Ed know.</div>`);
       }
+      exploreMapLog('setupMap() completed successfully ✅');
     } catch(fatalErr) {
+      exploreMapLog(`FATAL error in setupMap: ${fatalErr.message || fatalErr}`);
       console.error('Explore map failed to render:', fatalErr);
       if (loader) loader.style.display = 'none';
       el.insertAdjacentHTML('beforeend', `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--parchment);z-index:600;padding:20px;text-align:center;"><div><div style="font-size:1.5rem;margin-bottom:8px;">⚠️</div><div style="font-size:0.85rem;color:var(--text-body);margin-bottom:6px;font-weight:600;">Map couldn't load</div><div style="font-size:0.72rem;color:var(--text-muted);word-break:break-word;">${(fatalErr && fatalErr.message) || 'Unknown error'}</div></div></div>`);
@@ -7599,27 +7642,32 @@ async function renderExploreMap(bakeries) {
   }
 
   if (window.L?.markerClusterGroup) {
+    exploreMapLog('Branch: L + markerClusterGroup already loaded — calling setupMap() directly');
     setupMap();
   } else if (window.L) {
+    exploreMapLog('Branch: L loaded, markerClusterGroup missing — loading cluster plugin script…');
     const s = document.createElement('script');
     s.src = 'https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js';
-    s.onload = setupMap;
+    s.onload = () => { exploreMapLog('Cluster plugin script onload fired'); setupMap(); };
     s.onerror = () => {
-      console.warn('Marker cluster plugin failed to load — rendering without clustering');
+      exploreMapLog('Cluster plugin script onerror fired (failed to load from CDN)');
       setupMap(); // still try — the fallback inside setupMap handles a missing plugin
     };
     document.head.appendChild(s);
   } else {
+    exploreMapLog('Branch: Leaflet not loaded at all — loading leaflet.js then cluster plugin…');
     const s1 = document.createElement('script');
     s1.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
     s1.onload = () => {
+      exploreMapLog('leaflet.js onload fired');
       const s2 = document.createElement('script');
       s2.src = 'https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js';
-      s2.onload = setupMap;
-      s2.onerror = () => { console.warn('Marker cluster plugin failed to load'); setupMap(); };
+      s2.onload = () => { exploreMapLog('Cluster plugin script onload fired'); setupMap(); };
+      s2.onerror = () => { exploreMapLog('Cluster plugin script onerror fired'); setupMap(); };
       document.head.appendChild(s2);
     };
     s1.onerror = () => {
+      exploreMapLog('leaflet.js onerror fired — CORE LIBRARY FAILED TO LOAD');
       if (loader) loader.style.display = 'none';
       el.insertAdjacentHTML('beforeend', `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--parchment);z-index:600;padding:20px;text-align:center;"><div><div style="font-size:1.5rem;margin-bottom:8px;">⚠️</div><div style="font-size:0.85rem;color:var(--text-body);font-weight:600;">Couldn't load the map library</div><div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;">Check your connection and try again</div></div></div>`);
     };
