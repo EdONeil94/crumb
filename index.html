@@ -3289,7 +3289,29 @@ nav::before {
       </div>
     </div>
 
+    <!-- List / Map view toggle -->
+    <div style="display:flex; gap:6px; margin-bottom:16px;">
+      <button class="bakery-view-btn active" id="exploreViewListBtn" onclick="setExploreViewMode('list')">📋 List</button>
+      <button class="bakery-view-btn" id="exploreViewMapBtn" onclick="setExploreViewMode('map')">🗺️ Map</button>
+    </div>
+
     <div id="exploreBakeryList" style="display:flex; flex-direction:column; gap:16px;"></div>
+
+    <div id="exploreMapWrap" style="display:none;">
+      <div id="exploreMapEl" style="height:420px; width:100%; border-radius:var(--radius); overflow:hidden; background:var(--parchment-dark); position:relative;">
+        <div id="exploreMapLoading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--parchment);z-index:500;font-size:0.82rem;color:var(--text-muted);">
+          <div style="text-align:center;"><div class="spinner" style="margin:0 auto 8px;"></div>Loading map…</div>
+        </div>
+      </div>
+      <div style="display:flex; gap:14px; margin-top:10px; flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:6px;font-size:0.75rem;color:var(--text-muted);">
+          <div style="width:14px;height:14px;border-radius:50%;background:#2c1810;border:2px solid #d4a574;"></div> Reviewed on Crumbz
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:0.75rem;color:var(--text-muted);">
+          <div style="width:14px;height:14px;border-radius:50%;background:#8a8a8a;border:2px solid #cfcfcf;"></div> Google only — not yet reviewed
+        </div>
+      </div>
+    </div>
   </div>
 
 </div>
@@ -7397,6 +7419,123 @@ let exploreNearbyActive = false;
 let exploreNearbyRadiusMiles = 5;
 let exploreNearbyCoords = null;
 
+// ─── EXPLORE: MAP VIEW ─────────────────────────────────────────────────────────
+let exploreViewMode = 'list';
+let exploreLastResults = [];
+let exploreMapInstance = null;
+
+function setExploreViewMode(mode) {
+  exploreViewMode = mode;
+  document.getElementById('exploreViewListBtn').classList.toggle('active', mode === 'list');
+  document.getElementById('exploreViewMapBtn').classList.toggle('active', mode === 'map');
+  document.getElementById('exploreBakeryList').style.display = mode === 'list' ? 'flex' : 'none';
+  document.getElementById('exploreMapWrap').style.display = mode === 'map' ? 'block' : 'none';
+  if (mode === 'map') renderExploreMap(exploreLastResults);
+}
+
+async function renderExploreMap(bakeries) {
+  const el = document.getElementById('exploreMapEl');
+  const loader = document.getElementById('exploreMapLoading');
+  if (!el) return;
+  if (loader) loader.style.display = 'flex';
+
+  // Only plot bakeries we actually have coordinates for
+  const points = bakeries.filter(b => b.lat && b.lng);
+
+  function setupMap() {
+    if (loader) loader.style.display = 'none';
+    if (exploreMapInstance) { exploreMapInstance.remove(); exploreMapInstance = null; }
+
+    const L = window.L;
+    exploreMapInstance = L.map('exploreMapEl', { center: [54, -1], zoom: 6, zoomControl: true, scrollWheelZoom: false });
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      attribution: '© OpenStreetMap © CARTO', subdomains: 'abcd', maxZoom: 19
+    }).addTo(exploreMapInstance);
+
+    // Same visual language as the profile "My Map" — espresso/honey SVG circles,
+    // with Google-only (not yet reviewed) bakeries shown in a muted grey instead.
+    function makeIcon(label, isCrumb) {
+      const fill = isCrumb ? '#2c1810' : '#8a8a8a';
+      const stroke = isCrumb ? '#d4a574' : '#cfcfcf';
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34">
+        <circle cx="17" cy="17" r="15" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+        <text x="17" y="21" font-family="sans-serif" font-size="9" font-weight="700" fill="${stroke}" text-anchor="middle">${label}</text>
+      </svg>`;
+      return L.divIcon({ html: svg, className: '', iconSize: [34, 34], iconAnchor: [17, 17] });
+    }
+
+    const clusters = L.markerClusterGroup({
+      maxClusterRadius: 60,
+      iconCreateFunction: cluster => {
+        const n = cluster.getChildCount();
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="38" height="38" viewBox="0 0 38 38">
+          <circle cx="19" cy="19" r="17" fill="#2c1810" stroke="#d4a574" stroke-width="2"/>
+          <text x="19" y="23" font-family="sans-serif" font-size="10" font-weight="700" fill="#d4a574" text-anchor="middle">${n}🥐</text>
+        </svg>`;
+        return L.divIcon({ html: svg, className: '', iconSize: [38, 38], iconAnchor: [19, 19] });
+      }
+    });
+
+    if (!points.length) {
+      el.insertAdjacentHTML('beforeend', `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:400;"><div style="background:rgba(250,246,240,0.92);border-radius:8px;padding:12px 20px;font-size:0.82rem;color:var(--text-muted);text-align:center;">📍 No mappable bakeries in this result set</div></div>`);
+    }
+
+    points.forEach(b => {
+      const isCrumb = b.source === 'crumb';
+      const scoreLabel = isCrumb ? (b.communityAvg || 0).toFixed(1) : (b.googleRating || '–');
+      const marker = L.marker([b.lat, b.lng], { icon: makeIcon(scoreLabel, isCrumb) });
+
+      const actionHtml = isCrumb
+        ? `<button onclick="closeExplorePopupAnd(()=>openBakeryProfile('${escJS(b.name)}'))" style="margin-top:6px;background:#2c1810;color:#d4a574;border:none;border-radius:100px;padding:5px 12px;font-size:0.75rem;font-weight:600;cursor:pointer;">View →</button>`
+        : `<button onclick="closeExplorePopupAnd(()=>openAddModalForBakery('${escJS(b.name)}','${escJS(b.address||'')}','${b.placeId||''}','${b.lat||''}','${b.lng||''}'))" style="margin-top:6px;background:#2c1810;color:#d4a574;border:none;border-radius:100px;padding:5px 12px;font-size:0.75rem;font-weight:600;cursor:pointer;">+ Be first to review</button>`;
+
+      marker.bindPopup(`
+        <div style="font-family:sans-serif;min-width:160px;">
+          <div style="font-weight:700;font-size:0.88rem;margin-bottom:3px;">${b.name}</div>
+          <div style="font-size:0.74rem;color:#888;margin-bottom:4px;">${b.address || ''}</div>
+          <div style="font-size:0.8rem;">${isCrumb ? `<strong>${b.reviewCount || 1}</strong> review${(b.reviewCount||1) !== 1 ? 's' : ''} &nbsp;·&nbsp; <strong style="color:#2c1810;">⭐ ${scoreLabel}</strong>` : `<strong style="color:#2c1810;">★ ${scoreLabel} Google</strong>${b.googleReviews ? ` &nbsp;·&nbsp; ${b.googleReviews.toLocaleString()} reviews` : ''}`}</div>
+          ${actionHtml}
+        </div>`, { maxWidth: 220 });
+      clusters.addLayer(marker);
+    });
+
+    exploreMapInstance.addLayer(clusters);
+
+    if (points.length) {
+      const group = L.featureGroup(points.map(b => L.marker([b.lat, b.lng])));
+      try { exploreMapInstance.fitBounds(group.getBounds().pad(0.3), { maxZoom: 14 }); } catch(e) {}
+    }
+  }
+
+  if (window.L?.markerClusterGroup) {
+    setupMap();
+  } else if (window.L) {
+    const s = document.createElement('script');
+    s.src = 'https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js';
+    s.onload = setupMap;
+    document.head.appendChild(s);
+  } else {
+    const s1 = document.createElement('script');
+    s1.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    s1.onload = () => {
+      const s2 = document.createElement('script');
+      s2.src = 'https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js';
+      s2.onload = setupMap;
+      document.head.appendChild(s2);
+    };
+    document.head.appendChild(s1);
+  }
+}
+
+// Leaflet popups render inside iframe-free DOM but outside Explore's own
+// click-handling context, so route "view" / "review" taps back through a
+// small helper that closes the popup first for a clean transition.
+function closeExplorePopupAnd(fn) {
+  if (exploreMapInstance) exploreMapInstance.closePopup();
+  fn();
+}
+
 // ─── EXPLORE: NEARBY MODE (radius-based, not tied to any city) ────────────────
 function toggleExploreNearby() {
   exploreNearbyActive = !exploreNearbyActive;
@@ -7811,6 +7950,8 @@ function renderExploreResults(city, crumbBakeries, googleResults, isNearby) {
     list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🏪</div><div class="empty-state-title">No bakeries found ${isNearby ? 'within this radius' : 'yet'}</div><div class="empty-state-text">Be the first to review a bakery in ${city.name} on Crumbz!${nearbyHint}</div></div>`;
     const countEl = document.getElementById('exploreResultCount');
     if (countEl) countEl.textContent = '';
+    exploreLastResults = [];
+    if (exploreViewMode === 'map') renderExploreMap([]);
     return;
   }
 
@@ -7820,6 +7961,11 @@ function renderExploreResults(city, crumbBakeries, googleResults, isNearby) {
       ? `${combined.length} bakeries found within this radius`
       : '';
   }
+
+  // Stash the latest result set so the Map view (and re-toggling into it) can
+  // use it without needing to re-fetch anything.
+  exploreLastResults = combined;
+  if (exploreViewMode === 'map') renderExploreMap(combined);
 
   list.innerHTML = combined.slice(0, 20).map((b, i) => {
     const rank = i + 1;
