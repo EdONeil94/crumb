@@ -7530,7 +7530,7 @@ async function renderExploreMap(bakeries) {
       if (exploreMapInstance) { exploreMapInstance.remove(); exploreMapInstance = null; }
 
       const L = window.L;
-      exploreMapInstance = L.map('exploreMapEl', { center: [54, -1], zoom: 6, zoomControl: true, scrollWheelZoom: false, tap: true, touchZoom: true, dragging: true });
+      exploreMapInstance = L.map('exploreMapEl', { center: [54, -1], zoom: 6, zoomControl: true, scrollWheelZoom: false, tap: true, touchZoom: true, dragging: true, preferCanvas: true });
       exploreMapLog('L.map() created OK');
 
       L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
