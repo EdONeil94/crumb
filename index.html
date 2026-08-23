@@ -2586,25 +2586,6 @@ nav::before {
   .torn { overflow: hidden; }
 }
 
-
-/* Explore map marker labels — permanent tooltips on native circleMarkers,
-   stripped of Leaflet's default tooltip bubble/border/arrow so they just
-   read as plain centered text sitting on top of the circle. */
-.explore-marker-label {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  padding: 0 !important;
-  font-family: sans-serif;
-  font-size: 9px;
-  font-weight: 700;
-  text-align: center;
-  pointer-events: none;
-}
-.explore-marker-label::before { display: none !important; }
-.explore-marker-label-crumb { color: #d4a574; }
-.explore-marker-label-google { color: #cfcfcf; }
-
 </style>
 </head>
 
@@ -6627,13 +6608,25 @@ async function saveReview() {
       ...dimData
     };
 
-    await addDoc(collection(db, 'items'), review);
+    const reviewRef = await addDoc(collection(db, 'items'), review);
+    // Update local state immediately rather than waiting on a fresh network
+    // fetch — getDocs() right after a write can occasionally race with the
+    // write itself and momentarily miss it, which is exactly what caused
+    // counters to sometimes need a manual pull-to-refresh to catch up.
+    allItems.unshift({ id: reviewRef.id, ...review, createdAt: new Date() });
+    updateStats();
+    renderRecentGrid();
+
     nextBtn.disabled = false;
     closeAddModal();
     showToast('🥐 Review saved!');
-    await loadData();
-    await loadItemRecords();
-    renderLeaderboard(lbCurrentTab);
+
+    // Reconcile with the server in the background — this fills in anything
+    // the optimistic update above doesn't cover (itemRecords aggregates,
+    // leaderboard, etc.) without blocking the UI or requiring the user to
+    // do anything themselves.
+    loadData();
+    loadItemRecords().then(() => renderLeaderboard(lbCurrentTab));
   } catch (err) {
     showToast('Error saving — check your config');
     console.error(err);
@@ -7530,7 +7523,7 @@ async function renderExploreMap(bakeries) {
       if (exploreMapInstance) { exploreMapInstance.remove(); exploreMapInstance = null; }
 
       const L = window.L;
-      exploreMapInstance = L.map('exploreMapEl', { center: [54, -1], zoom: 6, zoomControl: true, scrollWheelZoom: false, tap: true, touchZoom: true, dragging: true, preferCanvas: true });
+      exploreMapInstance = L.map('exploreMapEl', { center: [54, -1], zoom: 6, zoomControl: true, scrollWheelZoom: false, tap: true, touchZoom: true, dragging: true });
       exploreMapLog('L.map() created OK');
 
       L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
@@ -7538,15 +7531,23 @@ async function renderExploreMap(bakeries) {
       }).addTo(exploreMapInstance);
       exploreMapLog('Tile layer added OK');
 
-      // Custom SVG-in-divIcon markers can silently fail to paint on iOS Safari
-      // even though they're created correctly in Leaflet's internal state (a
-      // known WebKit rendering quirk with transformed custom HTML overlays).
-      // L.circleMarker is rendered through Leaflet's own core SVG engine —
-      // the same well-tested path used for polylines/polygons — which is far
-      // more reliable cross-browser than a custom divIcon. The score label is
-      // added as a permanent tooltip rather than baked into the icon itself.
+      // Two earlier approaches both failed: inline SVG in a divIcon silently
+      // failed to paint on iOS Safari (no error, just invisible), and
+      // circleMarker + a permanent Leaflet tooltip threw a hard "appendChild"
+      // crash on EVERY browser including desktop (confirmed — this was never
+      // iOS-specific, it was a genuine bug in that combination). Plain HTML/CSS
+      // inside a divIcon — no SVG, no Leaflet tooltip system — sidesteps both:
+      // it's just a styled <div> with text in it, the most basic possible
+      // rendering path.
+      function makeIcon(label, isCrumb) {
+        const fill = isCrumb ? '#2c1810' : '#8a8a8a';
+        const stroke = isCrumb ? '#d4a574' : '#cfcfcf';
+        const html = `<div style="width:30px;height:30px;border-radius:50%;background:${fill};border:2px solid ${stroke};display:flex;align-items:center;justify-content:center;font-family:sans-serif;font-size:9px;font-weight:700;color:${stroke};box-sizing:border-box;">${label}</div>`;
+        return L.divIcon({ html, className: '', iconSize: [30, 30], iconAnchor: [15, 15] });
+      }
+
       const markerLayer = L.layerGroup();
-      exploreMapLog(`Using native circleMarker rendering. About to add ${points.length} point(s)…`);
+      exploreMapLog(`Using plain HTML divIcon rendering. About to add ${points.length} point(s)…`);
 
       if (!points.length) {
         exploreMapLog('points.length is 0 — showing "no mappable bakeries" message, nothing to plot');
@@ -7558,23 +7559,8 @@ async function renderExploreMap(bakeries) {
         try {
           const isCrumb = b.source === 'crumb';
           const scoreLabel = isCrumb ? (b.communityAvg || 0).toFixed(1) : (b.googleRating || '–');
-          const fill = isCrumb ? '#2c1810' : '#8a8a8a';
-          const stroke = isCrumb ? '#d4a574' : '#cfcfcf';
 
-          const marker = L.circleMarker([b.lat, b.lng], {
-            radius: 15,
-            fillColor: fill,
-            fillOpacity: 1,
-            color: stroke,
-            weight: 2
-          });
-
-          marker.bindTooltip(scoreLabel, {
-            permanent: true,
-            direction: 'center',
-            className: isCrumb ? 'explore-marker-label explore-marker-label-crumb' : 'explore-marker-label explore-marker-label-google',
-            interactive: false
-          });
+          const marker = L.marker([b.lat, b.lng], { icon: makeIcon(scoreLabel, isCrumb) });
 
           const cardOnclick = isCrumb
             ? `closeExplorePopupAnd(()=>openBakeryProfile('${escJS(b.name)}'))`
