@@ -31,19 +31,55 @@
 // substitute for judgement, just a fast first pass before each pass.
 //
 // Usage: node scripts/check-dead-refs.js [path-to-file...]
-// Defaults to src/legacy-app.js. Exits non-zero if anything is flagged, so it
-// can be wired into a pre-commit hook or CI step if desired.
+// Defaults to index.html + every .js file under src/ (walked recursively —
+// see collectDefaultTargets) — extended 2026-08-24 from its original
+// src/legacy-app.js-only default specifically because that default was a
+// confirmed blind spot during the pages/components carving: a data-onclick
+// in index.html (or, going forward, in any src/pages/*.js or
+// src/components/*.js file) with no matching registerActions() entry
+// passed clean, since the checker never saw it. Exits non-zero if anything
+// is flagged, so it can be wired into a pre-commit hook or CI step if
+// desired.
+//
+// Cross-file note: registerActions() names are collected GLOBALLY across
+// every .js target before any file is checked (see collectKnownCallableNames
+// vs. the registeredActions set in main()) — necessary once more than one
+// file can call registerActions() (previously only src/legacy-app.js did,
+// so per-file == global and this made no difference). Dead-statement-call
+// and bare-variable checks stay correctly per-file, since imports and
+// module-scope bindings are genuinely local to whichever file declares them.
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
 
+// Recursively collects every .js file under `dir` (relative to repoRoot),
+// returned as repo-relative paths. No glob dependency — keeps this script's
+// zero-new-dependencies design intact.
+function walkJsFiles(dir) {
+  const abs = path.resolve(repoRoot, dir);
+  const out = [];
+  for (const entry of readdirSync(abs, { withFileTypes: true })) {
+    const relPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      out.push(...walkJsFiles(relPath));
+    } else if (entry.isFile() && entry.name.endsWith('.js')) {
+      out.push(relPath);
+    }
+  }
+  return out;
+}
+
+function collectDefaultTargets() {
+  return ['index.html', ...walkJsFiles('src')];
+}
+
 const targets = process.argv.slice(2).length
   ? process.argv.slice(2)
-  : ['src/legacy-app.js'];
+  : collectDefaultTargets();
 
 const KEYWORDS = new Set([
   'if', 'for', 'while', 'switch', 'catch', 'function', 'return', 'typeof',
@@ -88,13 +124,19 @@ function stripLineComments(src) {
 // `const { db, doc, getDoc } = fb;`, repeated with different subsets in
 // almost every function) are collected too — they're real local bindings,
 // just not top-level ones, and treating them as "known" is far safer than
-// re-flagging every single one as a false positive.
+// re-flagging every single one as a false positive. Also covers a dynamic-
+// dispatch idiom found in src/events/delegate.js once that file started
+// being scanned too (`const fn = getAction(name); ... fn(...args, el);`) —
+// a local var initialized from a call expression is never the "renamed and
+// forgot to update call sites" bug this checker targets, since declaration
+// and usage are always co-located in the same function scope.
 function collectKnownCallableNames(src) {
   const names = new Set();
   const patterns = [
     /^\s*(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/gm,
     /^\s*(?:export\s+)?(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\(/gm,
     /^\s*(?:export\s+)?(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?[A-Za-z_$][\w$]*\s*=>/gm,
+    /^\s*(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:await\s+)?[A-Za-z_$][\w$.]*\([^)]*\)\s*;?\s*$/gm,
   ];
   for (const re of patterns) {
     for (const m of src.matchAll(re)) names.add(m[1]);
@@ -117,7 +159,12 @@ function collectKnownCallableNames(src) {
 function collectTopLevelVariables(src) {
   const names = new Set();
   for (const line of src.split('\n')) {
-    const m = line.match(/^(let|const|var)\s+([A-Za-z_$][\w$]*)\s*(=|;)/);
+    // `export ` doesn't change window-visibility — only whether other ES
+    // modules can import the binding — so an exported `let`/`const`/`var`
+    // is exactly as invisible to a raw handler as an unexported one. Missing
+    // this prefix meant every single export in src/state/appState.js (all
+    // declared `export let ...`) was invisible to this check entirely.
+    const m = line.match(/^(?:export\s+)?(let|const|var)\s+([A-Za-z_$][\w$]*)\s*(=|;)/);
     if (m) names.add(m[2]);
   }
   return names;
@@ -159,10 +206,13 @@ function collectDelegatedActionUsages(src) {
   return usages;
 }
 
-function checkDeadDelegatedActions(src) {
-  const registered = collectRegisteredActionNames(src);
+// `registeredActions` is the GLOBAL set collected across every .js target
+// (see main()) — not just this file's own registerActions() calls. Needed
+// once more than one file can register actions; see the module header
+// comment.
+function checkDeadDelegatedActions(src, registeredActions) {
   const usages = collectDelegatedActionUsages(src);
-  return usages.filter(u => !registered.has(u.name));
+  return usages.filter(u => !registeredActions.has(u.name));
 }
 
 // Narrow, line-anchored heuristic: only matches a call that IS the entire
@@ -189,6 +239,14 @@ function checkDeadStatementCalls(src, knownNames) {
   return findings;
 }
 
+// `topLevelVars` is the GLOBAL set collected across every .js target (see
+// main()) — not just this file's own top-level bindings. A raw handler's
+// bare-variable bug is inherently about window-exposure, which is a
+// cross-file question: since state now lives in src/state/appState.js
+// rather than solely in src/legacy-app.js, a raw handler anywhere
+// referencing e.g. `currentUser` needs checking against appState.js's
+// top-level vars too, not just whichever file happens to contain the
+// handler itself.
 function checkBareVariablesInRawHandlers(src, topLevelVars) {
   const findings = [];
   const attrRe = / on(click|change|input)="((?:[^"\\]|\\.)*)"/g;
@@ -257,15 +315,30 @@ function extractBraceBody(src, openBraceIdx) {
 function main() {
   let exitCode = 0;
 
+  // Pass 1: read every target once, and build the two GLOBAL sets
+  // (registered actions, top-level vars) that checkDeadDelegatedActions and
+  // checkBareVariablesInRawHandlers need — see their own comments for why
+  // these must be cross-file rather than per-target. Sources are cached so
+  // pass 2 doesn't re-read/re-strip anything.
+  const sourcesByTarget = new Map();
+  const registeredActions = new Set();
+  const topLevelVars = new Set();
   for (const target of targets) {
     const abs = path.resolve(repoRoot, target);
     const raw = readFileSync(abs, 'utf8');
     const src = stripLineComments(raw);
+    sourcesByTarget.set(target, src);
+    for (const name of collectRegisteredActionNames(src)) registeredActions.add(name);
+    for (const name of collectTopLevelVariables(src)) topLevelVars.add(name);
+  }
 
+  // Pass 2: check each target against the global sets above, plus its own
+  // local knownNames (imports/local declarations — genuinely per-file).
+  for (const target of targets) {
+    const src = sourcesByTarget.get(target);
     const knownNames = collectKnownCallableNames(src);
-    const topLevelVars = collectTopLevelVariables(src);
 
-    const deadActions = checkDeadDelegatedActions(src);
+    const deadActions = checkDeadDelegatedActions(src, registeredActions);
     const deadStatementCalls = checkDeadStatementCalls(src, knownNames);
     const bareVars = checkBareVariablesInRawHandlers(src, topLevelVars);
     const unusedParams = checkUnusedParams(src);
