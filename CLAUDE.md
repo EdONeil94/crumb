@@ -167,10 +167,44 @@ parser — cheap and low-false-positive, not a substitute for judgement).
   delegation — don't try to fix it while converting that cluster, just
   don't let it block the conversion or get misread as something the
   migration broke.
-- **"Test Croissant"** seeded test data in the live Firebase project still
-  needs manual deletion. Not `E2E_`/`E2E `-prefixed, so
-  `tests/cleanup.teardown.js` won't touch it — this is separate from the
-  Playwright suite's own test-data lifecycle.
+- **Bakeries page data-loading race** (`src/legacy-app.js`): `loadData()`
+  (populates `allItems`, the only thing `renderBakeries()` reads via
+  `buildBakeryIndex()`) runs async and unawaited from `onAuthStateChanged`
+  — `#navAvatar` becoming visible only means auth resolved, not that this
+  fetch finished. `renderBakeries()` itself runs exactly once, synchronously
+  on nav click, and nothing re-renders it once `loadData()` completes
+  later — so navigating to Bakeries fast enough to beat that fetch shows a
+  *permanent* "No bakeries found" empty state, not a slow-then-populated
+  one, until the page is reloaded or re-navigated to. Found via
+  `tests/utils/preorders.js`'s `openFirstBakeryProfile` hitting this
+  reliably enough in automated runs (which click through the UI far faster
+  than any human) to need a workaround there (wait for `#recentGrid .card`
+  — `loadData()`'s first synchronous side effect — before ever clicking
+  into Bakeries). A real robustness gap, worth fixing in the app itself
+  eventually (e.g. `loadData()` re-rendering whichever page is currently
+  active, or `showPage('bakeries')` awaiting a data-ready signal) — but
+  unrelated to handler delegation, so not touched here.
+- **Manual Firestore cleanup still needed** in the live project (`crumb-ddeb6`)
+  — two separate items, neither touched by `tests/cleanup.teardown.js`:
+  - **"Test Croissant"** seeded test data. Not `E2E_`/`E2E `-prefixed, so
+    outside the teardown script's scope entirely.
+  - **8 orphaned `items` docs (+ their `itemRecords`)**, confirmed via a
+    one-off signed-in script against the live project on 2026-08-24 (not
+    caught by `npm run test:e2e`'s own teardown, since `items`/`itemRecords`
+    were never in its scope — see `tests/utils/reviews.js`'s module
+    comment). Leftover from *earlier* debugging runs this same session,
+    where a test failed before reaching its own `deleteReview()` step, back
+    when those tests still had bugs (now fixed — a clean run self-cleans
+    these correctly). Harmless (each is a single throwaway review + its
+    1:1 itemRecord, no Storage photos attached), just needs a delete pass:
+    items `3oukHDHwNbout4AE71Hs`/`T6fme6I6VKEzxoZyUu4D`/`XZpGu1g3xzulRIqup0qb`/
+    `XReVQqqln5cfSChcV9Ij`/`uu5N12dS5cMxRfvgFZY9`/`rpf58hEnW3lNc7S4KNtG`/
+    `lBxvYkuoWzW4S41Nkkvq`/`U4usowrGynWZF7o48x9c` (names all start with
+    `E2E Edit Sliders`/`E2E Share`/`E2E Share Wiring`), each with a matching
+    `itemRecords` doc of the same id-relationship (check `item.itemRecordId`
+    per doc — don't assume without checking, per `deleteReview()`'s own
+    logic, in case a future session's runs left more than one review
+    sharing a record).
 
 ## E2E tests (Playwright)
 
