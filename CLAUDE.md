@@ -10,9 +10,9 @@ its own section below), and the **E2E test workflow** — all done on
 
 ## Carving src/legacy-app.js into src/pages/ and src/components/
 
-**Status as of 2026-08-24: Phases 0, 1, and 2 all complete** (steps 1-11
-of 32). Phase 3 (`reviewCard.js`, `feed.js`, `follows.js`, `people.js`,
-`reservations.js`) not started.
+**Status as of 2026-08-24: Phases 0, 1, and 2 all complete, Phase 3 under
+way** (step 12 of 32 done — `reviewCard.js`). Phase 3's remaining 4 steps
+(`feed.js`, `follows.js`, `people.js`, `reservations.js`) not started.
 This is separate from — and comes after — the handler delegation migration
 above; don't conflate the two milestones. Plan approved 2026-08-24 (was
 drafted as a plan-mode file at `~/.claude/plans/logical-painting-kurzweil.md`,
@@ -138,7 +138,9 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   **closes out Phase 2** — genuinely clean despite several external
   callers, a true leaf module (first page extraction)
 - **Phase 3 — medium, cohesive, good coverage:**
-  12. `src/components/reviewCard.js` · 13. `src/pages/feed.js` ·
+  12. `src/components/reviewCard.js` — ✅ **done** (2026-08-24, commit
+  `502e057`) — split, not clean: `openProfileIfSignedIn` deferred, see its
+  own extraction-log entry below · 13. `src/pages/feed.js` ·
   14. `src/components/follows.js` · 15. `src/pages/people.js` (best-covered
   page in the app) · 16. `src/components/reservations.js`
 - **Phase 4 — large but well-tested (the "does this scale" milestone):**
@@ -274,6 +276,44 @@ boundaries — commits happen at the module/stage level throughout.
 
 ### Extraction log (most recent first)
 
+- **`src/components/reviewCard.js` — step 12** (2026-08-24, commit `502e057`).
+  **Opens Phase 3.** Split, not clean — flagged and confirmed *before*
+  writing any code this time (the pattern from step 10 onward): moved the
+  2 genuinely self-contained functions, `cardHTML` (Home page's
+  `renderRecentGrid`, itself still in `legacy-app.js` — Phase 7 step 28)
+  and `feedCardHTML` (Feed page's `renderFeed`, still in `legacy-app.js` —
+  Phase 3 step 13), plus their shared `noop` no-op action. Every one of
+  their dependencies (`getCategoryDisplay`, `allItems`/`allItemRecords`,
+  `timeAgo`, `dataArgs`) was already extracted in Phase 0 — no surprises
+  there. `openProfileIfSignedIn` — registered alongside `noop` in the
+  *same original* `registerActions()` call, and referenced by both
+  `cardHTML`'s and `feedCardHTML`'s markup — stayed behind: it calls
+  `openProfileModal`, still in `legacy-app.js` (future
+  `src/components/profileModal.js`, Phase 5 step 22). Moving it would have
+  meant `reviewCard.js` importing back from `legacy-app.js` for
+  `openProfileModal`, while `legacy-app.js` already needs `cardHTML`/
+  `feedCardHTML` imported the normal one-way direction from
+  `reviewCard.js` — a genuine two-file cycle, same shape as `qrCode.js`'s
+  `confirmCollected`/`closeQrConfirmOverlay` deferral (step 10). The
+  global `registerActions()` registry means `openProfileIfSignedIn`
+  staying registered from `legacy-app.js` doesn't break the
+  `data-onclick="openProfileIfSignedIn"` references sitting inside the
+  now-moved markup. Also corrected, while here: an earlier assumption in
+  this session that `cardHTML` was reused across several not-yet-extracted
+  pages (Bakeries/Leaderboard/People) turned out to be wrong — a full-file
+  grep found exactly one call site each for `cardHTML` and `feedCardHTML`
+  (`renderRecentGrid`/`renderFeed` respectively); the plan's naming this a
+  shared "review card" component anyway is about avoiding duplicated
+  rendering logic once Home/Feed both exist as separate files, not about
+  current fan-in. `cardHTML`/`feedCardHTML` both had stale `WINDOW
+  EXPORTS` entries — removed, same class of finding as every step so far.
+  Ran a targeted Playwright smoke check first (Home page load, checked for
+  console/page errors) but it couldn't get past a signed-out session's
+  differently-labeled nav — abandoned in favor of going straight to the
+  full suite, which is the real gate regardless. Verified: `check:dead-refs`
+  clean, `npm run build` succeeds (41 modules), full `test:e2e` 60
+  passed/11 skipped/0 failed, including `feed.spec.js` (exercises
+  `feedCardHTML` directly).
 - **`src/pages/shop.js` — step 11** (2026-08-24, commit `163abf4`).
   **Closes out Phase 2.** First page extraction — genuinely clean and
   moved wholesale despite `allProducts` and 4 of these 7 functions
@@ -994,7 +1034,7 @@ registered-action/top-level-variable sets, not just `legacy-app.js` in
 isolation.
 
 **Second, different blind spot found in practice (`editReviewModal.js`,
-Phase 2 step 9 of the carving plan, 2026-08-24) — fixed 2026-08-25, before
+Phase 2 step 9 of the carving plan, 2026-08-24) — fixed 2026-08-24, before
 Phase 3 started.** `checkDeadStatementCalls` only recognizes a dead
 reference when it's the *entire* line as a standalone `name(args);` call —
 it did **not** check bare identifiers used as object-shorthand properties
