@@ -2,8 +2,58 @@
 
 See `README.md` for the phase-1 modularization overview (Vite build, file
 layout, deploy steps). This file covers two things that change often enough
-to need a living doc: the **handler delegation migration** in progress on
-`phase-1-modularize`, and the **E2E test workflow**.
+to need a living doc: the **handler delegation migration** (complete as of
+2026-08-24 — see milestone note below) done on `phase-1-modularize`, and the
+**E2E test workflow**.
+
+## Milestone: handler delegation migration complete (2026-08-24)
+
+Every cluster of raw inline `onclick=`/`onchange=`/`oninput=` handlers that
+was ever in scope for this migration is now converted to the delegated
+`data-onclick`/`data-onchange`/`data-oninput` system. Verified fresh, not
+recalled, on 2026-08-24 after the BAKERY SEARCH cluster (the last one)
+landed and after fixing an unrelated Google Places API key config issue
+that had been blocking its live-network test:
+
+- `npm run check:dead-refs` — clean (no dead references, no dead statement
+  calls, no bare-variable scope leaks).
+- `npm run build` — succeeds.
+- `npm run test:e2e` (full suite, fresh run) — **59 passed, 12 skipped
+  (expected — data-dependent, e.g. no Send candidates / no 2+-bakery
+  location / no bakery with opening hours / no flagged reviews in the
+  target project), 0 failed.**
+- `src/legacy-app.js` — 0 raw handler sites left (every remaining
+  `onclick=`/`onchange=`/`oninput=` match is inside a comment, verified
+  line-by-line).
+- `index.html` — 11 raw handler sites left, all in clusters that were never
+  in scope for this migration: top-level nav's "+ Add"/"Rate a Bake!"
+  triggers (`:73`, `:138`), FEED TABS (`:262`–`:263`), RATING's own
+  overall-rating slider (`:420`), SETTINGS (`:877`, `:881`, `:936`,
+  confirmed by DOM to be inside `#page-settings`), and the admin-only
+  Manage Bakery assignment modal (`:988`, `:1009`, confirmed by DOM to be
+  the modal alongside `closeManageBakeryModal`). One of the 11
+  (`:824`, the user-profile modal's ✏️ edit-profile button — its handler is
+  just `closeProfileModal(); showPage('settings');`) wasn't spelled out
+  verbatim in this list before; it's bucketed under SETTINGS here since its
+  only job is entering that page, the same way the nav's own "+ Add"
+  trigger is bucketed separately from the Add modal it opens — not a gap
+  introduced by this migration, just a site worth naming explicitly rather
+  than leaving implicit.
+
+**Not the same milestone as README.md's "Phase 1."** This migration —
+converting inline handlers to the delegated system — is complete, but
+README's own "What's NOT done yet" section still lists carving
+`src/legacy-app.js` into `src/pages/*.js`/`src/components/*.js` as
+unstarted, separate, larger work. This migration was a necessary precursor
+to that carving (delegated handlers don't need `window[name]` exports, so
+files can split more cleanly), but doing the carving itself hasn't started.
+Don't read "handler delegation migration complete" as "Phase 1 modularization
+complete" — they're different scopes.
+
+Everything in "Known pre-existing issues" below is exactly that — pre-existing
+app-level robustness gaps (a data-loading race, a shared `z-index` on
+modals, some manual Firestore cleanup) explicitly unrelated to and out of
+scope for this migration, not blockers to calling it done.
 
 ## Handler delegation migration
 
