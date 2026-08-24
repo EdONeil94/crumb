@@ -121,3 +121,59 @@ export async function ensureProfileExists(user) {
     });
   } catch(e) { console.warn('ensureProfileExists error:', e); }
 }
+
+// ─── 3c: Social state ───────────────────────────────────────────────────────
+// The cleanest of the three sub-stages: all 5 loaders here are genuinely
+// self-contained (no UI-render calls, no cross-cluster reads), and each of
+// the 4 state variables has exactly one reassignment site — the loader
+// itself, which moves with it — so no setters are needed at all. Functions
+// staying in legacy-app.js that mutate these (toggleFollow/toggleBookmark/
+// toggleSaveItem) only ever mutate by property/Set-method (`.add()`/
+// `.delete()`, `userBookmarks[k] = ...`, `delete userBookmarks[k]`), never
+// reassign wholesale — verified via grep across the whole file.
+
+export let myFollowing = new Set(); // UIDs I follow
+export let myFollowers = new Set(); // UIDs that follow me
+
+export async function loadFollows() {
+  if (!currentUser || !fb) return;
+  const { db, collection, query, where, getDocs } = fb;
+  try {
+    // Who I follow
+    const followingSnap = await getDocs(query(collection(db, 'follows'), where('followerId', '==', currentUser.uid)));
+    myFollowing = new Set(followingSnap.docs.map(d => d.data().followingId));
+    // Who follows me
+    const followersSnap = await getDocs(query(collection(db, 'follows'), where('followingId', '==', currentUser.uid)));
+    myFollowers = new Set(followersSnap.docs.map(d => d.data().followerId));
+  } catch(e) { console.log('Follows load error:', e.message); }
+}
+
+export let userBookmarks = {}; // bakeryName -> { id, address }
+
+export async function loadBookmarks() {
+  if (!currentUser || !fb) return;
+  const { db, collection, query, where, getDocs } = fb;
+  try {
+    const snap = await getDocs(query(collection(db, 'bookmarks'), where('userId', '==', currentUser.uid)));
+    userBookmarks = {};
+    snap.docs.forEach(d => {
+      const data = d.data();
+      userBookmarks[data.bakeryName] = { id: d.id, address: data.address || '' };
+    });
+  } catch(e) { console.warn('Bookmarks load error:', e); }
+}
+
+export let userSavedItems = {}; // itemId -> { docId, name, bakeryName, bakeryAddress, category, photoURL, price }
+
+export async function loadSavedItems() {
+  if (!currentUser || !fb) return;
+  const { db, collection, query, where, getDocs } = fb;
+  try {
+    const snap = await getDocs(query(collection(db, 'savedItems'), where('userId', '==', currentUser.uid)));
+    userSavedItems = {};
+    snap.docs.forEach(d => {
+      const data = d.data();
+      userSavedItems[data.itemId] = { docId: d.id, ...data };
+    });
+  } catch(e) { console.warn('Saved items load error:', e); }
+}

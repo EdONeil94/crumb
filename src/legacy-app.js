@@ -15,6 +15,8 @@ import {
   loadBakeryProfiles, loadAllUserRoles,
   allItems, allBakeries, allProfiles, allItemRecords, setAllItems,
   setAllBakeries, loadItemRecords, ensureProfileExists,
+  myFollowing, myFollowers, loadFollows, userBookmarks, loadBookmarks,
+  userSavedItems, loadSavedItems,
 } from './state/appState.js';
 
 // lockScroll/unlockScroll, showToast, timeAgo, escJS, distKm, extractCity,
@@ -4970,21 +4972,8 @@ async function loadReactionsForItems(itemIds) {
 registerActions({ toggleReaction, toggleReactionPicker, toggleReactionFromPicker });
 
 // ─── FOLLOWS ──────────────────────────────────────────────────────────────────
-let myFollowing = new Set(); // UIDs I follow
-let myFollowers = new Set(); // UIDs that follow me
-
-async function loadFollows() {
-  if (!currentUser || !fb) return;
-  const { db, collection, query, where, getDocs } = fb;
-  try {
-    // Who I follow
-    const followingSnap = await getDocs(query(collection(db, 'follows'), where('followerId', '==', currentUser.uid)));
-    myFollowing = new Set(followingSnap.docs.map(d => d.data().followingId));
-    // Who follows me
-    const followersSnap = await getDocs(query(collection(db, 'follows'), where('followingId', '==', currentUser.uid)));
-    myFollowers = new Set(followersSnap.docs.map(d => d.data().followerId));
-  } catch(e) { console.log('Follows load error:', e.message); }
-}
+// myFollowing/myFollowers/loadFollows moved to src/state/appState.js
+// (2026-08-24, Phase 0 step 3c) — imported above.
 
 async function toggleFollow(targetUid) {
   if (!currentUser || targetUid === currentUser.uid) return;
@@ -5912,20 +5901,8 @@ function renderDmStatRows(rows, subtitle) {
 registerActions({ switchDmTab });
 
 // ─── BOOKMARKS ────────────────────────────────────────────────────────────────
-let userBookmarks = {}; // bakeryName -> { id, address }
-
-async function loadBookmarks() {
-  if (!currentUser || !fb) return;
-  const { db, collection, query, where, getDocs } = fb;
-  try {
-    const snap = await getDocs(query(collection(db, 'bookmarks'), where('userId', '==', currentUser.uid)));
-    userBookmarks = {};
-    snap.docs.forEach(d => {
-      const data = d.data();
-      userBookmarks[data.bakeryName] = { id: d.id, address: data.address || '' };
-    });
-  } catch(e) { console.warn('Bookmarks load error:', e); }
-}
+// userBookmarks/loadBookmarks moved to src/state/appState.js (2026-08-24,
+// Phase 0 step 3c) — imported above.
 
 function isBookmarked(bakeryName) {
   return !!userBookmarks[bakeryName];
@@ -5962,20 +5939,8 @@ async function toggleBookmark(bakeryName, address, btnEl) {
 }
 
 // ─── SAVED ITEMS (want to try) ────────────────────────────────────────────────
-let userSavedItems = {}; // itemId -> { docId, name, bakeryName, bakeryAddress, category, photoURL, price }
-
-async function loadSavedItems() {
-  if (!currentUser || !fb) return;
-  const { db, collection, query, where, getDocs } = fb;
-  try {
-    const snap = await getDocs(query(collection(db, 'savedItems'), where('userId', '==', currentUser.uid)));
-    userSavedItems = {};
-    snap.docs.forEach(d => {
-      const data = d.data();
-      userSavedItems[data.itemId] = { docId: d.id, ...data };
-    });
-  } catch(e) { console.warn('Saved items load error:', e); }
-}
+// userSavedItems/loadSavedItems moved to src/state/appState.js (2026-08-24,
+// Phase 0 step 3c) — imported above.
 
 function isSavedItem(itemId) {
   return !!userSavedItems[itemId];
@@ -9010,14 +8975,11 @@ Object.assign(window, {
   isBookmarked,
   isSavedItem,
   loadBakeryCatalogue,
-  loadBookmarks,
-  loadFollows,
   loadLeafletThenMap,
   loadMyPreorders,
   loadNotifications,
   loadProducts,
   loadReactionsForItems,
-  loadSavedItems,
   mpItemBreakdownHTML,
   openAddModal,
   openAuthModal,
