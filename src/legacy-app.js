@@ -42,6 +42,10 @@ import {
 } from './pages/shop.js';
 import { cardHTML, feedCardHTML } from './components/reviewCard.js';
 import { switchFeedTab, renderFeed } from './pages/feed.js';
+import {
+  getFollowState, followBtnHTML, getFollowersForUser, getFollowingForUser,
+  buildFollowUserRowHTML,
+} from './components/follows.js';
 // Side-effect only — PWA install/update-check/status-bar-fix/pull-to-refresh/
 // keyboard-scroll all self-execute on import, no exports needed here.
 import './app/lifecycle.js';
@@ -4439,24 +4443,11 @@ async function toggleFollow(targetUid) {
   } catch(e) { showToast('Could not update follow'); console.error(e); }
 }
 
-function getFollowState(targetUid) {
-  if (!currentUser || targetUid === currentUser.uid) return 'self';
-  const iFollow = myFollowing.has(targetUid);
-  const theyFollow = myFollowers.has(targetUid);
-  if (iFollow) return 'following';
-  if (theyFollow) return 'follow-back';
-  return 'follow';
-}
-
-function followBtnHTML(targetUid, dark) {
-  const state = getFollowState(targetUid);
-  if (state === 'self') return '';
-  const labels = { follow: 'Follow', 'follow-back': 'Follow back', following: 'Following' };
-  if (dark) {
-    return `<button class="follow-btn ${state}" data-onclick="followAndRefreshProfile" data-args='${dataArgs([targetUid])}'>${labels[state]}</button>`;
-  }
-  return `<button class="people-follow-btn ${state}" data-onclick="followAndRefreshPeople" data-args='${dataArgs([targetUid])}'>${labels[state]}</button>`;
-}
+// getFollowState/followBtnHTML/getFollowersForUser/getFollowingForUser/
+// buildFollowUserRowHTML moved to src/components/follows.js (2026-08-24,
+// Phase 3 step 14) — imported above. toggleFollow/refreshFollowButtons/
+// followAndRefreshProfile/followAndRefreshPeople/refreshOpenProfile stay
+// here — see follows.js's own header comment for why.
 
 // The old onclick="toggleFollow(uid).then(()=>refreshOpenProfile())"/
 // "...then(()=>renderPeople())" chains don't fit the plain "cleanup, then one
@@ -4481,36 +4472,6 @@ function refreshFollowButtons(uid) {
 
 async function refreshOpenProfile() {
   if (profileModalUid) await openProfileModal(profileModalUid, profileActiveCatFilter, profileActiveLocFilter);
-}
-
-async function getFollowersForUser(uid) {
-  const { db, collection, query, where, getDocs } = fb;
-  const snap = await getDocs(query(collection(db, 'follows'), where('followingId', '==', uid)));
-  return snap.docs.map(d => d.data());
-}
-
-async function getFollowingForUser(uid) {
-  const { db, collection, query, where, getDocs } = fb;
-  const snap = await getDocs(query(collection(db, 'follows'), where('followerId', '==', uid)));
-  return snap.docs.map(d => d.data());
-}
-
-function buildFollowUserRowHTML(followUid, followName, followPhoto, isFollowingPage) {
-  const initials = (followName || '?').charAt(0).toUpperCase();
-  const avatarInner = followPhoto ? `<img src="${followPhoto}" alt="${followName}">` : initials;
-  const state = getFollowState(followUid);
-  const btnLabel = state === 'following' ? 'Following' : state === 'follow-back' ? 'Follow back' : 'Follow';
-  const btnClass = state === 'following' ? 'following' : state === 'follow-back' ? 'follow-back' : '';
-  const userReviews = allItems.filter(i => i.userId === followUid).length;
-  return `
-    <div class="follow-user-row">
-      <div class="follow-user-avatar" data-onclick="closeProfileModal,openProfileModal" data-args='${dataArgs([followUid])}'>${avatarInner}</div>
-      <div class="follow-user-info" data-onclick="closeProfileModal,openProfileModal" data-args='${dataArgs([followUid])}'>
-        <div class="follow-user-name">${followName || 'Anonymous'}</div>
-        <div class="follow-user-meta">${userReviews} review${userReviews !== 1 ? 's' : ''}</div>
-      </div>
-      ${state !== 'self' ? `<button class="people-follow-btn ${btnClass}" data-onclick="followAndRefreshProfile" data-args='${dataArgs([followUid])}'>${btnLabel}</button>` : ''}
-    </div>`;
 }
 
 // ─── SHOP ─────────────────────────────────────────────────────────────────────
@@ -7727,7 +7688,6 @@ Object.assign(window, {
   buildBakeryMapHTML,
   buildCategoryChips,
   buildCategoryFilterBar,
-  buildFollowUserRowHTML,
   buildOpeningHoursHTML,
   buildSummary,
   buildTastingDims,
@@ -7743,15 +7703,11 @@ Object.assign(window, {
   fetchGoogleBakeries,
   fetchGoogleBakeriesNearPoint,
   fetchPlaceDetails,
-  followBtnHTML,
   geocodeBakeryAddress,
   geocodeMissingBakeries,
   getCrumbBakeriesNearCity,
   getCrumbBakeriesNearPoint,
   getEditSlotValue,
-  getFollowState,
-  getFollowersForUser,
-  getFollowingForUser,
   getLbFilters,
   getSlotValue,
   getTrendingBakeriesNearCity,
