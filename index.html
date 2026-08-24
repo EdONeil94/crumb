@@ -533,20 +533,20 @@
 
     <!-- Filters row 1: country (locked) + city + nearest -->
     <div style="display:flex; gap:8px; justify-content:center; flex-wrap:nowrap; margin-bottom:8px; max-width:480px; margin-left:auto; margin-right:auto;">
-      <select id="poCountrySelect" class="explore-select" onchange="onPoCountryChange()" style="flex:1; min-width:0;">
+      <select id="poCountrySelect" class="explore-select" data-onchange="onPoCountryChange" style="flex:1; min-width:0;">
         <option value="">🌍 Country</option>
       </select>
-      <select id="poCitySelect" class="explore-select" onchange="onPoCityChange()" style="flex:1.4; min-width:0;">
+      <select id="poCitySelect" class="explore-select" data-onchange="onPoCityChange" style="flex:1.4; min-width:0;">
         <option value="">Select a city</option>
       </select>
-      <button class="explore-select" id="poNearestBtn" onclick="poDetectNearest()" style="cursor:pointer;flex-shrink:0;padding:9px 12px;white-space:nowrap;">📍</button>
+      <button class="explore-select" id="poNearestBtn" data-onclick="poDetectNearest" style="cursor:pointer;flex-shrink:0;padding:9px 12px;white-space:nowrap;">📍</button>
     </div>
     <!-- Filters row 2: bakery + sort -->
     <div style="display:flex; gap:8px; justify-content:center; flex-wrap:nowrap; max-width:480px; margin-left:auto; margin-right:auto;">
-      <select id="poBakeryFilter" class="explore-select" onchange="renderPreorderPage()" style="flex:1; min-width:0;">
+      <select id="poBakeryFilter" class="explore-select" data-onchange="renderPreorderPage" style="flex:1; min-width:0;">
         <option value="">🏪 All bakeries</option>
       </select>
-      <select id="poSortFilter" class="explore-select" onchange="renderPreorderPage()" style="flex:1; min-width:0;">
+      <select id="poSortFilter" class="explore-select" data-onchange="renderPreorderPage" style="flex:1; min-width:0;">
         <option value="slot">🕐 By time</option>
         <option value="bakery">🏪 By bakery</option>
         <option value="price_asc">💰 Price ↑</option>
@@ -801,10 +801,10 @@
         <button class="bakery-view-btn" id="peopleViewMembers" data-onclick="setPeopleView" data-args='["members"]'>👥 Members</button>
       </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap;" id="rankingFilters">
-        <select class="form-select" id="rankingLocationFilter" onchange="renderRankings()" style="font-size:0.8rem; padding:7px 12px; border-radius:100px; max-width:160px;">
+        <select class="form-select" id="rankingLocationFilter" data-onchange="renderRankings" style="font-size:0.8rem; padding:7px 12px; border-radius:100px; max-width:160px;">
           <option value="">📍 All locations</option>
         </select>
-        <select class="form-select" id="rankingLevelFilter" onchange="populateRankingLocationFilter(); renderRankings()" style="font-size:0.8rem; padding:7px 12px; border-radius:100px;">
+        <select class="form-select" id="rankingLevelFilter" data-onchange="populateRankingLocationFilter,renderRankings" style="font-size:0.8rem; padding:7px 12px; border-radius:100px;">
           <option value="city">By city</option>
           <option value="country">By country</option>
         </select>

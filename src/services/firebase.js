@@ -18,7 +18,7 @@ import {
   query, orderBy, where, getDoc, setDoc, increment, onSnapshot,
   serverTimestamp, limit, runTransaction
 } from 'firebase/firestore';
-import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject, listAll } from 'firebase/storage';
 
 // ─── FIREBASE CONFIG ────────────────────────────────────────────────────────
 const firebaseConfig = {
@@ -44,6 +44,6 @@ window._crumb = {
   onAuthStateChanged, signOut, updateProfile,
   collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy,
   where, getDoc, setDoc, increment, onSnapshot, serverTimestamp, limit,
-  runTransaction, ref, uploadBytes, getDownloadURL, deleteObject
+  runTransaction, ref, uploadBytes, getDownloadURL, deleteObject, listAll
 };
 window.dispatchEvent(new Event('crumb-firebase-ready'));

@@ -542,23 +542,23 @@ function toggleUserMenu() {
       <div style="font-size:0.82rem; font-weight:600; color:var(--espresso); display:flex; align-items:center; gap:8px;">${name} ${roleBadgeHtml}</div>
       <div style="font-size:0.72rem; color:var(--text-muted);">${currentUser.email || ''}</div>
     </div>
-    <div onclick="closeAvatarDropdown(); openProfileModal(currentUser.uid);"
+    <div data-onclick="closeAvatarDropdown,openProfileModal" data-args='${dataArgs([currentUser.uid])}'
       style="padding:11px 16px; font-size:0.85rem; color:var(--text-body); cursor:pointer; display:flex; align-items:center; gap:8px;"
       onmouseover="this.style.background='var(--parchment)'" onmouseout="this.style.background=''">
       👤 View my profile
     </div>
-    <div onclick="closeAvatarDropdown(); showPage('settings');"
+    <div data-onclick="closeAvatarDropdown,showPage" data-args='${dataArgs(['settings'])}'
       style="padding:11px 16px; font-size:0.85rem; color:var(--text-body); cursor:pointer; display:flex; align-items:center; gap:8px;"
       onmouseover="this.style.background='var(--parchment)'" onmouseout="this.style.background=''">
       ⚙️ Settings
     </div>
-    <div onclick="closeAvatarDropdown(); openFeatureRequestModal();"
+    <div data-onclick="closeAvatarDropdown,openFeatureRequestModal"
       style="padding:11px 16px; font-size:0.85rem; color:var(--text-body); cursor:pointer; display:flex; align-items:center; gap:8px;"
       onmouseover="this.style.background='var(--parchment)'" onmouseout="this.style.background=''">
       💡 Request a feature
     </div>
     <div style="border-top:1px solid var(--border);">
-      <div onclick="closeAvatarDropdown(); fb.signOut(fb.auth); showToast('Signed out');"
+      <div data-onclick="signOutFromAvatarMenu"
         style="padding:11px 16px; font-size:0.85rem; color:#c0392b; cursor:pointer; display:flex; align-items:center; gap:8px;"
         onmouseover="this.style.background='var(--parchment)'" onmouseout="this.style.background=''">
         → Sign out
@@ -572,6 +572,16 @@ function closeAvatarDropdown() {
   const d = document.getElementById('avatarDropdown');
   if (d) d.remove();
   document.removeEventListener('click', closeOnClickOutside);
+}
+
+// fb.signOut(fb.auth) doesn't fit the plain "cleanup, then one named action"
+// data-onclick shape (delegate.js) — it's a direct method call, not a
+// registrable named function — so it gets this small wrapper instead,
+// mirroring signOutFromMobileMenu.
+function signOutFromAvatarMenu() {
+  closeAvatarDropdown();
+  fb.signOut(fb.auth);
+  showToast('Signed out');
 }
 
 function closeOnClickOutside(e) {
@@ -700,6 +710,20 @@ async function renderFeed() {
   }).join('');
 }
 
+// The username link's onclick stays a raw attribute (it's nested inside the
+// card's own raw onclick="openDetail(...)" and still needs its own
+// event.stopPropagation() to avoid double-firing — that only becomes
+// unnecessary once BOTH the card and its nested elements are delegated, per
+// the explore-map markers). It used to inline `if(currentUser) ...` directly,
+// which broke post-modularization: bare top-level `let`/`const` bindings in
+// an ES module aren't visible to inline onclick="..." attributes (which
+// always run in plain global scope), unlike this module's functions, which
+// the WINDOW EXPORTS Object.assign(window, {...}) block below deliberately
+// re-exposes. This wrapper does the same for the currentUser check.
+function openProfileIfSignedIn(uid) {
+  if (currentUser) openProfileModal(uid);
+}
+
 function feedCardHTML(item, reactionBarHTML, followedBadge) {
   const catDisp = getCategoryDisplay(item);
   const record = item.itemRecordId ? allItemRecords.find(r => r.id === item.itemRecordId) : null;
@@ -733,7 +757,7 @@ function feedCardHTML(item, reactionBarHTML, followedBadge) {
       </div>
       <div class="card-body">
         <div class="card-meta">
-          <span style="cursor:pointer;color:var(--caramel);" onclick="event.stopPropagation(); if(currentUser) openProfileModal('${item.userId}')">${item.userName || 'Anonymous'}</span>
+          <span style="cursor:pointer;color:var(--caramel);" onclick="event.stopPropagation(); openProfileIfSignedIn('${item.userId}')">${item.userName || 'Anonymous'}</span>
           ${item.createdAt ? `<span>·</span><span>${timeAgo(item.createdAt.toDate ? item.createdAt.toDate() : new Date(item.createdAt))}</span>` : ''}
           ${followedBadge || ''}
         </div>
@@ -782,7 +806,7 @@ function cardHTML(item) {
       </div>
       <div class="card-body">
         <div class="card-meta">
-          <span style="cursor:pointer;color:var(--caramel);" onclick="event.stopPropagation(); if(currentUser) openProfileModal('${item.userId}')">${item.userName || 'Anonymous'}</span>
+          <span style="cursor:pointer;color:var(--caramel);" onclick="event.stopPropagation(); openProfileIfSignedIn('${item.userId}')">${item.userName || 'Anonymous'}</span>
           ${item.createdAt ? `<span>·</span><span>${timeAgo(item.createdAt.toDate ? item.createdAt.toDate() : new Date(item.createdAt))}</span>` : ''}
         </div>
         <div class="card-name">${item.name || 'Unknown bake'}</div>
@@ -1036,24 +1060,6 @@ function renderBakeries() {
 }
 
 // ─── FILTER HELPERS ───────────────────────────────────────────────────────────
-function buildItemRowHTML(item, onClickFn) {
-  const catDisp = getCategoryDisplay(item);
-  const record = item.itemRecordId ? allItemRecords.find(r => r.id === item.itemRecordId) : null;
-  const score = record ? record.communityAvg.toFixed(1) : (item.communityAvg ? item.communityAvg.toFixed(1) : (item.overallRating ? item.overallRating.toFixed(1) : '–'));
-  const thumb = item.photoURL
-    ? `<div class="bakery-item-thumb"><img src="${item.photoURL}" alt="${item.name}"></div>`
-    : `<div class="bakery-item-thumb">${catDisp.emoji}</div>`;
-  return `
-    <div class="bakery-item-row" onclick="${onClickFn}">
-      ${thumb}
-      <div class="bakery-item-info">
-        <div class="bakery-item-name">${item.name || 'Unknown bake'}</div>
-        <div class="bakery-item-meta">${item.bakeryName ? `<span class="loc-link" onclick="event.stopPropagation(); closeProfileModal(); openBakeryProfile('${escJS(item.bakeryName)}')" style="cursor:pointer; color:var(--caramel);">📍 ${item.bakeryName}</span> · ` : ''}${catDisp.sub || catDisp.main}</div>
-      </div>
-      <div class="bakery-item-score">${score}</div>
-    </div>`;
-}
-
 let peopleViewMode = 'rankings';
 
 function setPeopleView(mode) {
@@ -1230,7 +1236,7 @@ async function renderRankings() {
       m.avgNoteLength > 20 ? '✍️ detailed' : '',
     ].filter(Boolean);
 
-    return `<div class="ranking-card${pos <= 3 ? ` top-${pos}` : ''}${isMe ? ' is-me' : ''}" onclick="openProfileModal('${u.uid}')">
+    return `<div class="ranking-card${pos <= 3 ? ` top-${pos}` : ''}${isMe ? ' is-me' : ''}" data-onclick="openProfileModal" data-args='${dataArgs([u.uid])}'>
       <div class="ranking-pos ${posClass}">${posLabel}</div>
       <div class="ranking-avatar">${avatarInner}</div>
       <div class="ranking-info">
@@ -1281,7 +1287,10 @@ function renderPeople() {
     const avatarInner = m.photo ? `<img src="${m.photo}" alt="${m.name}">` : initials;
     const avg = m.reviews ? (m.totalRating / m.reviews).toFixed(1) : '–';
     const followBtn = currentUser && m.uid !== currentUser.uid ? followBtnHTML(m.uid, false) : '';
-    return `<div class="member-card" onclick="${currentUser ? `openProfileModal('${m.uid}')` : 'openAuthModal()'}">
+    const cardAction = currentUser
+      ? `data-onclick="openProfileModal" data-args='${dataArgs([m.uid])}'`
+      : `data-onclick="openAuthModal"`;
+    return `<div class="member-card" ${cardAction}>
       <div class="member-avatar-lg">${avatarInner}</div>
       <div class="member-info">
         <div class="member-name">${m.name || 'Anonymous'}</div>
@@ -1333,25 +1342,25 @@ async function openProfileModal(uid, catFilter, locFilter) {
   const locs = [...new Set(userItems.map(i => i.bakeryName).filter(Boolean))];
   let locFilterBar = '';
   if (locs.length > 1) {
-    const allBtn = `<button class="filter-chip location-chip${!profileActiveLocFilter ? ' active' : ''}" onclick="openProfileModal('${uid}', '${profileActiveCatFilter || ''}', '')">All locations</button>`;
+    const allBtn = `<button class="filter-chip location-chip${!profileActiveLocFilter ? ' active' : ''}" data-onclick="openProfileModal" data-args='${dataArgs([uid, profileActiveCatFilter || '', ''])}'>All locations</button>`;
     const locBtns = locs.map(loc => {
       const isActive = profileActiveLocFilter === loc;
-      return `<button class="filter-chip location-chip${isActive ? ' active' : ''}" onclick="openProfileModal('${uid}', '${profileActiveCatFilter}', '${escJS(loc)}')">${loc}${isActive ? ` <span onclick="event.stopPropagation(); closeProfileModal(); openBakeryProfile('${escJS(loc)}')" style="opacity:0.7;margin-left:4px;">↗</span>` : ''}</button>`;
+      return `<button class="filter-chip location-chip${isActive ? ' active' : ''}" data-onclick="openProfileModal" data-args='${dataArgs([uid, profileActiveCatFilter, loc])}'>${loc}${isActive ? ` <span data-onclick="closeProfileModal,openBakeryProfile" data-args='${dataArgs([loc])}' style="opacity:0.7;margin-left:4px;">↗</span>` : ''}</button>`;
     }).join('');
     locFilterBar = `<div class="filter-bar">${allBtn}${locBtns}</div>`;
   } else if (locs.length === 1) {
-    locFilterBar = `<div style="margin-bottom:12px;font-size:0.82rem;">All reviews from <span style="color:var(--caramel);cursor:pointer;font-weight:600;" onclick="closeProfileModal(); openBakeryProfile('${escJS(locs[0])}')">📍 ${locs[0]} ↗</span></div>`;
+    locFilterBar = `<div style="margin-bottom:12px;font-size:0.82rem;">All reviews from <span style="color:var(--caramel);cursor:pointer;font-weight:600;" data-onclick="closeProfileModal,openBakeryProfile" data-args='${dataArgs([locs[0]])}'>📍 ${locs[0]} ↗</span></div>`;
   }
   const reviewsHTML = filtered.map(item => {
     const catDisp = getCategoryDisplay(item);
     const record = item.itemRecordId ? allItemRecords.find(r => r.id === item.itemRecordId) : null;
     const score = record ? record.communityAvg.toFixed(1) : (item.communityAvg ? item.communityAvg.toFixed(1) : (item.overallRating ? item.overallRating.toFixed(1) : '–'));
     const thumb = item.photoURL ? `<div class="bakery-item-thumb"><img src="${item.photoURL}" alt="${item.name}"></div>` : `<div class="bakery-item-thumb">${catDisp.emoji}</div>`;
-    return `<div class="bakery-item-row" onclick="closeProfileModal(); openDetail('${item.id}')">
+    return `<div class="bakery-item-row" data-onclick="closeProfileModal,openDetail" data-args='${dataArgs([item.id])}'>
       ${thumb}
       <div class="bakery-item-info">
         <div class="bakery-item-name">${item.name || 'Unknown bake'}</div>
-        <div class="bakery-item-meta"><span style="cursor:pointer;color:var(--caramel);" onclick="event.stopPropagation(); closeProfileModal(); openBakeryProfile('${escJS(item.bakeryName || '')}')">📍 ${item.bakeryName || ''}</span> · ${catDisp.sub || catDisp.main}</div>
+        <div class="bakery-item-meta"><span style="cursor:pointer;color:var(--caramel);" data-onclick="closeProfileModal,openBakeryProfile" data-args='${dataArgs([item.bakeryName || ''])}'>📍 ${item.bakeryName || ''}</span> · ${catDisp.sub || catDisp.main}</div>
       </div>
       <div class="bakery-item-score">${score}</div>
     </div>`;
@@ -1422,20 +1431,20 @@ async function openProfileModal(uid, catFilter, locFilter) {
         <div class="profile-hero-stats">
           <div class="profile-stat"><div class="profile-stat-num">${userItems.length}</div><div class="profile-stat-label">Reviews</div></div>
           <div class="profile-stat"><div class="profile-stat-num">${avgRating}</div><div class="profile-stat-label">Avg score</div></div>
-          <div class="profile-stat" style="cursor:pointer;" onclick="switchProfileTab('followers','${uid}')"><div class="profile-stat-num">${followerCount}</div><div class="profile-stat-label">Followers</div></div>
-          <div class="profile-stat" style="cursor:pointer;" onclick="switchProfileTab('following','${uid}')"><div class="profile-stat-num">${followingCount}</div><div class="profile-stat-label">Following</div></div>
+          <div class="profile-stat" style="cursor:pointer;" data-onclick="switchProfileTab" data-args='${dataArgs(['followers', uid])}'><div class="profile-stat-num">${followerCount}</div><div class="profile-stat-label">Followers</div></div>
+          <div class="profile-stat" style="cursor:pointer;" data-onclick="switchProfileTab" data-args='${dataArgs(['following', uid])}'><div class="profile-stat-num">${followingCount}</div><div class="profile-stat-label">Following</div></div>
         </div>
       </div>
     </div>
     ${statsStrip}
     <div class="profile-tabs">
-      <div class="profile-tab active" onclick="switchProfileTab('reviews','${uid}')">Reviews</div>
-      <div class="profile-tab" onclick="switchProfileTab('followers','${uid}')">Followers</div>
-      <div class="profile-tab" onclick="switchProfileTab('following','${uid}')">Following</div>
-      ${isOwnProfile ? `<div class="profile-tab" onclick="switchProfileTab('saved','${uid}')">Saved</div>` : ''}
-      ${isOwnProfile ? `<div class="profile-tab" onclick="switchProfileTab('orders','${uid}')">Orders</div>` : ''}
-      ${isOwnProfile ? `<div class="profile-tab" onclick="switchProfileTab('activity','${uid}')">Activity</div>` : ''}
-      ${isOwnProfile ? `<div class="profile-tab" onclick="switchProfileTab('map','${uid}')">My Map</div>` : ''}
+      <div class="profile-tab active" data-onclick="switchProfileTab" data-args='${dataArgs(['reviews', uid])}'>Reviews</div>
+      <div class="profile-tab" data-onclick="switchProfileTab" data-args='${dataArgs(['followers', uid])}'>Followers</div>
+      <div class="profile-tab" data-onclick="switchProfileTab" data-args='${dataArgs(['following', uid])}'>Following</div>
+      ${isOwnProfile ? `<div class="profile-tab" data-onclick="switchProfileTab" data-args='${dataArgs(['saved', uid])}'>Saved</div>` : ''}
+      ${isOwnProfile ? `<div class="profile-tab" data-onclick="switchProfileTab" data-args='${dataArgs(['orders', uid])}'>Orders</div>` : ''}
+      ${isOwnProfile ? `<div class="profile-tab" data-onclick="switchProfileTab" data-args='${dataArgs(['activity', uid])}'>Activity</div>` : ''}
+      ${isOwnProfile ? `<div class="profile-tab" data-onclick="switchProfileTab" data-args='${dataArgs(['map', uid])}'>My Map</div>` : ''}
     </div>
     <div class="profile-tab-content" id="profileTabContent">
       ${catFilterBar}${locFilterBar}
@@ -1539,16 +1548,6 @@ function buildCategoryFilterBar(items, activeCategory, fnName, argsFor) {
     return `<button class="filter-chip${activeCategory === cat ? ' active' : ''}" data-onclick="${fnName}" data-args='${dataArgs(argsFor(cat))}'>${emoji} ${label}</button>`;
   }).join('');
   return `<div class="filter-bar">${allBtn}${catBtns}</div>`;
-}
-
-function buildLocationFilterBar(items, activeLoc, onClickFn) {
-  const locs = [...new Set(items.map(i => i.bakeryName).filter(Boolean))];
-  if (locs.length <= 1) return '';
-  const allBtn = `<button class="filter-chip location-chip${!activeLoc ? ' active' : ''}" onclick="${onClickFn}('')">All locations</button>`;
-  const locBtns = locs.map(loc =>
-    `<button class="filter-chip location-chip${activeLoc === loc ? ' active' : ''}" onclick="${onClickFn}('${escJS(loc)}')">${loc}</button>`
-  ).join('');
-  return `<div class="filter-bar">${allBtn}${locBtns}</div>`;
 }
 
 async function fetchPlaceDetails(placeId) {
@@ -4114,18 +4113,9 @@ async function renderExploreMap(bakeries) {
 
 // Leaflet popups render inside iframe-free DOM but outside Explore's own
 // click-handling context, so route "view" / "review" taps back through a
-// small helper that closes the popup first for a clean transition.
-function closeExplorePopupAnd(fn) {
-  if (exploreMapInstance) exploreMapInstance.closePopup();
-  fn();
-}
-
-// Same cleanup step as closeExplorePopupAnd, but as a registrable zero-arg
-// action so its call sites can use the comma-list "cleanup, then one
-// parameterized action" shape instead of passing a closure through
-// data-args (which can't serialize a function). closeExplorePopupAnd itself
-// is left in place, unused, for the same later cleanup decision as
-// buildItemRowHTML/buildLocationFilterBar.
+// small registrable action that closes the popup first for a clean
+// transition — used as the "cleanup" half of the comma-list "cleanup, then
+// one parameterized action" shape.
 function closeExploreMapPopup() {
   if (exploreMapInstance) exploreMapInstance.closePopup();
 }
@@ -5185,9 +5175,24 @@ function followBtnHTML(targetUid, dark) {
   if (state === 'self') return '';
   const labels = { follow: 'Follow', 'follow-back': 'Follow back', following: 'Following' };
   if (dark) {
-    return `<button class="follow-btn ${state}" onclick="event.stopPropagation(); toggleFollow('${targetUid}').then(()=>refreshOpenProfile())">${labels[state]}</button>`;
+    return `<button class="follow-btn ${state}" data-onclick="followAndRefreshProfile" data-args='${dataArgs([targetUid])}'>${labels[state]}</button>`;
   }
-  return `<button class="people-follow-btn ${state}" onclick="event.stopPropagation(); toggleFollow('${targetUid}').then(()=>renderPeople())">${labels[state]}</button>`;
+  return `<button class="people-follow-btn ${state}" data-onclick="followAndRefreshPeople" data-args='${dataArgs([targetUid])}'>${labels[state]}</button>`;
+}
+
+// The old onclick="toggleFollow(uid).then(()=>refreshOpenProfile())"/
+// "...then(()=>renderPeople())" chains don't fit the plain "cleanup, then one
+// parameterized action" data-onclick shape (delegate.js), so each gets a
+// small named wrapper instead. event.stopPropagation() is dropped from both:
+// these follow buttons sit inside/beside their own clickable rows, and
+// delegate.js's closest()-based matching already resolves to the innermost
+// data-onclick only — the same reasoning as the explore map markers.
+function followAndRefreshProfile(uid) {
+  toggleFollow(uid).then(() => refreshOpenProfile());
+}
+
+function followAndRefreshPeople(uid) {
+  toggleFollow(uid).then(() => renderPeople());
 }
 
 function refreshFollowButtons(uid) {
@@ -5221,12 +5226,12 @@ function buildFollowUserRowHTML(followUid, followName, followPhoto, isFollowingP
   const userReviews = allItems.filter(i => i.userId === followUid).length;
   return `
     <div class="follow-user-row">
-      <div class="follow-user-avatar" onclick="closeProfileModal(); openProfileModal('${followUid}')">${avatarInner}</div>
-      <div class="follow-user-info" onclick="closeProfileModal(); openProfileModal('${followUid}')">
+      <div class="follow-user-avatar" data-onclick="closeProfileModal,openProfileModal" data-args='${dataArgs([followUid])}'>${avatarInner}</div>
+      <div class="follow-user-info" data-onclick="closeProfileModal,openProfileModal" data-args='${dataArgs([followUid])}'>
         <div class="follow-user-name">${followName || 'Anonymous'}</div>
         <div class="follow-user-meta">${userReviews} review${userReviews !== 1 ? 's' : ''}</div>
       </div>
-      ${state !== 'self' ? `<button class="people-follow-btn ${btnClass}" onclick="event.stopPropagation(); toggleFollow('${followUid}').then(()=>refreshOpenProfile())">${btnLabel}</button>` : ''}
+      ${state !== 'self' ? `<button class="people-follow-btn ${btnClass}" data-onclick="followAndRefreshProfile" data-args='${dataArgs([followUid])}'>${btnLabel}</button>` : ''}
     </div>`;
 }
 
@@ -6541,7 +6546,7 @@ async function renderPreorderPage() {
           ${Object.entries(bakeries).map(([bakeryName, items]) => `
             <div style="margin-bottom:20px;">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-                <div style="font-size:0.88rem;font-weight:600;color:var(--caramel);cursor:pointer;" onclick="closeBakeryModalIfOpen(); openBakeryProfile('${escJS(bakeryName)}')">🏪 ${bakeryName} ↗</div>
+                <div style="font-size:0.88rem;font-weight:600;color:var(--caramel);cursor:pointer;" data-onclick="closeBakeryModalIfOpen,openBakeryProfile" data-args='${dataArgs([bakeryName])}'>🏪 ${bakeryName} ↗</div>
                 <div style="font-size:0.72rem;color:var(--text-muted);">${items.length} item${items.length!==1?'s':''}</div>
               </div>
               <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;">
@@ -6562,7 +6567,7 @@ async function renderPreorderPage() {
                         ${soldOut
                           ? `<button class="btn-ghost" disabled style="opacity:0.4;font-size:0.78rem;">Sold out</button>`
                           : currentUser
-                            ? `<button class="btn-espresso" style="font-size:0.78rem;padding:7px 14px;" onclick="openReserveModal('${o.id}','${escJS(o.bakeryName)}','${escJS(o.name)}','${escJS(o.slot)}','${o.collectDate}',${remaining||0},${o.maxPerPerson||2})">Reserve</button>`
+                            ? `<button class="btn-espresso" style="font-size:0.78rem;padding:7px 14px;" data-onclick="openReserveModal" data-args='${dataArgs([o.id, o.bakeryName, o.name, o.slot, o.collectDate, remaining||0, o.maxPerPerson||2])}'>Reserve</button>`
                             : `<button class="btn-espresso" style="font-size:0.78rem;padding:7px 14px;" data-onclick="openAuthModal">Sign in</button>`}
                       </div>
                     </div>
@@ -6662,16 +6667,16 @@ function openMyPreordersSheet() {
           <div style="font-family:'Playfair Display',serif;font-size:1rem;font-weight:700;color:var(--espresso);">🗓️ My pre-orders</div>
           ${myPendingPreorders.length ? `<div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">${myPendingPreorders.length} upcoming reservation${myPendingPreorders.length !== 1 ? 's' : ''}</div>` : ''}
         </div>
-        <button onclick="document.getElementById('myPreordersSheet').remove()" style="background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--text-muted);">✕</button>
+        <button data-onclick="closeMyPreordersSheet" style="background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--text-muted);">✕</button>
       </div>
       <div style="overflow-y:auto;flex:1;padding:0 20px 24px;">${rows}</div>
       ${myPendingPreorders.length ? `
         <div style="padding:12px 20px 28px;border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:10px;">
-          <button class="btn-ghost" style="flex:1;" onclick="document.getElementById('myPreordersSheet').remove(); showPage('preorders')">Browse more</button>
-          <button class="btn-espresso" style="flex:1;" onclick="document.getElementById('myPreordersSheet').remove(); openProfileModal(currentUser.uid).then(()=>switchProfileTab('orders',currentUser.uid))">View all orders</button>
+          <button class="btn-ghost" style="flex:1;" data-onclick="closeMyPreordersSheet,showPage" data-args='${dataArgs(['preorders'])}'>Browse more</button>
+          <button class="btn-espresso" style="flex:1;" data-onclick="viewOrdersFromMyPreordersSheet">View all orders</button>
         </div>` : `
         <div style="padding:12px 20px 28px;border-top:1px solid var(--border);flex-shrink:0;">
-          <button class="btn-espresso" style="width:100%;" onclick="document.getElementById('myPreordersSheet').remove(); showPage('preorders')">Browse pre-orders</button>
+          <button class="btn-espresso" style="width:100%;" data-onclick="closeMyPreordersSheet,showPage" data-args='${dataArgs(['preorders'])}'>Browse pre-orders</button>
         </div>`}
     </div>`;
 
@@ -6698,6 +6703,19 @@ function openMyPreordersSheet() {
   });
 }
 
+function closeMyPreordersSheet() {
+  document.getElementById('myPreordersSheet')?.remove();
+}
+
+// The "View all orders" action chains a promise (switchProfileTab only once
+// openProfileModal's data has loaded) rather than the plain "cleanup, then
+// one call" shape delegate.js handles natively, so it needs this small named
+// wrapper instead of a comma-list data-onclick.
+function viewOrdersFromMyPreordersSheet() {
+  closeMyPreordersSheet();
+  openProfileModal(currentUser.uid).then(() => switchProfileTab('orders', currentUser.uid));
+}
+
 // ─── PRE-ORDER / RESERVATIONS ─────────────────────────────────────────────────
 const COLLECTION_TIMES = ['7:00am','7:30am','8:00am','8:30am','9:00am','9:30am','10:00am','10:30am','11:00am','11:30am','12:00pm','12:30pm','1:00pm','2:00pm','3:00pm','4:00pm','5:00pm'];
 // Legacy alias
@@ -6713,13 +6731,13 @@ async function openManagePreordersModal(bakeryName) {
   // Tab bar
   document.getElementById('managePreordersContent').innerHTML = `
     <div style="display:flex;border-bottom:1px solid var(--border);margin:-24px -24px 20px;padding:0 24px;">
-      <button class="dm-stat-tab active" id="mpTab_upcoming" onclick="switchMpTab('upcoming','${escJS(bakeryName)}')"
+      <button class="dm-stat-tab active" id="mpTab_upcoming" data-onclick="switchMpTab" data-args='${dataArgs(['upcoming', bakeryName])}'
         style="flex:1;padding:12px 4px;font-size:0.8rem;font-weight:600;border:none;background:none;cursor:pointer;color:var(--espresso);border-bottom:2px solid var(--honey);">Upcoming</button>
-      <button class="dm-stat-tab" id="mpTab_week" onclick="switchMpTab('week','${escJS(bakeryName)}')"
+      <button class="dm-stat-tab" id="mpTab_week" data-onclick="switchMpTab" data-args='${dataArgs(['week', bakeryName])}'
         style="flex:1;padding:12px 4px;font-size:0.8rem;font-weight:500;border:none;background:none;cursor:pointer;color:var(--text-muted);border-bottom:2px solid transparent;">Last 7d</button>
-      <button class="dm-stat-tab" id="mpTab_month" onclick="switchMpTab('month','${escJS(bakeryName)}')"
+      <button class="dm-stat-tab" id="mpTab_month" data-onclick="switchMpTab" data-args='${dataArgs(['month', bakeryName])}'
         style="flex:1;padding:12px 4px;font-size:0.8rem;font-weight:500;border:none;background:none;cursor:pointer;color:var(--text-muted);border-bottom:2px solid transparent;">Month</button>
-      <button class="dm-stat-tab" id="mpTab_forecast" onclick="switchMpTab('forecast','${escJS(bakeryName)}')"
+      <button class="dm-stat-tab" id="mpTab_forecast" data-onclick="switchMpTab" data-args='${dataArgs(['forecast', bakeryName])}'
         style="flex:1;padding:12px 4px;font-size:0.8rem;font-weight:500;border:none;background:none;cursor:pointer;color:var(--text-muted);border-bottom:2px solid transparent;">✨ Forecast</button>
     </div>
     <div id="mpTabContent"><div style="text-align:center;padding:32px;"><div class="spinner" style="margin:0 auto;"></div></div></div>`;
@@ -6796,9 +6814,9 @@ async function renderMpUpcoming(panel, bakeryName) {
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
         <div style="font-size:0.85rem;font-weight:600;color:var(--espresso);">Pre-order offerings</div>
         <div style="display:flex;gap:8px;">
-          <button class="btn-caramel" style="font-size:0.78rem;padding:7px 14px;" onclick="openQRScanner('${escJS(bakeryName)}')">📷 Scan QR</button>
-          <button class="btn-ghost" style="font-size:0.78rem;padding:7px 14px;" onclick="openCatalogueManager('${escJS(bakeryName)}')">📋 Catalogue</button>
-          <button class="btn-espresso" style="font-size:0.78rem;padding:7px 14px;" onclick="showAddOfferingForm('${escJS(bakeryName)}')">+ Add item</button>
+          <button class="btn-caramel" style="font-size:0.78rem;padding:7px 14px;" data-onclick="openQRScanner" data-args='${dataArgs([bakeryName])}'>📷 Scan QR</button>
+          <button class="btn-ghost" style="font-size:0.78rem;padding:7px 14px;" data-onclick="openCatalogueManager" data-args='${dataArgs([bakeryName])}'>📋 Catalogue</button>
+          <button class="btn-espresso" style="font-size:0.78rem;padding:7px 14px;" data-onclick="showAddOfferingForm" data-args='${dataArgs([bakeryName])}'>+ Add item</button>
         </div>
       </div>
       <div id="addOfferingForm" style="display:none;background:var(--parchment);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;"></div>
@@ -6817,15 +6835,15 @@ async function renderMpUpcoming(panel, bakeryName) {
           ${offerings.map(o => {
             const reserved = reservationsForDate.filter(r => r.offeringId === o.id).length;
             const remaining = o.remaining ?? o.quantity ?? 0;
-            return `<div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin-bottom:6px;background:var(--cream-white);display:flex;gap:10px;align-items:center;">
+            return `<div id="offeringrow_${o.id}" style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin-bottom:6px;background:var(--cream-white);display:flex;gap:10px;align-items:center;">
               ${o.photoURL ? `<img src="${o.photoURL}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;flex-shrink:0;">` : `<div style="width:40px;height:40px;border-radius:6px;background:var(--parchment-dark);display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0;">🥐</div>`}
               <div style="flex:1;min-width:0;">
                 <div style="font-weight:600;font-size:0.85rem;color:var(--espresso);">${o.name}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted);">${o.slot} · £${parseFloat(o.price||0).toFixed(2)} · ${remaining} left · ${reserved} reserved</div>
               </div>
               <div style="display:flex;gap:6px;flex-shrink:0;">
-                <button onclick="openEditOffering('${o.id}','${escJS(bakeryName)}')" style="background:none;border:none;color:var(--caramel);font-size:0.8rem;cursor:pointer;">✏️</button>
-                <button onclick="deleteOffering('${o.id}','${escJS(bakeryName)}')" style="background:none;border:none;color:#e74c3c;font-size:0.8rem;cursor:pointer;">✕</button>
+                <button data-onclick="openEditOffering" data-args='${dataArgs([o.id, bakeryName])}' style="background:none;border:none;color:var(--caramel);font-size:0.8rem;cursor:pointer;">✏️</button>
+                <button data-onclick="deleteOffering" data-args='${dataArgs([o.id, bakeryName])}' style="background:none;border:none;color:#e74c3c;font-size:0.8rem;cursor:pointer;">✕</button>
               </div>
             </div>`;
           }).join('')}
@@ -6839,7 +6857,7 @@ async function renderMpUpcoming(panel, bakeryName) {
                 </div>
                 ${r.status === 'collected'
                   ? `<span style="font-size:0.68rem;font-weight:700;color:#155724;background:#d4edda;padding:3px 8px;border-radius:100px;">✓ Collected</span>`
-                  : `<button class="btn-espresso" style="font-size:0.72rem;padding:5px 10px;" onclick="markCollected('${r.id}','${escJS(bakeryName)}')">Collected</button>`}
+                  : `<button class="btn-espresso" style="font-size:0.72rem;padding:5px 10px;" data-onclick="markCollected" data-args='${dataArgs([r.id, bakeryName])}'>Collected</button>`}
               </div>`).join('')}` : ''}
         </div>`;
       }).join('')}`;
@@ -7022,7 +7040,7 @@ async function renderMpMonth(panel, bakeryName) {
     const data = dateMap[dateStr];
     const isToday = d === now.getDate() && month === now.getMonth() && year === now.getFullYear();
     const intensity = data ? Math.max(0.15, data.revenue / maxRevDay) : 0;
-    cells += `<div onclick="${data ? `showMpDayDetail('${dateStr}','${escJS(bakeryName)}')` : ''}"
+    cells += `<div class="mp-cal-day" data-date="${dateStr}" ${data ? `data-onclick="showMpDayDetail" data-args='${dataArgs([dateStr, bakeryName])}'` : ''}
       style="aspect-ratio:1;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:${data?'pointer':'default'};
         background:${data ? `rgba(44,24,16,${intensity})` : 'transparent'};
         border:${isToday?'2px solid var(--honey)':'1px solid transparent'};
@@ -7069,7 +7087,7 @@ async function renderMpMonth(panel, bakeryName) {
 
     <!-- Calendar heatmap -->
     <div style="font-size:0.78rem;font-weight:700;color:var(--espresso);margin:20px 0 10px;">Revenue calendar</div>
-    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px;">
+    <div id="mpMonthCalendar" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px;">
       ${dayLabels.map(l=>`<div style="text-align:center;font-size:0.62rem;font-weight:600;color:var(--text-muted);padding-bottom:4px;">${l}</div>`).join('')}
       ${cells}
     </div>
@@ -7336,6 +7354,7 @@ function showMpDayDetail(dateStr, bakeryName) {
       const revenue = orders.reduce((s,r)=>s+(r.totalPrice||r.price||0),0);
 
       const overlay = document.createElement('div');
+      overlay.id = 'mpDayDetailOverlay';
       overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:2000;display:flex;align-items:flex-end;justify-content:center;';
       overlay.innerHTML=`
         <div style="background:var(--cream-white);border-radius:var(--radius) var(--radius) 0 0;width:100%;max-width:520px;max-height:70vh;overflow-y:auto;">
@@ -7344,7 +7363,7 @@ function showMpDayDetail(dateStr, bakeryName) {
               <div style="font-family:'Playfair Display',serif;font-size:0.95rem;font-weight:700;color:var(--espresso);">${dateLabel}</div>
               <div style="font-size:0.75rem;color:var(--caramel);font-weight:600;margin-top:2px;">${orders.length} order${orders.length!==1?'s':''} · £${revenue.toFixed(2)} total</div>
             </div>
-            <button onclick="this.closest('div[style]').remove()" style="background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--text-muted);">✕</button>
+            <button data-onclick="closeMpDayDetail" style="background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--text-muted);">✕</button>
           </div>
           <div style="padding:16px 20px 32px;">
             ${!orders.length?'<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:20px 0;">No orders this day</div>':
@@ -7364,6 +7383,10 @@ function showMpDayDetail(dateStr, bakeryName) {
       document.body.appendChild(overlay);
       overlay.addEventListener('click',e=>{if(e.target===overlay)overlay.remove();});
     });
+}
+
+function closeMpDayDetail() {
+  document.getElementById('mpDayDetailOverlay')?.remove();
 }
 
 async function uploadItemPhoto(file) {
@@ -7398,7 +7421,7 @@ async function openEditOffering(offeringId, bakeryName) {
     <div style="background:var(--cream-white);border-radius:var(--radius) var(--radius) 0 0;width:100%;max-width:560px;max-height:82vh;overflow-y:auto;">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--cream-white);z-index:1;">
         <div style="font-family:'Playfair Display',serif;font-size:1rem;font-weight:700;color:var(--espresso);">✏️ Edit offering</div>
-        <button onclick="document.getElementById('editOfferingOverlay').remove()" style="background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--text-muted);">✕</button>
+        <button data-onclick="closeEditOfferingOverlay" style="background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--text-muted);">✕</button>
       </div>
       <div style="padding:16px 20px 32px;display:flex;flex-direction:column;gap:14px;">
         <div class="form-group" style="margin:0;"><label class="form-label">Item name</label>
@@ -7417,8 +7440,8 @@ async function openEditOffering(offeringId, bakeryName) {
         </div>
         <div class="form-group" style="margin:0;"><label class="form-label">Collection window</label>
           <div style="display:flex;gap:8px;margin-bottom:8px;">
-            <button type="button" id="editSlotModeRange" class="bakery-view-btn ${!slotIsBy?'active':''}" style="flex:1;border-radius:8px;" onclick="setEditSlotMode('range')">Time range</button>
-            <button type="button" id="editSlotModeBy" class="bakery-view-btn ${slotIsBy?'active':''}" style="flex:1;border-radius:8px;" onclick="setEditSlotMode('by')">Collect by</button>
+            <button type="button" id="editSlotModeRange" class="bakery-view-btn ${!slotIsBy?'active':''}" style="flex:1;border-radius:8px;" data-onclick="setEditSlotMode" data-args='${dataArgs(['range'])}'>Time range</button>
+            <button type="button" id="editSlotModeBy" class="bakery-view-btn ${slotIsBy?'active':''}" style="flex:1;border-radius:8px;" data-onclick="setEditSlotMode" data-args='${dataArgs(['by'])}'>Collect by</button>
           </div>
           <div id="editSlotRangeInputs" style="display:${slotIsBy?'none':'flex'};align-items:center;gap:8px;">
             <select class="form-select" id="editOfferingSlotFrom" style="flex:1;">${COLLECTION_TIMES.map(t=>`<option value="${t}" ${t===slotFromVal?'selected':''}>${t}</option>`).join('')}</select>
@@ -7433,13 +7456,17 @@ async function openEditOffering(offeringId, bakeryName) {
           ${o.photoURL ? `<img src="${o.photoURL}" style="width:70px;height:70px;object-fit:cover;border-radius:8px;margin-bottom:8px;display:block;">` : ''}
           <input type="file" accept="image/*" id="editOfferingPhoto" style="font-size:0.82rem;"></div>
         <div style="display:flex;gap:10px;margin-top:4px;">
-          <button class="btn-ghost" style="flex:1;" onclick="document.getElementById('editOfferingOverlay').remove()">Cancel</button>
-          <button class="btn-espresso" style="flex:2;" onclick="saveEditOffering('${offeringId}','${escJS(bakeryName)}')">Save changes</button>
+          <button class="btn-ghost" style="flex:1;" data-onclick="closeEditOfferingOverlay">Cancel</button>
+          <button class="btn-espresso" style="flex:2;" data-onclick="saveEditOffering" data-args='${dataArgs([offeringId, bakeryName])}'>Save changes</button>
         </div>
       </div>
     </div>`;
   document.body.appendChild(overlay);
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+}
+
+function closeEditOfferingOverlay() {
+  document.getElementById('editOfferingOverlay')?.remove();
 }
 
 function setEditSlotMode(mode) {
@@ -7489,7 +7516,7 @@ async function saveEditOffering(offeringId, bakeryName) {
     await saveToCatalogue(bakeryName, name, updates.description, price, photoURL);
     showToast('✅ Offering updated');
     document.getElementById('editOfferingOverlay')?.remove();
-    await renderManagePreorders(bakeryName);
+    await renderMpUpcoming(null, bakeryName);
   } catch(e) { showToast('Could not save changes'); console.error(e); }
 }
 
@@ -7509,7 +7536,7 @@ function showAddOfferingForm(bakeryName) {
     <!-- Catalogue picker -->
     <div class="form-group" id="cataloguePickerGroup">
       <label class="form-label">From your catalogue <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
-      <select class="form-select" id="cataloguePicker" onchange="fillFromCatalogue('${escJS(bakeryName)}',this.value)">
+      <select class="form-select" id="cataloguePicker" data-onchange="fillFromCatalogue">
         <option value="">— Start fresh or pick a saved item —</option>
       </select>
     </div>
@@ -7531,8 +7558,8 @@ function showAddOfferingForm(bakeryName) {
     </div>
     <div class="form-group"><label class="form-label">Collection window <span style="color:#e74c3c;">*</span></label>
       <div style="display:flex;gap:8px;margin-bottom:8px;">
-        <button type="button" id="slotModeRange" class="bakery-view-btn active" style="flex:1;border-radius:8px;" onclick="setSlotMode('range')">Time range</button>
-        <button type="button" id="slotModeBy" class="bakery-view-btn" style="flex:1;border-radius:8px;" onclick="setSlotMode('by')">Collect by</button>
+        <button type="button" id="slotModeRange" class="bakery-view-btn active" style="flex:1;border-radius:8px;" data-onclick="setSlotMode" data-args='${dataArgs(['range'])}'>Time range</button>
+        <button type="button" id="slotModeBy" class="bakery-view-btn" style="flex:1;border-radius:8px;" data-onclick="setSlotMode" data-args='${dataArgs(['by'])}'>Collect by</button>
       </div>
       <div id="slotRangeInputs" style="display:flex;align-items:center;gap:8px;">
         <select class="form-select" id="offeringSlotFrom" style="flex:1;">${COLLECTION_TIMES.map(t=>`<option value="${t}">${t}</option>`).join('')}</select>
@@ -7546,14 +7573,18 @@ function showAddOfferingForm(bakeryName) {
     </div>
     <div class="form-group"><label class="form-label">Photo</label>
       <div id="offeringPhotoPreview" style="margin-bottom:6px;"></div>
-      <input type="file" accept="image/*" id="offeringPhoto" style="font-size:0.82rem;" onchange="previewOfferingPhoto(this)"></div>
+      <input type="file" accept="image/*" id="offeringPhoto" style="font-size:0.82rem;" data-onchange="previewOfferingPhoto"></div>
     <div style="display:flex;gap:8px;margin-top:8px;">
-      <button class="btn-ghost" onclick="document.getElementById('addOfferingForm').style.display='none'">Cancel</button>
-      <button class="btn-espresso" onclick="saveOffering('${escJS(bakeryName)}')">Save offering</button>
+      <button class="btn-ghost" data-onclick="hideAddOfferingForm">Cancel</button>
+      <button class="btn-espresso" data-onclick="saveOffering" data-args='${dataArgs([bakeryName])}'>Save offering</button>
     </div>`;
 
   // Load catalogue async
   loadBakeryCatalogue(bakeryName);
+}
+
+function hideAddOfferingForm() {
+  document.getElementById('addOfferingForm').style.display = 'none';
 }
 
 function previewOfferingPhoto(input) {
@@ -7584,9 +7615,10 @@ async function loadBakeryCatalogue(bakeryName) {
   } catch(e) { console.warn('Catalogue load error:', e); }
 }
 
-function fillFromCatalogue(bakeryName, catalogueId) {
-  if (!catalogueId) return;
-  const sel = document.getElementById('cataloguePicker');
+// bakeryName was a dead parameter on the old onclick="fillFromCatalogue(bakeryName,this.value)"
+// call (never read in the body) — dropped here since this is its only call site.
+function fillFromCatalogue(sel) {
+  if (!sel.value) return;
   const opt = sel.options[sel.selectedIndex];
   if (!opt) return;
 
@@ -7601,7 +7633,7 @@ function fillFromCatalogue(bakeryName, catalogueId) {
   }
 
   // Store catalogue item ID so we can reuse its photoURL on save
-  document.getElementById('addOfferingForm').dataset.catalogueId = catalogueId;
+  document.getElementById('addOfferingForm').dataset.catalogueId = sel.value;
   document.getElementById('addOfferingForm').dataset.cataloguePhoto = opt.dataset.photo || '';
 }
 
@@ -7691,7 +7723,7 @@ async function saveOffering(bakeryName) {
 
     showToast('✅ Offering added — goes live at 8am the day before');
     document.getElementById('addOfferingForm').style.display = 'none';
-    await renderManagePreorders(bakeryName);
+    await renderMpUpcoming(null, bakeryName);
   } catch(e) { showToast('Could not save offering'); console.error(e); }
 }
 
@@ -7701,7 +7733,7 @@ async function deleteOffering(offeringId, bakeryName) {
   try {
     await deleteDoc(doc(db, 'preorderOfferings', offeringId));
     showToast('Offering removed');
-    await renderManagePreorders(bakeryName);
+    await renderMpUpcoming(null, bakeryName);
   } catch(e) { showToast('Could not remove'); }
 }
 
@@ -7710,7 +7742,7 @@ async function markCollected(reservationId, bakeryName) {
   try {
     await updateDoc(doc(db, 'reservations', reservationId), { status: 'collected', collectedAt: new Date().toISOString() });
     showToast('✓ Marked as collected');
-    await renderManagePreorders(bakeryName);
+    await renderMpUpcoming(null, bakeryName);
   } catch(e) { showToast('Could not update'); }
 }
 
@@ -7790,7 +7822,7 @@ async function renderPreorderTab(container, bakeryName) {
                   ${soldOut
                     ? `<button class="btn-ghost" disabled style="opacity:0.4;font-size:0.78rem;">Sold out</button>`
                     : currentUser
-                      ? `<button class="btn-espresso" style="font-size:0.78rem;padding:7px 14px;" onclick="openReserveModal('${o.id}','${escJS(bakeryName)}','${escJS(o.name)}','${o.slot}','${date}',${o.remaining??o.quantity??0},${o.maxPerPerson||2})">Reserve</button>`
+                      ? `<button class="btn-espresso" style="font-size:0.78rem;padding:7px 14px;" data-onclick="openReserveModal" data-args='${dataArgs([o.id, bakeryName, o.name, o.slot, date, o.remaining??o.quantity??0, o.maxPerPerson||2])}'>Reserve</button>`
                       : `<button class="btn-espresso" style="font-size:0.78rem;padding:7px 14px;" data-onclick="openAuthModal">Sign in</button>`}
                 </div>
               </div>
@@ -7815,7 +7847,7 @@ function openReserveModal(offeringId, bakeryName, offeringName, slot, collectDat
   overlay.id = 'reserveModalOverlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:2000;display:flex;align-items:flex-end;justify-content:center;';
   const options = Array.from({length: max}, (_,i) => i+1).map(n =>
-    `<button onclick="closeReserveModal(); reserveOffering('${offeringId}','${escJS(bakeryName)}','${escJS(offeringName)}','${escJS(slot)}','${collectDate}',${n})"
+    `<button data-onclick="closeReserveModal,reserveOffering" data-args='${dataArgs([offeringId, bakeryName, offeringName, slot, collectDate, n])}'
       style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:14px 20px;border:none;border-bottom:1px solid var(--border);background:none;cursor:pointer;font-size:0.92rem;color:var(--espresso);"
       onmouseover="this.style.background='var(--parchment)'" onmouseout="this.style.background='none'">
       <span>${n}× ${offeringName}</span>
@@ -7902,6 +7934,32 @@ async function reserveOffering(offeringId, bakeryName, offeringName, slot, colle
 }
 
 
+// Extracts the first "H:MMam/pm" time token from a slot string — works for
+// both slot formats getSlotValue()/getEditSlotValue() can produce, "7:00am –
+// 11:00am" (range: takes the start time) and "Collect by 5:00pm" (takes that
+// time) — and converts it to zero-padded 24h "HH:MM" for use in a Date
+// string. Returns null if no time token is found (e.g. missing/malformed
+// slot), so callers can fall back to a default.
+//
+// Bug fix: the previous logic built the cutoff Date from
+// `collectDate + 'T' + slot.replace('am','').replace('pm','')` directly —
+// for every real slot format this produces a string like "...T7:00 – 11:00"
+// or "...TCollect by 7:00", which `new Date(...)` parses as Invalid Date.
+// Since `NaN > anything` is always false, this made the 12-hour cancel
+// cutoff check (both the Cancel button's own visibility and the actual
+// enforcement in cancelReservation) permanently return false — the Cancel
+// button never rendered at all, for any reservation, regardless of timing.
+function parseSlotStartTime(slot) {
+  const m = slot?.match(/(\d{1,2}):(\d{2})\s*(am|pm)/i);
+  if (!m) return null;
+  let hh = parseInt(m[1], 10);
+  const mm = m[2];
+  const ap = m[3].toLowerCase();
+  if (ap === 'pm' && hh !== 12) hh += 12;
+  if (ap === 'am' && hh === 12) hh = 0;
+  return `${String(hh).padStart(2, '0')}:${mm}`;
+}
+
 // ── Customer: view orders in profile ──────────────────────────────────────────
 async function renderOrdersTab(container) {
   if (!currentUser || !fb) {
@@ -7931,12 +7989,12 @@ async function renderOrdersTab(container) {
       const ref = r.id.slice(-6).toUpperCase();
       const collectDate = r.collectDate ? new Date(r.collectDate).toLocaleDateString('en-GB', {weekday:'short',day:'numeric',month:'short'}) : '';
       const canCancel = r.status === 'pending' && r.collectDate && (() => {
-        const collect = new Date(r.collectDate + 'T' + (r.slot?.replace('am','').replace('pm','') || '09:00'));
+        const collect = new Date(r.collectDate + 'T' + (parseSlotStartTime(r.slot) || '09:00'));
         return (collect - new Date()) > 12 * 60 * 60 * 1000;
       })();
 
       // QR code block — generated after render
-      const qrBlock = r.status !== 'cancelled' ? `<div class="order-qr" id="qr_${r.id}" onclick="expandQR('${r.id}','${escJS(r.offeringName)}','${ref}')" title="Tap to enlarge"></div>` : '';
+      const qrBlock = r.status !== 'cancelled' ? `<div class="order-qr" id="qr_${r.id}" data-onclick="expandQR" data-args='${dataArgs([r.id, r.offeringName, ref])}' title="Tap to enlarge"></div>` : '';
 
       return `<div class="order-card${r.status === 'collected' ? ' collected' : ''}" id="ordercard_${r.id}">
         <div class="order-card-header">
@@ -7953,7 +8011,7 @@ async function renderOrdersTab(container) {
               ${r.quantity > 1 ? `${r.quantity}× · ` : ''}Pay in store · £${parseFloat(r.totalPrice || r.price || 0).toFixed(2)}
             </div>
             <div class="order-id">Ref: ${ref}</div>
-            ${canCancel ? `<button onclick="cancelReservation('${r.id}','${r.offeringId}')" style="margin-top:8px;background:none;border:none;color:#e74c3c;font-size:0.75rem;cursor:pointer;padding:0;">Cancel reservation</button>` : ''}
+            ${canCancel ? `<button data-onclick="cancelReservation" data-args='${dataArgs([r.id, r.offeringId])}' style="margin-top:8px;background:none;border:none;color:#e74c3c;font-size:0.75rem;cursor:pointer;padding:0;">Cancel reservation</button>` : ''}
           </div>
           ${r.status !== 'cancelled' ? qrBlock : ''}
         </div>
@@ -7977,7 +8035,7 @@ async function cancelReservation(reservationId, offeringId) {
     // Check 12hr rule
     const resSnap = await getDoc(doc(db, 'reservations', reservationId));
     const r = resSnap.data();
-    const collect = new Date(r.collectDate + 'T09:00');
+    const collect = new Date(r.collectDate + 'T' + (parseSlotStartTime(r.slot) || '09:00'));
     if ((collect - new Date()) < 12 * 60 * 60 * 1000) {
       showToast('Cannot cancel within 12 hours of collection time');
       return;
@@ -8006,7 +8064,7 @@ async function openCatalogueManager(bakeryName) {
     <div style="background:var(--cream-white);border-radius:var(--radius) var(--radius) 0 0;width:100%;max-width:560px;max-height:75vh;display:flex;flex-direction:column;">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);">
         <div style="font-family:'Playfair Display',serif;font-size:1rem;font-weight:700;color:var(--espresso);">📋 Item catalogue</div>
-        <button onclick="document.getElementById('catalogueManagerOverlay').remove()" style="background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--text-muted);">✕</button>
+        <button data-onclick="closeCatalogueManager" style="background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--text-muted);">✕</button>
       </div>
       <div id="catalogueList" style="overflow-y:auto;flex:1;padding:16px 20px;">
         <div style="text-align:center;padding:24px;"><div class="spinner" style="margin:0 auto;"></div></div>
@@ -8032,11 +8090,15 @@ async function openCatalogueManager(bakeryName) {
           <div style="font-size:0.88rem;font-weight:600;color:var(--espresso);">${item.name}</div>
           <div style="font-size:0.72rem;color:var(--text-muted);">£${parseFloat(item.price||0).toFixed(2)}${item.description ? ` · ${item.description.slice(0,40)}${item.description.length>40?'…':''}` : ''}</div>
         </div>
-        <button onclick="removeCatalogueItem('${item.id}','${escJS(bakeryName)}')" style="background:none;border:none;color:#e74c3c;font-size:0.8rem;cursor:pointer;flex-shrink:0;">Remove</button>
+        <button data-onclick="removeCatalogueItem" data-args='${dataArgs([item.id, bakeryName])}' style="background:none;border:none;color:#e74c3c;font-size:0.8rem;cursor:pointer;flex-shrink:0;">Remove</button>
       </div>`).join('');
   } catch(e) {
     document.getElementById('catalogueList').innerHTML = '<div style="padding:16px;color:var(--text-muted);">Could not load catalogue.</div>';
   }
+}
+
+function closeCatalogueManager() {
+  document.getElementById('catalogueManagerOverlay')?.remove();
 }
 
 async function removeCatalogueItem(itemId, bakeryName) {
@@ -8078,6 +8140,7 @@ function generateOrderQRCodes(reservations) {
 function expandQR(reservationId, itemName, ref) {
   // Show a full-screen QR for easy scanning
   const overlay = document.createElement('div');
+  overlay.id = 'expandedQRModal';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:2000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;';
   overlay.innerHTML = `
     <div style="background:white;border-radius:16px;padding:24px;text-align:center;">
@@ -8086,7 +8149,7 @@ function expandQR(reservationId, itemName, ref) {
       <div style="font-size:0.75rem;color:#888;margin-top:4px;font-family:monospace;">Ref: ${ref}</div>
       <div style="font-size:0.72rem;color:#aaa;margin-top:8px;">Show this to the baker at collection</div>
     </div>
-    <button style="color:white;background:none;border:1.5px solid rgba(255,255,255,0.4);border-radius:100px;padding:10px 28px;font-size:0.85rem;cursor:pointer;" onclick="this.closest('div[style]').remove()">Close</button>`;
+    <button style="color:white;background:none;border:1.5px solid rgba(255,255,255,0.4);border-radius:100px;padding:10px 28px;font-size:0.85rem;cursor:pointer;" data-onclick="closeExpandedQR">Close</button>`;
   document.body.appendChild(overlay);
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 
@@ -8101,6 +8164,10 @@ function expandQR(reservationId, itemName, ref) {
       });
     }
   });
+}
+
+function closeExpandedQR() {
+  document.getElementById('expandedQRModal')?.remove();
 }
 
 // ─── QR SCANNER (baker side) ──────────────────────────────────────────────────
@@ -8353,7 +8420,7 @@ function renderNotifPanel() {
         ? `<div class="notif-avatar"><img src="${n.actorPhoto}" alt=""></div>`
         : `<div class="notif-avatar">${(n.actorName || '?').charAt(0).toUpperCase()}</div>`;
     return `
-      <div class="notif-item ${n.unread ? 'unread' : ''}" onclick="closeNotifPanel(); notifItems[${i}].onClick()">
+      <div class="notif-item ${n.unread ? 'unread' : ''}" data-onclick="closeNotifPanel,openNotifItem" data-args='${dataArgs([i])}'>
         ${avatarHTML}
         <div class="notif-body">
           <div class="notif-text"><strong>${escJS(n.actorName)}</strong> ${n.text}</div>
@@ -8361,6 +8428,18 @@ function renderNotifPanel() {
         </div>
       </div>`;
   }).join('');
+}
+
+// Each notification carries its own ad-hoc onClick closure (see
+// loadNotifications) rather than a single named action, so this thin,
+// index-based wrapper is what's registered — it looks the closure up from
+// module-scope notifItems and invokes it, instead of the old raw
+// onclick="notifItems[i].onClick()", which broke post-modularization for the
+// same reason as the avatar dropdown: notifItems is a plain module-level
+// `let`, invisible to inline onclick="..." attributes (global scope) — it
+// was never in WINDOW EXPORTS, only functions are.
+function openNotifItem(i) {
+  notifItems[i]?.onClick?.();
 }
 
 async function markAllNotifsRead() {
@@ -8490,6 +8569,21 @@ registerActions({
 // WINDOW EXPORTS too.
 registerActions({ showPage, toggleUserMenu, toggleMobileMenu });
 
+// Avatar dropdown (toggleUserMenu). Bug fix: "View my profile" and "Sign out"
+// used to inline bare `currentUser`/`fb` reads directly in their onclick
+// text — broken post-modularization, since those are plain module-scope
+// `let`s, invisible to inline onclick="..." (global scope), unlike this
+// module's functions, which WINDOW EXPORTS deliberately re-exposes.
+// signOutFromAvatarMenu is new, mirroring signOutFromMobileMenu, since
+// fb.signOut(fb.auth) is a direct method call, not a registrable name.
+registerActions({ closeAvatarDropdown, signOutFromAvatarMenu });
+
+// Notifications panel item click. openNotifItem is new — replaces the raw
+// onclick="notifItems[i].onClick()", broken the same way (notifItems is a
+// bare module-scope array) — see openNotifItem's own comment for why a thin
+// index-based wrapper was the fix instead of a bigger redesign.
+registerActions({ openNotifItem });
+
 // Auth modal. openAuthModal has many plain-JS call sites elsewhere in this
 // file (e.g. `if (!currentUser) { openAuthModal(); return; }`) — those are
 // ordinary function calls, not markup-driven, so they need no conversion.
@@ -8523,10 +8617,22 @@ registerActions({ submitFeatureRequest, toggleFeatureVote, deleteFeatureRequest,
 // also stays in WINDOW EXPORTS.
 registerActions({ setBakeryView, openBakeryProfile, toggleBookmark, renderBakeries });
 
-// People page view toggle only. The rest of FILTER HELPERS (rankings, the
-// Profile modal's own rendering, the People/Profile ternary at the member
-// card) still needs its own dedicated pass.
+// People page view toggle.
 registerActions({ setPeopleView });
+
+// People page rankings/members + the Profile modal's own rendering — the
+// rest of FILTER HELPERS. openProfileModal/closeProfileModal/openBakeryProfile/
+// openDetail/openAuthModal are already registered elsewhere (Bakeries page,
+// Leaderboard, Auth blocks) — no change needed for those here.
+// followAndRefreshProfile/followAndRefreshPeople are new wrapper functions
+// (see followBtnHTML) replacing two toggleFollow(...).then(...) chains that
+// didn't fit the plain data-onclick shape. switchProfileTab stays in WINDOW
+// EXPORTS too — the Saved tab's "Remove" button (a different section,
+// renderSavedTab) still calls it through a raw, unconverted onclick chain.
+registerActions({
+  renderRankings, populateRankingLocationFilter, switchProfileTab,
+  followAndRefreshProfile, followAndRefreshPeople,
+});
 
 // buildCategoryFilterBar + openBakeryProfile. buildCategoryFilterBar now
 // takes an argsFor(cat) callback instead of a fixedArgs array, so each
@@ -8541,19 +8647,70 @@ registerActions({ setPeopleView });
 // migrated off the global. openProfileModal/openBakeryEditModal/
 // openManageBakeryModal/openAddModalForBakery all still have other
 // unconverted call sites elsewhere and stay in WINDOW EXPORTS.
-// buildItemRowHTML and buildLocationFilterBar are dead code (zero call
-// sites found) — left as-is; flagging again for a separate decision on
-// deleting them, not touched as part of this migration.
 registerActions({
   openProfileModal, openBakeryEditModal, openManageBakeryModal,
   openManageShopModal, openManagePreordersModal, switchBakeryTab,
   openAddModalForBakery,
 });
 
-// Explore page. closeExploreMapPopup is new (see its definition, next to
-// the now-unused closeExplorePopupAnd) — replaces passing a closure through
-// data-args, which can't serialize a function, with the same comma-list
-// "cleanup step, then one parameterized action" shape used everywhere else.
+// Pre-order discovery page. onPoCountryChange/onPoCityChange/poDetectNearest/
+// renderPreorderPage/closeBakeryModalIfOpen/openReserveModal had no call
+// sites anywhere else in the file, so they've been removed from WINDOW
+// EXPORTS entirely.
+registerActions({
+  onPoCountryChange, onPoCityChange, poDetectNearest, renderPreorderPage,
+  closeBakeryModalIfOpen, openReserveModal,
+});
+
+// My pre-orders sheet (burger menu). closeMyPreordersSheet and
+// viewOrdersFromMyPreordersSheet are both new — neither needs WINDOW
+// EXPORTS since they have no call sites outside this sheet's own markup.
+registerActions({ closeMyPreordersSheet, viewOrdersFromMyPreordersSheet });
+
+// Reservations flow: reserve-modal quantity picker, the profile Orders tab's
+// cancel button and QR-code tap-to-enlarge, and the enlarged QR's own close
+// button (closeExpandedQR, new — replaces onclick="this.closest(...).remove()"
+// with the same named-overlay-id pattern as closeReserveModal/
+// closeMyPreordersSheet). reserveOffering, cancelReservation, and expandQR
+// each had no call sites outside the markup converted here, so all three
+// come out of WINDOW EXPORTS entirely — as does closeReserveModal, whose
+// last remaining raw call site (the quantity-picker buttons) is converted
+// above. markCollected/openEditOffering/deleteOffering are the baker-side
+// Manage Pre-orders modal — converted separately below.
+registerActions({
+  reserveOffering, cancelReservation, expandQR, closeExpandedQR,
+});
+
+// Baker: manage offerings (the last untouched piece of Pre-orders/
+// Reservations). closeMpDayDetail/closeEditOfferingOverlay/hideAddOfferingForm/
+// closeCatalogueManager are new — each replaces a plain
+// document.getElementById(...).remove()/this.closest(...).remove()/
+// style.display='none' onclick with a named helper, following the
+// closeReserveModal/closeExpandedQR pattern.
+// fillFromCatalogue's signature dropped its unused bakeryName parameter and
+// now reads the <select> itself (trailing-element convention) instead of
+// `this.value`, since it had exactly one call site. All 16 functions below
+// had no call sites outside this cluster, so none need WINDOW EXPORTS —
+// openCatalogueManager's and markCollected's own internal plain-JS refresh
+// calls elsewhere in this file stay working regardless, since a same-module
+// function call never depended on the window global to begin with. This was
+// the last cluster with stragglers: the catalogue picker overlay's ✕ close
+// and per-item Remove buttons (openCatalogueManager) were still raw
+// onclick=, both fixed here — removeCatalogueItem also comes out of WINDOW
+// EXPORTS below since that was its only reason for being there.
+registerActions({
+  switchMpTab, openQRScanner, openCatalogueManager, showAddOfferingForm,
+  openEditOffering, deleteOffering, markCollected, showMpDayDetail,
+  closeMpDayDetail, setSlotMode, setEditSlotMode, fillFromCatalogue,
+  previewOfferingPhoto, saveOffering, saveEditOffering,
+  closeEditOfferingOverlay, hideAddOfferingForm, closeCatalogueManager,
+  removeCatalogueItem,
+});
+
+// Explore page. closeExploreMapPopup is new — replaces passing a closure
+// through data-args, which can't serialize a function, with the same
+// comma-list "cleanup step, then one parameterized action" shape used
+// everywhere else.
 // hideExploreResults is a new one-line wrapper for a handler that was
 // previously raw inline JS with no named function at all. The temporary
 // EXPLORE MAP DIAGNOSTICS debug panel (exploreMapLog) isn't handler-driven —
@@ -8586,13 +8743,8 @@ registerActions({
 // zero-arg call site, no compound logic.
 registerActions({ runCategoryMigration });
 
-// Notifications panel. Left un-converted: each rendered notif-item's
-// onclick="closeNotifPanel(); notifItems[i].onClick()" — that `onClick` is
-// an ad-hoc closure stored per-notification (follow → openProfileModal,
-// shared review → openDetail, reaction → no-op), not a named function, so
-// there's no single action name to register for it. That row-click behavior
-// would need its own redesign, not just an attribute swap — out of scope
-// here. closeNotifPanel stays in WINDOW EXPORTS for that call site.
+// Notifications panel. Each notif-item's click is now converted too — see
+// openNotifItem, registered further up alongside the avatar-dropdown bug fix.
 registerActions({ toggleNotifPanel, closeNotifPanel, markAllNotifsRead });
 
 initDelegatedEvents();
@@ -8916,28 +9068,20 @@ Object.assign(window, {
   buildCategoryChips,
   buildCategoryFilterBar,
   buildFollowUserRowHTML,
-  buildItemRowHTML,
-  buildLocationFilterBar,
   buildOpeningHoursHTML,
   buildReactionBarInner,
   buildSummary,
   buildTastingDims,
   calNav,
-  cancelReservation,
   cardHTML,
   clearBakery,
   clearEditPhoto,
   clearItemMatch,
   clearParentCategory,
-  closeAvatarDropdown,
-  closeBakeryModalIfOpen,
-  closeExplorePopupAnd,
   closeMobileMenu,
-  closeNotifPanel,
   closeOnClickOutside,
   closeProfileModal,
   closeQRScanner,
-  closeReserveModal,
   compressImage,
   compressToDataURL,
   computeCountryRank,
@@ -8945,7 +9089,6 @@ Object.assign(window, {
   confirmCollected,
   createNewItem,
   deactivateExploreNearby,
-  deleteOffering,
   deleteProduct,
   deleteReview,
   detectExploreLocation,
@@ -8955,7 +9098,6 @@ Object.assign(window, {
   editBakeryBlurb,
   ensureProfileExists,
   escJS,
-  expandQR,
   exploreMapLog,
   extractCity,
   extractCountry,
@@ -8964,7 +9106,6 @@ Object.assign(window, {
   fetchGoogleBakeries,
   fetchGoogleBakeriesNearPoint,
   fetchPlaceDetails,
-  fillFromCatalogue,
   filterShareCandidates,
   followBtnHTML,
   friendlyAuthError,
@@ -9012,46 +9153,35 @@ Object.assign(window, {
   loadSavedItems,
   loadUserRole,
   lockScroll,
-  markCollected,
   modalBack,
   modalNext,
   mpItemBreakdownHTML,
   onCalDayClick,
-  onPoCityChange,
-  onPoCountryChange,
   openAddModal,
   openAuthModal,
   openBakeryEditModal,
   openBakeryProfile,
-  openCatalogueManager,
   openDetail,
-  openEditOffering,
   openFeatureRequestModal,
   openManageBakeryModal,
   openProductDetail,
   openProductModal,
+  openProfileIfSignedIn,
   openProfileModal,
-  openQRScanner,
-  openReserveModal,
   openSettingsPage,
   ownsBakery,
-  poDetectNearest,
   populateBakeryLocationFilter,
   populateExploreCityDropdown,
   populateExploreCountryDropdown,
   populateLbLocationFilter,
   populatePoCityDropdown,
-  populateRankingLocationFilter,
-  previewOfferingPhoto,
   processScannedReservation,
   productCardHTML,
   promoteUser,
   promptAssignBakery,
   refreshAdminUsersPanel,
   refreshFollowButtons,
-  refreshOpenProfile,
   refreshReactionBar,
-  removeCatalogueItem,
   removePhoto,
   removeReviewAndFlag,
   removeSavedItem,
@@ -9083,23 +9213,17 @@ Object.assign(window, {
   renderNotifPanel,
   renderOrdersTab,
   renderParentChips,
-  renderPeople,
-  renderPreorderPage,
   renderPreorderTab,
-  renderRankings,
   renderRecentGrid,
   renderSavedTab,
   renderShareCandidateRows,
   renderShopPage,
-  reserveOffering,
   resetAddModal,
   runExploreNearbySearch,
   saveBakeryBlurb,
   saveBakeryPage,
   saveBakeryProfile,
   saveEdit,
-  saveEditOffering,
-  saveOffering,
   saveProduct,
   saveReview,
   saveSettingsProfile,
@@ -9115,27 +9239,21 @@ Object.assign(window, {
   selectParentCategory,
   selectSubCategory,
   sendSharedReview,
-  setEditSlotMode,
-  setSlotMode,
-  showAddOfferingForm,
   showAdminTab,
   showAuthError,
   showBakeryItemHints,
   showKnownBakeries,
   showMobileInstallBtn,
-  showMpDayDetail,
   showPage,
   showToast,
   signOutFromSettings,
   switchDmTab,
   switchFeedTab,
   switchLbTab,
-  switchMpTab,
   switchProfileTab,
   timeAgo,
   toggleBakeryHours,
   toggleBookmark,
-  toggleFollow,
   toggleReaction,
   toggleReactionPicker,
   unlockScroll,
