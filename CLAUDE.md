@@ -1,10 +1,190 @@
 # Crumbz — working notes
 
 See `README.md` for the phase-1 modularization overview (Vite build, file
-layout, deploy steps). This file covers two things that change often enough
-to need a living doc: the **handler delegation migration** (complete as of
-2026-08-24 — see milestone note below) done on `phase-1-modularize`, and the
-**E2E test workflow**.
+layout, deploy steps). This file covers three things that change often
+enough to need a living doc: the **handler delegation migration** (complete
+as of 2026-08-24 — see milestone note below), the **carving of
+`src/legacy-app.js` into `src/pages/`/`src/components/`** (in progress, see
+its own section below), and the **E2E test workflow** — all done on
+`phase-1-modularize`.
+
+## Carving src/legacy-app.js into src/pages/ and src/components/
+
+**Status as of 2026-08-24: Phase 0 started, 1/32 extraction steps done.**
+This is separate from — and comes after — the handler delegation migration
+above; don't conflate the two milestones. Plan approved 2026-08-24 (was
+drafted as a plan-mode file at `~/.claude/plans/logical-painting-kurzweil.md`,
+which is **outside this repo and not guaranteed to survive a session
+reset** — this section is the durable copy of record; treat it, not the
+plan file, as authoritative if they ever diverge).
+
+**Why this is happening now**: the handler delegation migration removed the
+main reason functions needed `window[name]` exposure, which was the blocker
+to splitting `legacy-app.js` (9,412 lines, 296 functions) safely.
+
+**The single biggest risk**: module scope. Splitting one file into many ES
+modules means top-level `let`s that today are implicitly shared (same file,
+same scope) become genuinely private to whichever file they end up in,
+unless deliberately exported — the exact bug class already hit twice this
+project (bare `currentUser`/`fb` refs throwing `ReferenceError`,
+`modalNext`/`modalBack` silently unregistered past `check:dead-refs`). This
+is why a dedicated shared-state module (`src/state/appState.js`) is
+front-loaded early rather than discovered cluster by cluster.
+
+### Proposed layout
+
+```
+src/
+  state/appState.js     — shared mutable state + its loader functions
+  data/categories.js     — CATEGORY_TREE and friends: static, read-only, zero risk
+  utils/                 — showToast, timeAgo, escJS, lockScroll/unlockScroll, distKm,
+                            extractCity, extractCountry — pure functions, zero shared state
+  app/lifecycle.js       — PWA install, update check, mobile status bar fix,
+                            pull-to-refresh, keyboard-aware scrolling
+  components/*.js        — reusable modals/widgets used from more than one page
+  pages/*.js             — the 9 index.html `#page-*` routed views
+```
+
+`appState.js` centralizes: **identity/roles** (`currentUser`, `fb`,
+`allUserRoles`, `currentUserRole`, `currentUserBakery`, `bakeryProfiles`,
+`isAdmin()`/`isBusiness()`/`ownsBakery()`), **core data caches** (`allItems`,
+`allBakeries`, `allProfiles`, `allItemRecords` + their loaders `loadData()`/
+`buildBakeryIndex()`/`loadProfiles()`/`loadBakeryProfiles()`/
+`loadAllUserRoles()`/`loadUserRole()`/`loadItemRecords()`/
+`ensureProfileExists()`), and **social state** (`myFollowing`/`myFollowers`
++ `loadFollows()`, `userBookmarks` + `loadBookmarks()`, `userSavedItems` +
+`loadSavedItems()`). Centralizing the loaders alongside the raw state is
+deliberate — two of this doc's "Known pre-existing issues" (below) are bugs
+in exactly these loaders, and this move is a natural point to at least
+surface that, not an obligation to fix it while extracting.
+
+Sections that must **not** become 1:1 modules: **FILTER HELPERS** (grab-bag
+spanning People page + Profile modal + Bakery modal internals — splits
+three ways); **ADMIN PANEL / ADMIN PANEL RENDERERS / MANAGE BAKERY / REVIEW
+FLAGGING (empty) / FLAG REVIEW** (5 headers, one real feature →
+`adminPanel.js`); **RATING** (1 function, folds into `addReviewModal.js` —
+it's the wizard's own slider); **UTILS** (mostly a migration-log comment
+block, not utility code — prune, don't carry into `src/utils/`).
+
+**Prerequisite, not yet done**: `scripts/check-dead-refs.js` defaults to
+scanning `src/legacy-app.js` only (the same documented blind spot that let
+`modalNext`/`modalBack` ship broken during the delegation migration) — needs
+extending to cover the new directories before relying on it during this
+work, ideally before Phase 1 starts.
+
+### Extraction order (32 steps across 8 phases)
+
+Ordered by a mix of test-coverage confidence *and* entanglement/blast-radius
+— not coverage alone (e.g. `src/app/lifecycle.js` has no dedicated tests but
+near-zero entanglement, so it's Phase 1, not Phase 7).
+
+- **Phase 0 — infrastructure, most carefully, full E2E after each:**
+  1. `src/data/categories.js` — ✅ **done** (2026-08-24, commit `2d06491`)
+  2. `src/utils/*`
+  3. `src/state/appState.js` — **split into 3 checkpointed commits**, full
+     `test:e2e` after each: **3a** identity/roles, **3b** core data caches,
+     **3c** social state. Functions stay in `legacy-app.js` through all
+     three; only state declarations + read/write call sites get rewired to
+     import from `appState.js`.
+  4. Extend `check:dead-refs` to cover the new directories.
+- **Phase 1 — foundational, high fan-in, implicitly covered by every spec:**
+  5. `src/components/nav.js` · 6. `src/components/authModal.js` ·
+  7. `src/app/lifecycle.js`
+- **Phase 2 — small, self-contained, strongly direct-tested:**
+  8. `src/components/reactions.js` · 9. `src/components/editReviewModal.js` ·
+  10. `src/components/qrCode.js` · 11. `src/pages/shop.js`
+- **Phase 3 — medium, cohesive, good coverage:**
+  12. `src/components/reviewCard.js` · 13. `src/pages/feed.js` ·
+  14. `src/components/follows.js` · 15. `src/pages/people.js` (best-covered
+  page in the app) · 16. `src/components/reservations.js`
+- **Phase 4 — large but well-tested (the "does this scale" milestone):**
+  17. `src/components/manageOfferingsModal.js` (biggest single cluster,
+  ~1,020 lines, 11 real-click tests — deepest coverage in the app) ·
+  18. `src/components/addReviewModal.js` (kept as **one** module — internal
+  state is deeply cross-referential; this is the exact cluster where
+  `modalNext`/`modalBack` broke during delegation, splitting further risks
+  the same bug class via cross-module import mistakes instead)
+- **Phase 5 — composite modals aggregating several historical clusters:**
+  19. `src/components/itemDetailModal.js` ·
+  20. `src/components/shareReviewModal.js` ·
+  21. `src/components/bakeryModal.js` · 22. `src/components/profileModal.js`
+- **Phase 6 — admin/business surfaces (spec exists, but destructive actions
+  are wiring-only, not click-verified — extra manual QA regardless of order):**
+  23. `src/components/adminPanel.js` ·
+  24. `src/components/businessBakeryManagement.js` (carries the documented
+  `renderBusinessSection()`-missing-`buildBakeryIndex()` bug — natural point
+  to surface it, not obligated to fix) ·
+  25. `src/components/notifications.js` (thin direct coverage, wide fan-in)
+- **Phase 7 — last, zero/confirmed-zero direct test coverage, budget extra
+  manual QA, write/extend specs at extraction time rather than leaving the
+  gap open:**
+  26. `src/pages/bakeries.js` (also carries the documented `loadData()`
+  race) · 27. `src/pages/leaderboard.js` · 28. `src/pages/home.js` ·
+  29. `src/pages/explore.js` (largest zero-coverage cluster, ~1,075 lines,
+  but most self-contained of the zero-coverage group) ·
+  30. `src/pages/preorders.js` (confirmed zero coverage via grep — see
+  below) · 31. `src/components/preordersSheet.js` (confirmed zero coverage) ·
+  32. `src/pages/settings.js` (mostly composition of Phase 6's components
+  by this point)
+
+**Coverage verified, not assumed, for the two originally-"unclear" items**:
+grepped `tests/` for every DOM id/function name tied to `#page-preorders`
+(`poCountrySelect`/`poCitySelect`/`poBakeryFilter`/`onPoCountryChange`/
+`onPoCityChange`/`poDetectNearest`/`renderPreorderPage`/`initPreorderPage`)
+and the My Pre-orders sheet (`myPreordersSheet`/`mobilePreordersBtn`/
+`openMyPreordersSheet`/`closeMyPreordersSheet`/
+`viewOrdersFromMyPreordersSheet`/`loadMyPreorders`/`updatePreorderBadge`) —
+zero hits on either. `tests/utils/preorders.js` is misleadingly named: it
+drives Bakeries page → bakery profile modal → Manage pre-orders /
+reserve-from-profile, never `#page-preorders` itself. Both genuinely
+untested, not just unclear — no reordering needed, Phase 7 stands.
+
+### Commit strategy
+
+**One commit per module (32 steps → at least 32 commits), never fewer.**
+Each commit lands only after its own full `test:e2e` run is green —
+extractions are never stacked ungated before running the suite, so a
+regression always bisects to exactly one module's change. Phase 0 stage 3
+(`appState.js`) is finer-grained than the module-level norm (3 commits, one
+per state group) given its elevated risk. Phase boundaries are not commit
+boundaries — commits happen at the module/stage level throughout.
+
+### Per-extraction workflow (mirrors the delegation migration's proven process)
+
+1. Before moving: re-verify the function/state list for that module — line
+   numbers shift as earlier steps land; re-grep at extraction time.
+2. Move the code; rewrite shared-state reads/writes to import from
+   `appState.js` instead of relying on same-file scope.
+3. Wire the new module in; remove moved functions from `legacy-app.js` and
+   from `WINDOW EXPORTS` if still listed (worth checking even if the plan
+   didn't flag it — e.g. `getCategoryDisplay`/`getTastingDims` turned out to
+   be stale `WINDOW EXPORTS` entries, same class as the Item detail modal
+   fix from the delegation migration).
+4. `npm run check:dead-refs` (once extended per the prerequisite above).
+5. `npm run build`.
+6. Run the **full** `npm run test:e2e`, not just the spec(s) matching that
+   module.
+7. Commit (see commit strategy above).
+8. Update this section: check off the step, note anything found.
+
+### Extraction log (most recent first)
+
+- **`src/data/categories.js`** (2026-08-24, commit `2d06491`). Moved
+  `CATEGORY_TREE`/`CATEGORIES`/`SUB_TO_PARENT`/`SUB_LABEL`/
+  `getCategoryDisplay`/`TASTING_DIMS_UNIVERSAL`/`TASTING_DIM_5TH`/
+  `DEFAULT_DIM_5TH`/`getTastingDims`/`TASTING_DIMS` as-is. Found
+  `getCategoryDisplay`/`getTastingDims` were stale `WINDOW EXPORTS` entries
+  (every call site is a direct JS call, never a raw markup attribute) —
+  removed them, same class of finding as the Item detail modal fix. Also
+  found `TASTING_DIMS` (the "legacy flat list") is genuinely dead code —
+  zero references anywhere outside its own declaration — moved as-is rather
+  than deleted, since deleting dead code wasn't this extraction's job;
+  worth deleting in a follow-up if still unused then. One E2E flake on the
+  first full run (`qr-scanner-baker.spec.js`, a bakery-ownership-permission
+  issue on whichever bakery `openFirstBakeryProfile` happened to land on —
+  nothing in that spec's path touches category/tasting data), confirmed
+  non-reproducing via an isolated rerun (4/4 passed) before a clean full
+  rerun (60 passed/11 skipped/0 failed) gated the commit.
 
 ## Milestone: handler delegation migration complete (2026-08-24)
 
