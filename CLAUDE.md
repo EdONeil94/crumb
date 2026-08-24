@@ -10,7 +10,10 @@ its own section below), and the **E2E test workflow** — all done on
 
 ## Carving src/legacy-app.js into src/pages/ and src/components/
 
-**Status as of 2026-08-24: Phase 0 started, 1/32 extraction steps done.**
+**Status as of 2026-08-24: Phase 0 in progress, 2/32 extraction steps
+done.** Next up: step 3 (`src/state/appState.js`) — the highest-risk step
+in the plan, paused for an explicit mode-switch confirmation before it
+starts (see extraction log below).
 This is separate from — and comes after — the handler delegation migration
 above; don't conflate the two milestones. Plan approved 2026-08-24 (was
 drafted as a plan-mode file at `~/.claude/plans/logical-painting-kurzweil.md`,
@@ -80,7 +83,7 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
 
 - **Phase 0 — infrastructure, most carefully, full E2E after each:**
   1. `src/data/categories.js` — ✅ **done** (2026-08-24, commit `2d06491`)
-  2. `src/utils/*`
+  2. `src/utils/*` — ✅ **done** (2026-08-24, commit `a372e56`)
   3. `src/state/appState.js` — **split into 3 checkpointed commits**, full
      `test:e2e` after each: **3a** identity/roles, **3b** core data caches,
      **3c** social state. Functions stay in `legacy-app.js` through all
@@ -169,6 +172,18 @@ boundaries — commits happen at the module/stage level throughout.
 
 ### Extraction log (most recent first)
 
+- **`src/utils/{dom,geo,strings}.js`** (2026-08-24, commit `a372e56`).
+  `lockScroll`/`unlockScroll`/`showToast`/`timeAgo` → `dom.js`;
+  `distKm`/`extractCity`/`extractCountry` → `geo.js`; `escJS` → `strings.js`.
+  `lockScroll`/`unlockScroll`'s `scrollY` was a module-level `let` in the
+  original file — verified used nowhere else, kept as private state inside
+  `dom.js` rather than promoted to `appState.js`. Found `distKmUser`
+  (`:811` at the time) doesn't belong in this step: it reads
+  `userGeoCoords`, which is `src/pages/bakeries.js`'s own future local
+  state (Phase 7), not a true shared utility — left in `legacy-app.js`,
+  will import `distKm` from `geo.js` once `bakeries.js` moves. All 8 moved
+  functions had stale `WINDOW EXPORTS` entries (verified zero raw markup
+  call sites each) — removed, same class of finding as step 1.
 - **`src/data/categories.js`** (2026-08-24, commit `2d06491`). Moved
   `CATEGORY_TREE`/`CATEGORIES`/`SUB_TO_PARENT`/`SUB_LABEL`/
   `getCategoryDisplay`/`TASTING_DIMS_UNIVERSAL`/`TASTING_DIM_5TH`/
