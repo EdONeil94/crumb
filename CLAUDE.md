@@ -11,9 +11,9 @@ its own section below), and the **E2E test workflow** — all done on
 ## Carving src/legacy-app.js into src/pages/ and src/components/
 
 **Status as of 2026-08-24: Phase 0 and Phase 1 both complete.** Phase 2
-under way — steps 8 (`reactions.js`) and 9 (`editReviewModal.js`) done,
-steps 10-11 (`qrCode.js`, `src/pages/shop.js`) not started. 9/32
-extraction steps done.
+under way — steps 8-10 (`reactions.js`, `editReviewModal.js`, `qrCode.js`)
+done, step 11 (`src/pages/shop.js`) not started. 10/32 extraction steps
+done.
 This is separate from — and comes after — the handler delegation migration
 above; don't conflate the two milestones. Plan approved 2026-08-24 (was
 drafted as a plan-mode file at `~/.claude/plans/logical-painting-kurzweil.md`,
@@ -132,14 +132,29 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   9. `src/components/editReviewModal.js` — ✅ **done** (2026-08-24, commit
   `a911b4f`) — split, not clean, unlike step 8; see step 18/29 callouts
   below for the 3 deferred functions ·
-  10. `src/components/qrCode.js` · 11. `src/pages/shop.js`
+  10. `src/components/qrCode.js` — ✅ **done** (2026-08-24, commit
+  `b002aa0`) — split; see step 17 callout below for the 2 deferred
+  functions · 11. `src/pages/shop.js`
 - **Phase 3 — medium, cohesive, good coverage:**
   12. `src/components/reviewCard.js` · 13. `src/pages/feed.js` ·
   14. `src/components/follows.js` · 15. `src/pages/people.js` (best-covered
   page in the app) · 16. `src/components/reservations.js`
 - **Phase 4 — large but well-tested (the "does this scale" milestone):**
   17. `src/components/manageOfferingsModal.js` (biggest single cluster,
-  ~1,020 lines, 11 real-click tests — deepest coverage in the app) ·
+  ~1,020 lines, 11 real-click tests — deepest coverage in the app)
+
+  **⚠️ Deferred follow-up tied to this step — set up in Phase 2 step 10,
+  don't lose track of it.** `confirmCollected()`/`closeQrConfirmOverlay()`
+  (`qrCode.js`) stayed in `legacy-app.js` because `confirmCollected()`
+  calls `markCollected()`, part of this cluster. Moving them during step
+  10 would've meant `qrCode.js` importing back from `legacy-app.js` while
+  `legacy-app.js` already needs `generateOrderQRCodes()`/
+  `processScannedReservation()` imported back the normal direction — a
+  genuine two-file cycle. **Once step 17 lands and `markCollected()` has a
+  real importable home, revisit whether `confirmCollected()`/
+  `closeQrConfirmOverlay()` can move into `qrCode.js`.** Deliberate,
+  separate decision at that point.
+
   18. `src/components/addReviewModal.js` (kept as **one** module — internal
   state is deeply cross-referential; this is the exact cluster where
   `modalNext`/`modalBack` broke during delegation, splitting further risks
@@ -257,6 +272,38 @@ boundaries — commits happen at the module/stage level throughout.
 
 ### Extraction log (most recent first)
 
+- **`src/components/qrCode.js` — step 10** (2026-08-24, commit `b002aa0`).
+  Split, per confirmation caught *before* writing any code this time
+  (learned from step 9 — spotted the `confirmCollected()`→`markCollected()`
+  dependency during dependency analysis, flagged it immediately rather
+  than discovering it mid-write). Moved the 7 clean functions
+  (`generateOrderQRCodes`, `expandQR`, `closeExpandedQR`, `openQRScanner`,
+  `scanFrame`, `closeQRScanner`, `processScannedReservation` — diner QR
+  display + baker scanner bundled into one file). `confirmCollected()`/
+  `closeQrConfirmOverlay()` stayed behind — moving them would've formed a
+  genuine two-file cycle with `legacy-app.js` (which already needs
+  `generateOrderQRCodes()`/`processScannedReservation()` imported back).
+  `processScannedReservation` keeps its `WINDOW EXPORTS` entry (imported
+  back into `legacy-app.js` purely for that) since
+  `tests/qr-scanner-baker.spec.js` calls
+  `window.processScannedReservation(...)` directly.
+  **Found and fixed 3 more of step 9's exact bug class**: 3 different
+  `legacy-app.js` `registerActions()` calls still referenced now-moved
+  functions (`closeQRScanner`; `expandQR`/`closeExpandedQR`;
+  `openQRScanner`) as bare bindings — caught by grep sweep this time, not
+  by a failing test. **Also repeated step 9's actual mistake once**:
+  forgot to register `expandQR` itself in `qrCode.js`'s own
+  `registerActions()` call — but `check:dead-refs` caught this one
+  automatically, since a `data-onclick` string with no matching
+  registration is exactly what its dead-delegated-actions check covers
+  (the bare-identifier-in-object-literal form is the part still not
+  covered — see "What `check:dead-refs` actually catches" above).
+  Confirms the Phase 0 step 4 global-registry work is paying off in
+  practice. Verified with a targeted Playwright script (console + page
+  error listeners) that the app loads with zero runtime errors *before*
+  running the full suite this time, given how expensive discovering
+  another `ReferenceError` only via the 5-minute E2E run was last step.
+  Full `test:e2e`: 60 passed/11 skipped/0 failed.
 - **`src/components/editReviewModal.js` — step 9** (2026-08-24, commit
   `a911b4f`). Split, not clean, unlike step 8 — flagged and confirmed
   before writing any code: `handleEditPhoto()`/`saveEdit()`/
