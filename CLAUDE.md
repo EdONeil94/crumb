@@ -50,13 +50,18 @@ src/
 
 `appState.js` centralizes: **identity/roles** (`currentUser`, `fb`,
 `allUserRoles`, `currentUserRole`, `currentUserBakery`, `bakeryProfiles`,
-`isAdmin()`/`isBusiness()`/`ownsBakery()`), **core data caches** (`allItems`,
-`allBakeries`, `allProfiles`, `allItemRecords` + their loaders `loadData()`/
-`buildBakeryIndex()`/`loadProfiles()`/`loadBakeryProfiles()`/
-`loadAllUserRoles()`/`loadUserRole()`/`loadItemRecords()`/
-`ensureProfileExists()`), and **social state** (`myFollowing`/`myFollowers`
-+ `loadFollows()`, `userBookmarks` + `loadBookmarks()`, `userSavedItems` +
-`loadSavedItems()`). Centralizing the loaders alongside the raw state is
+`isAdmin()`/`isBusiness()`/`ownsBakery()`, `loadUserRole()`/
+`loadAllUserRoles()`/`loadBakeryProfiles()` — ✅ done, 3a), **core data
+caches** (`allItems`, `allBakeries`, `allProfiles`, `allItemRecords` + their
+loaders `loadData()`/`buildBakeryIndex()`/`loadProfiles()`/
+`loadItemRecords()`/`ensureProfileExists()` — corrected 2026-08-24: an
+earlier draft of this line duplicated `loadBakeryProfiles()`/
+`loadAllUserRoles()`/`loadUserRole()` here too, which was wrong — none of
+those three populate `allItems`/`allBakeries`/`allProfiles`/`allItemRecords`,
+they belong to identity/roles only, already moved in 3a), and **social
+state** (`myFollowing`/`myFollowers` + `loadFollows()`, `userBookmarks` +
+`loadBookmarks()`, `userSavedItems` + `loadSavedItems()`). Centralizing the
+loaders alongside the raw state is
 deliberate — two of this doc's "Known pre-existing issues" (below) are bugs
 in exactly these loaders, and this move is a natural point to at least
 surface that, not an obligation to fix it while extracting.

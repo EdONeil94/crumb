@@ -8,7 +8,16 @@
 //
 // This file is built up in three checkpointed sub-stages (3a identity/roles,
 // 3b core data caches, 3c social state), each its own commit gated on a
-// full test:e2e run — see CLAUDE.md for why. This is 3a only.
+// full test:e2e run — see CLAUDE.md for why. This is 3a + 3b.
+//
+// 3b note: loadData()/buildBakeryIndex()/loadProfiles() stay in
+// legacy-app.js rather than moving here, unlike 3a's loaders — each has a
+// real dependency legacy-app.js still owns (loadData/loadProfiles call UI
+// render functions like renderRecentGrid()/updateNav()/renderPeople();
+// buildBakeryIndex reads exploreCache, owned by the not-yet-extracted
+// Explore page). Moving them would mean this module importing back from
+// the file that imports it. Only loadItemRecords()/ensureProfileExists()
+// are genuinely self-contained enough to move, same as 3a's cluster.
 
 // ─── 3a: Identity / roles ───────────────────────────────────────────────────
 
@@ -65,4 +74,50 @@ export async function loadAllUserRoles() {
     allUserRoles = {};
     snap.docs.forEach(d => { allUserRoles[d.id] = d.data(); });
   } catch(e) {}
+}
+
+// ─── 3b: Core data caches ───────────────────────────────────────────────────
+// allItems/allBakeries are exported as state + setters only (their loaders
+// stay in legacy-app.js — see the note above); allItemRecords/allProfiles
+// have no setter since their sole mutator either moves with them
+// (loadItemRecords) or only ever mutates properties, never reassigns
+// (loadProfiles's `allProfiles[d.id] = ...`, verified via grep — no
+// wholesale `allProfiles = ` reassignment exists anywhere in the codebase).
+
+export let allItems = [];
+export let allBakeries = {}; // keyed by bakeryName
+export let allProfiles = {}; // uid -> profile data
+export let allItemRecords = []; // cached from Firestore
+
+export function setAllItems(items) { allItems = items; }
+export function setAllBakeries(bakeries) { allBakeries = bakeries; }
+
+export async function loadItemRecords() {
+  if (!fb) return;
+  const { db, collection, getDocs } = fb;
+  try {
+    const snap = await getDocs(collection(db, 'itemRecords'));
+    allItemRecords = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch(e) { console.log('itemRecords load:', e.message); }
+}
+
+// Guarantees every signed-in user has at least a minimal profile doc, so they
+// show up as a "member" immediately — even before their first review or
+// their first visit to Settings → Profile.
+export async function ensureProfileExists(user) {
+  if (!fb) return;
+  const { db, doc, getDoc, setDoc, serverTimestamp } = fb;
+  try {
+    const ref = doc(db, 'profiles', user.uid);
+    const snap = await getDoc(ref);
+    if (snap.exists()) return; // already has a profile — never overwrite it here
+    await setDoc(ref, {
+      displayName: user.displayName || user.email?.split('@')[0] || 'Anonymous',
+      photoURL: user.photoURL || null,
+      location: '',
+      bio: '',
+      country: '',
+      createdAt: serverTimestamp()
+    });
+  } catch(e) { console.warn('ensureProfileExists error:', e); }
 }

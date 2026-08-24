@@ -13,6 +13,8 @@ import {
   allUserRoles, bakeryProfiles, setCurrentUser, setFb, setCurrentUserRole,
   setCurrentUserBakery, isAdmin, isBusiness, ownsBakery, loadUserRole,
   loadBakeryProfiles, loadAllUserRoles,
+  allItems, allBakeries, allProfiles, allItemRecords, setAllItems,
+  setAllBakeries, loadItemRecords, ensureProfileExists,
 } from './state/appState.js';
 
 // lockScroll/unlockScroll, showToast, timeAgo, escJS, distKm, extractCity,
@@ -100,7 +102,6 @@ async function removeUserRole(uid) {
    attributes throughout index.html.
    ──────────────────────────────────────────────────────────────────────── */
 
-let allProfiles = {}; // uid -> profile data
 let currentStep = 1;
 let totalSteps = 4;
 let selectedCategory = '';
@@ -108,37 +109,16 @@ let selectedBakery = null;
 let photoFile = null;
 let photoDataURL = null;
 let lbCurrentTab = 'all';
-let allItems = [];
 
 // CATEGORY_TREE, CATEGORIES, SUB_TO_PARENT, SUB_LABEL, getCategoryDisplay,
 // TASTING_DIMS_UNIVERSAL, TASTING_DIM_5TH, DEFAULT_DIM_5TH, getTastingDims,
 // and TASTING_DIMS moved to src/data/categories.js (2026-08-24, first step
 // of the pages/components carving) — imported at the top of this file.
+// allProfiles/allItems/allItemRecords/ensureProfileExists moved to
+// src/state/appState.js (2026-08-24, Phase 0 step 3b) — imported above.
 
 // Google Maps API key - replace with yours
 const GOOGLE_MAPS_KEY = 'AIzaSyCQa9SwvrPmdnk5S2-q8Mem2ZP22GVB1Yo';
-
-
-// Guarantees every signed-in user has at least a minimal profile doc, so they
-// show up as a "member" immediately — even before their first review or
-// their first visit to Settings → Profile.
-async function ensureProfileExists(user) {
-  if (!fb) return;
-  const { db, doc, getDoc, setDoc, serverTimestamp } = fb;
-  try {
-    const ref = doc(db, 'profiles', user.uid);
-    const snap = await getDoc(ref);
-    if (snap.exists()) return; // already has a profile — never overwrite it here
-    await setDoc(ref, {
-      displayName: user.displayName || user.email?.split('@')[0] || 'Anonymous',
-      photoURL: user.photoURL || null,
-      location: '',
-      bio: '',
-      country: '',
-      createdAt: serverTimestamp()
-    });
-  } catch(e) { console.warn('ensureProfileExists error:', e); }
-}
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 // window._crumb is guaranteed to already exist by the time this module runs,
@@ -393,13 +373,13 @@ async function loadData() {
   try {
     const q = query(collection(db, 'items'));
     const snap = await getDocs(q);
-    allItems = snap.docs
+    setAllItems(snap.docs
       .map(d => ({ id: d.id, ...d.data() }))
       .sort((a, b) => {
         const ta = a.createdAt?.toMillis?.() || a.createdAt?.seconds || 0;
         const tb = b.createdAt?.toMillis?.() || b.createdAt?.seconds || 0;
         return tb - ta;
-      });
+      }));
     renderRecentGrid();
     updateStats();
   } catch (e) {
@@ -616,10 +596,13 @@ function cardHTML(item) {
 registerActions({ openProfileIfSignedIn, noop });
 
 // ─── BAKERIES ─────────────────────────────────────────────────────────────────
-let allBakeries = {}; // keyed by bakeryName
+// allBakeries moved to src/state/appState.js (2026-08-24, Phase 0 step
+// 3b), imported above; kept here since buildBakeryIndex() itself stays
+// (it reads exploreCache, owned by the not-yet-extracted Explore page —
+// see appState.js's own 3b note for why this function didn't move too).
 
 function buildBakeryIndex() {
-  allBakeries = {};
+  setAllBakeries({});
   allItems.forEach(item => {
     const key = item.bakeryName || 'Unknown bakery';
     if (!allBakeries[key]) {
@@ -2612,17 +2595,9 @@ function buildSummary() {
 }
 
 // ─── ITEM MATCHING ────────────────────────────────────────────────────────────
+// allItemRecords/loadItemRecords moved to src/state/appState.js (2026-08-24,
+// Phase 0 step 3b) — imported above.
 let matchedItemRecord = null; // existing itemRecord if user picks one
-let allItemRecords = []; // cached from Firestore
-
-async function loadItemRecords() {
-  if (!fb) return;
-  const { db, collection, getDocs } = fb;
-  try {
-    const snap = await getDocs(collection(db, 'itemRecords'));
-    allItemRecords = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  } catch(e) { console.log('itemRecords load:', e.message); }
-}
 
 // Takes the input element itself (delegate.js's trailing-clicked-element
 // convention for handlers that need the live value) rather than a string —
@@ -8990,7 +8965,6 @@ if ('serviceWorker' in navigator && isFirebaseHosting) {
 // reachable from onclick attributes in the original file either.
 Object.assign(window, {
   buildBakeryCoords,
-  buildBakeryIndex,
   buildBakeryMapHTML,
   buildCategoryChips,
   buildCategoryFilterBar,
@@ -9010,7 +8984,6 @@ Object.assign(window, {
   deactivateExploreNearby,
   detectExploreLocation,
   distKmUser,
-  ensureProfileExists,
   exploreMapLog,
   feedCardHTML,
   fetchGoogleBakeries,
@@ -9038,14 +9011,11 @@ Object.assign(window, {
   isSavedItem,
   loadBakeryCatalogue,
   loadBookmarks,
-  loadData,
   loadFollows,
-  loadItemRecords,
   loadLeafletThenMap,
   loadMyPreorders,
   loadNotifications,
   loadProducts,
-  loadProfiles,
   loadReactionsForItems,
   loadSavedItems,
   mpItemBreakdownHTML,
