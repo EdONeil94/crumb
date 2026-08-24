@@ -11,9 +11,9 @@ its own section below), and the **E2E test workflow** — all done on
 ## Carving src/legacy-app.js into src/pages/ and src/components/
 
 **Status as of 2026-08-24: Phase 0 in progress, step 3 (`appState.js`)
-under way — sub-stage 3a (identity/roles) done, 3b (core data caches) and
+under way — sub-stages 3a (identity/roles) and 3b (core data caches) done,
 3c (social state) not started.** Stopped here deliberately per instruction
-after 3a's commit + full E2E run — waiting on explicit go-ahead before 3b.
+after 3b's commit + full E2E run — waiting on explicit go-ahead before 3c.
 This is separate from — and comes after — the handler delegation migration
 above; don't conflate the two milestones. Plan approved 2026-08-24 (was
 drafted as a plan-mode file at `~/.claude/plans/logical-painting-kurzweil.md`,
@@ -91,17 +91,23 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   2. `src/utils/*` — ✅ **done** (2026-08-24, commit `a372e56`)
   3. `src/state/appState.js` — **split into 3 checkpointed commits**, full
      `test:e2e` after each: **3a** identity/roles — ✅ **done** (2026-08-24,
-     commit `81c15a4`), **3b** core data caches — not started, **3c** social
-     state — not started. Resolved before 3a started: the plan's general
-     "functions stay in `legacy-app.js`, only state moves" framing
-     conflicted with 3a's own specific enumeration (which lists 6
-     functions) — confirmed with the user that the specific enumeration
-     wins where they conflict, so small self-contained state-management
-     functions (no DOM/UI rendering) move together with the state they
-     manage. Re-confirm this same resolution applies for 3b/3c before
-     assuming it by default — their own state-management functions
-     (`loadData()`, `buildBakeryIndex()`, etc.) are larger and more
-     UI-adjacent than 3a's, so the same reasoning may not transfer cleanly.
+     commit `81c15a4`), **3b** core data caches — ✅ **done** (2026-08-24,
+     commit `068b68c`), **3c** social state — not started. Resolved before
+     3a started: the plan's general "functions stay in `legacy-app.js`,
+     only state moves" framing conflicted with 3a's own specific
+     enumeration (which lists 6 functions) — confirmed with the user that
+     the specific enumeration wins where they conflict, so small
+     self-contained state-management functions (no DOM/UI rendering) move
+     together with the state they manage. **This did NOT transfer cleanly
+     to 3b, as flagged**: `loadData()`/`buildBakeryIndex()`/`loadProfiles()`
+     each depend on something `legacy-app.js` still owns (UI render calls,
+     or `exploreCache` from the not-yet-extracted Explore page) — moving
+     them would've meant `appState.js` importing back from the file that
+     imports it. Resolved by moving state + setters only for those three
+     (mirroring 3a's `currentUser`/`fb` treatment), while the two genuinely
+     self-contained functions (`loadItemRecords`, `ensureProfileExists`)
+     moved wholesale like 3a. **Re-confirm 3c's own scope the same way
+     before assuming — don't default to either pattern.**
   4. Extend `check:dead-refs` to cover the new directories.
 - **Phase 1 — foundational, high fan-in, implicitly covered by every spec:**
   5. `src/components/nav.js` · 6. `src/components/authModal.js` ·
@@ -185,6 +191,28 @@ boundaries — commits happen at the module/stage level throughout.
 
 ### Extraction log (most recent first)
 
+- **`src/state/appState.js` — stage 3b, core data caches** (2026-08-24,
+  commit `068b68c`). Moved `allItems`/`allBakeries` as state + setters only
+  (`setAllItems`/`setAllBakeries`) — `loadData()` and `buildBakeryIndex()`
+  stay in `legacy-app.js`, rewired to call the setters instead of direct
+  reassignment. Moved `allItemRecords`/`loadItemRecords()` and
+  `ensureProfileExists()` wholesale (genuinely self-contained, no setter
+  needed since `loadItemRecords`'s sole reassignment site moves with it).
+  `allProfiles` moved as bare state with **no setter at all** — verified
+  via grep it's never reassigned anywhere in the codebase, only mutated by
+  property (`allProfiles[d.id] = ...`, inside `loadProfiles()`, which also
+  stays in `legacy-app.js` unchanged since it calls `updateNav()`/
+  `renderPeople()`). Also fixed a duplication error in the plan text itself
+  (`CLAUDE.md`) found before starting: an earlier draft had listed
+  `loadBakeryProfiles()`/`loadAllUserRoles()`/`loadUserRole()` under "core
+  data caches" too, despite none of them populating any of 3b's four
+  caches — they belong to identity/roles only, already moved in 3a.
+  Corrected before any code moved (see the step-3 bullet above). All 5
+  candidate functions (`buildBakeryIndex`, `loadData`, `loadProfiles`,
+  `loadItemRecords`, `ensureProfileExists`) had stale `WINDOW EXPORTS`
+  entries — removed regardless of whether the function moved or stayed,
+  same class of finding as steps 1-2 and 3a. Full `test:e2e`: 60 passed/11
+  skipped/0 failed. Stopped here per instruction; 3c not started.
 - **`src/state/appState.js` — stage 3a, identity/roles** (2026-08-24, commit
   `81c15a4`). Moved `SUPER_ADMIN_UID`, `currentUser`, `fb`,
   `currentUserRole`, `currentUserBakery`, `allUserRoles`, `bakeryProfiles`,
