@@ -11,9 +11,11 @@ its own section below), and the **E2E test workflow** — all done on
 ## Carving src/legacy-app.js into src/pages/ and src/components/
 
 **Status as of 2026-08-24: Phase 0 in progress, step 3 (`appState.js`)
-under way — sub-stages 3a (identity/roles) and 3b (core data caches) done,
-3c (social state) not started.** Stopped here deliberately per instruction
-after 3b's commit + full E2E run — waiting on explicit go-ahead before 3c.
+complete — all three sub-stages (3a identity/roles, 3b core data caches, 3c
+social state) done.** This closes out the highest-risk step in the whole
+plan. Stopped here deliberately per instruction after 3c's commit + full
+E2E run — waiting on explicit go-ahead before step 4 (extending
+`check:dead-refs`), same as every sub-stage of step 3 required.
 This is separate from — and comes after — the handler delegation migration
 above; don't conflate the two milestones. Plan approved 2026-08-24 (was
 drafted as a plan-mode file at `~/.claude/plans/logical-painting-kurzweil.md`,
@@ -92,7 +94,10 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   3. `src/state/appState.js` — **split into 3 checkpointed commits**, full
      `test:e2e` after each: **3a** identity/roles — ✅ **done** (2026-08-24,
      commit `81c15a4`), **3b** core data caches — ✅ **done** (2026-08-24,
-     commit `068b68c`), **3c** social state — not started. Resolved before
+     commit `068b68c`), **3c** social state — ✅ **done** (2026-08-24,
+     commit `2367ba2`) — the cleanest of the three: all 5 loaders
+     (`loadFollows`/`loadBookmarks`/`loadSavedItems`) genuinely
+     self-contained, no setters needed at all. Resolved before
      3a started: the plan's general "functions stay in `legacy-app.js`,
      only state moves" framing conflicted with 3a's own specific
      enumeration (which lists 6 functions) — confirmed with the user that
@@ -206,6 +211,23 @@ boundaries — commits happen at the module/stage level throughout.
 
 ### Extraction log (most recent first)
 
+- **`src/state/appState.js` — stage 3c, social state** (2026-08-24, commit
+  `2367ba2`). Moved `myFollowing`/`myFollowers`/`loadFollows()`,
+  `userBookmarks`/`loadBookmarks()`, `userSavedItems`/`loadSavedItems()`
+  wholesale — the cleanest of the three sub-stages. Verified via grep: all
+  5 loaders are genuinely self-contained (no UI-render calls, no
+  cross-cluster reads besides `currentUser`/`fb`, both already in
+  `appState.js` from 3a), and each of the 4 state variables has exactly
+  one reassignment site — the loader itself — so **no setter functions
+  were needed at all**, unlike 3a/3b. Functions staying in `legacy-app.js`
+  that touch this state (`toggleFollow`/`toggleBookmark`/`toggleSaveItem`)
+  only ever mutate by property/Set-method (`.add()`/`.delete()`,
+  `userBookmarks[k] = ...`), never reassign wholesale — confirmed via the
+  same grep sweep. All 3 moved loaders had stale `WINDOW EXPORTS` entries,
+  removed. Full `test:e2e`: 60 passed/11 skipped/0 failed. **This
+  completes Phase 0 step 3 (`appState.js`) — the highest-risk step in the
+  whole plan.** Stopped here per instruction; step 4 (extending
+  `check:dead-refs`) not started.
 - **`src/state/appState.js` — stage 3b, core data caches** (2026-08-24,
   commit `068b68c`). Moved `allItems`/`allBakeries` as state + setters only
   (`setAllItems`/`setAllBakeries`) — `loadData()` and `buildBakeryIndex()`
