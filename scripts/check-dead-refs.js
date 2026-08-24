@@ -25,6 +25,18 @@
 //      Found 5 sites broken this way in one pass; a static check is much
 //      cheaper than finding these one click at a time.
 //
+//   3. Bare identifiers referenced inside a registerActions({...}) object
+//      literal (shorthand `{ openEditModal }` or an explicit value
+//      `{ save: saveHandler }`) that aren't actually defined or imported in
+//      that file — evaluating the object literal throws a ReferenceError
+//      before registerActions() itself is ever called, which silently halts
+//      the rest of that module's top-level execution (and therefore every
+//      delegated click handler in the app, not just the broken one). Added
+//      2026-08-24 after this exact bug shipped past a clean check:dead-refs
+//      + build in Phase 2 step 9 (src/components/editReviewModal.js) and
+//      was only caught by a full E2E run — see CLAUDE.md's carving-plan
+//      extraction log for that step.
+//
 // This is a deliberately simple, regex/line-based heuristic check, not a
 // real JS parser — it trades some recall for zero new dependencies, a
 // sub-second run, and (importantly) a low false-positive rate. It is not a
@@ -215,6 +227,54 @@ function checkDeadDelegatedActions(src, registeredActions) {
   return usages.filter(u => !registeredActions.has(u.name));
 }
 
+// Bare identifiers referenced inside a registerActions({ ... }) object
+// literal — either as shorthand (`{ openEditModal }`, meaning both the
+// registered name AND the function reference) or as an explicit value
+// (`{ save: saveHandler }`, where `saveHandler` is the reference that must
+// resolve). registerActions() itself only guards against a non-function
+// *value* (`typeof fn !== 'function'` → console.warn) — it can't guard
+// against the identifier not existing at all, because evaluating the object
+// literal throws a ReferenceError before registerActions() is ever called.
+// That's a second, distinct dead-reference bug class from
+// checkDeadStatementCalls above: this one is a bare identifier used as an
+// object-shorthand/value inside a call, not a standalone `name(args);`
+// statement — found in practice (Phase 2 step 9, src/components/
+// editReviewModal.js, 2026-08-24): a moved function's name stayed behind in
+// its old file's registerActions({...}) call as a dangling shorthand
+// property, throwing a ReferenceError during module evaluation that
+// silently halted the whole file's script execution (and therefore every
+// delegated click handler in the app) before initDelegatedEvents() ever
+// ran. Neither check:dead-refs nor `npm run build` caught it — only a real
+// E2E run did, once auth.setup.js's sign-in click timed out. Checked
+// against the same per-file `knownNames` (function/arrow declarations,
+// imports, destructured SDK bindings) as checkDeadStatementCalls, since the
+// underlying question is identical: "is this identifier actually resolvable
+// in this file's scope?"
+function checkDeadRegisterActionsRefs(src, knownNames) {
+  const findings = [];
+  const callRe = /registerActions\(\s*\{([\s\S]*?)\}\s*\)/g;
+  for (const m of src.matchAll(callRe)) {
+    const inner = m[1];
+    const innerStart = m.index + m[0].indexOf('{') + 1;
+    let offset = 0;
+    for (const rawPart of inner.split(',')) {
+      const partStart = innerStart + offset;
+      offset += rawPart.length + 1; // +1 accounts for the comma split() ate
+      const part = rawPart.trim();
+      if (!part) continue;
+      const colonIdx = part.indexOf(':');
+      const ref = (colonIdx === -1 ? part : part.slice(colonIdx + 1)).trim();
+      if (!/^[A-Za-z_$][\w$]*$/.test(ref)) continue; // not a simple identifier (inline fn, spread, etc.) — can't check statically
+      if (KEYWORDS.has(ref) || knownNames.has(ref)) continue;
+      const refIdx = rawPart.indexOf(ref);
+      const absIdx = partStart + (refIdx === -1 ? 0 : refIdx);
+      const line = src.slice(0, absIdx).split('\n').length;
+      findings.push({ line, name: ref, context: part.slice(0, 140) });
+    }
+  }
+  return findings;
+}
+
 // Narrow, line-anchored heuristic: only matches a call that IS the entire
 // (trimmed) line — `[await ]name(args);` — which is how the actual
 // renderManagePreorders bug looked at every one of its 4 call sites. This
@@ -339,6 +399,7 @@ function main() {
     const knownNames = collectKnownCallableNames(src);
 
     const deadActions = checkDeadDelegatedActions(src, registeredActions);
+    const deadRegisterActionsRefs = checkDeadRegisterActionsRefs(src, knownNames);
     const deadStatementCalls = checkDeadStatementCalls(src, knownNames);
     const bareVars = checkBareVariablesInRawHandlers(src, topLevelVars);
     const unusedParams = checkUnusedParams(src);
@@ -354,6 +415,16 @@ function main() {
       }
     } else {
       console.log('\n[dead data-onclick/data-onchange] none found.');
+    }
+
+    if (deadRegisterActionsRefs.length) {
+      exitCode = 1;
+      console.log(`\n[dead registerActions() reference] ${deadRegisterActionsRefs.length} identifier(s) inside a registerActions({...}) call aren't defined/imported in this file — evaluating the object literal throws a ReferenceError before registerActions() is ever called, silently halting the rest of this module's execution:`);
+      for (const f of deadRegisterActionsRefs) {
+        console.log(`  ${target}:${f.line}  '${f.name}'  —  ${f.context}`);
+      }
+    } else {
+      console.log('\n[dead registerActions() reference] none found.');
     }
 
     if (deadStatementCalls.length) {
@@ -388,7 +459,7 @@ function main() {
 
   console.log('');
   console.log(exitCode !== 0
-    ? 'FAILED — see [dead data-onclick/data-onchange] / [dead statement calls] / [bare variables] above.'
+    ? 'FAILED — see [dead data-onclick/data-onchange] / [dead registerActions() reference] / [dead statement calls] / [bare variables] above.'
     : 'OK — no dead references or bare-variable scope leaks found.');
   process.exit(exitCode);
 }

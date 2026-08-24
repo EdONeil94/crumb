@@ -954,7 +954,7 @@ summary at the top of this section).
 
 ### What `check:dead-refs` (`scripts/check-dead-refs.js`) actually catches
 
-Two distinct bug classes found the hard way during earlier passes, both
+Three distinct bug classes found the hard way during earlier passes, all
 invisible until someone clicks the exact broken element — this is why step
 1 above runs it *before* converting, not just after:
 
@@ -971,8 +971,14 @@ invisible until someone clicks the exact broken element — this is why step
   directly (`currentUser.uid`, `fb.signOut(...)`, `notifItems[i]`) throws a
   `ReferenceError` at click time, regardless of whether delegation has
   touched that handler yet. 5 sites were found broken this way in one pass.
+- **(c) Bare identifiers inside a `registerActions({...})` call itself**
+  (shorthand `{ openEditModal }` or a keyed value `{ save: saveHandler }`)
+  that aren't defined/imported in that file — evaluating the object literal
+  throws a `ReferenceError` before `registerActions()` is ever called,
+  halting that whole module's execution. Added after this exact shape shipped
+  once (`editReviewModal.js`, Phase 2 step 9) — see the fix note below.
 
-Both are checked statically (regex/line-based heuristics, not a real
+All three are checked statically (regex/line-based heuristics, not a real
 parser — cheap and low-false-positive, not a substitute for judgement).
 
 **Blind spot confirmed in practice (MODAL STEPS, delegation migration):**
@@ -988,12 +994,12 @@ registered-action/top-level-variable sets, not just `legacy-app.js` in
 isolation.
 
 **Second, different blind spot found in practice (`editReviewModal.js`,
-Phase 2 step 9 of the carving plan, 2026-08-24) — still open, not fixed.**
-`checkDeadStatementCalls` only recognizes a dead reference when it's the
-*entire* line as a standalone `name(args);` call — it does **not** check
-bare identifiers used as object-shorthand properties inside a
-`registerActions({ a, b, undefinedName })` call, which is exactly as real
-a `ReferenceError` risk as the statement-call form. Missing this let
+Phase 2 step 9 of the carving plan, 2026-08-24) — fixed 2026-08-25, before
+Phase 3 started.** `checkDeadStatementCalls` only recognizes a dead
+reference when it's the *entire* line as a standalone `name(args);` call —
+it did **not** check bare identifiers used as object-shorthand properties
+inside a `registerActions({ a, b, undefinedName })` call, which is exactly
+as real a `ReferenceError` risk as the statement-call form. Missing this let
 `openEditModal` (removed from `legacy-app.js`, forgotten from
 `editReviewModal.js`'s own `registerActions()` call) ship past both
 `check:dead-refs` and `npm run build` clean — the `ReferenceError` it threw
@@ -1002,11 +1008,31 @@ during module evaluation silently halted script execution before
 at all**, not just this one. Only caught because `auth.setup.js`'s real
 sign-in click timed out waiting for the auth modal to open — the same
 "full E2E suite is what actually proves it, not just a clean checker/build"
-lesson as the `modalNext`/`modalBack` case above, now demonstrated twice.
-Worth extending `collectKnownCallableNames`'s reasoning (or a parallel
-check) to cover identifiers inside `registerActions({...})` object
-literals — flagged here, not yet done, since fixing it wasn't in scope for
-step 9 itself.
+lesson as the `modalNext`/`modalBack` case above, demonstrated twice before
+this fix.
+
+**Fix**: a third check, `checkDeadRegisterActionsRefs`, added to
+`scripts/check-dead-refs.js`. For every `registerActions({...})` call in a
+file, it walks each entry — shorthand (`openEditModal`) or keyed
+(`save: saveHandler`) — extracts the identifier that must actually resolve
+(the shorthand name itself, or the value after the colon), and checks it
+against that file's own `knownNames` (the same per-file
+function-declaration/arrow-const/import set `checkDeadStatementCalls`
+already used) rather than the cross-file `registeredActions` set (which
+would be the wrong set to check against here — a dangling reference in
+*this* file isn't made valid by some *other* file happening to register a
+same-named action; the two checks answer different questions:
+`checkDeadDelegatedActions` asks "is this `data-onclick` name registered
+somewhere", `checkDeadRegisterActionsRefs` asks "does this specific
+`registerActions()` call's own identifier resolve in the file it's
+written in"). Verified against a throwaway two-file fixture reproducing
+the exact step-9 shape (a dangling shorthand ref in one file, a valid
+shorthand + a valid keyed ref in another) before trusting it — flagged
+the dangling one at the correct line, didn't false-positive on the valid
+file. Re-ran `check:dead-refs` against the real codebase clean (12
+targets, all three checks report none found) and `npm run build` clean
+afterward — no E2E gate needed for this, same reasoning as Phase 0 step 4
+(dev-tool script, zero runtime/bundle impact).
 
 ## Known pre-existing issues (out of scope for this migration)
 
