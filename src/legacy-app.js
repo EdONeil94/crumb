@@ -5390,19 +5390,19 @@ function productCardHTML(p, showBakery) {
   const priceStr = p.price ? `£${parseFloat(p.price).toFixed(2)}` : 'POA';
   const isUnavailable = p.available === false;
   return `
-    <div class="product-card${isUnavailable ? ' product-unavailable' : ''}" onclick="openProductDetail('${p.id}')">
+    <div class="product-card${isUnavailable ? ' product-unavailable' : ''}" data-onclick="openProductDetail" data-args='${dataArgs([p.id])}'>
       <div class="product-card-image" style="position:relative;">
         ${thumb}
         ${isUnavailable ? '<div class="product-badge">Unavailable</div>' : ''}
       </div>
       <div class="product-card-body">
-        ${showBakery ? `<div class="product-card-bakery" onclick="event.stopPropagation(); openBakeryProfile('${escJS(p.bakeryName || '')}')">📍 ${p.bakeryName}</div>` : ''}
+        ${showBakery ? `<div class="product-card-bakery" data-onclick="openBakeryProfile" data-args='${dataArgs([p.bakeryName || '', ''])}'>📍 ${p.bakeryName}</div>` : ''}
         <div class="product-card-name">${p.name}</div>
         ${p.productType ? `<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:4px;">${p.productType}</div>` : ''}
         <div class="product-card-desc">${p.description || ''}</div>
         <div class="product-card-footer">
           <div class="product-card-price">${priceStr}</div>
-          ${!isUnavailable ? `<button class="product-buy-btn" onclick="event.stopPropagation(); handleBuy('${p.id}')">Buy →</button>` : ''}
+          ${!isUnavailable ? `<button class="product-buy-btn" data-onclick="handleBuy" data-args='${dataArgs([p.id])}'>Buy →</button>` : ''}
         </div>
       </div>
     </div>`;
@@ -5422,7 +5422,7 @@ function openProductDetail(productId) {
       <div style="font-size:0.9rem;color:var(--text-body);line-height:1.65;margin-bottom:16px;">${p.description || ''}</div>
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:16px;border-top:1px solid var(--border);">
         <div style="font-family:'Playfair Display',serif;font-size:1.6rem;font-weight:700;color:var(--espresso);">${priceStr}</div>
-        <button class="product-buy-btn" style="padding:11px 24px;font-size:0.9rem;" onclick="handleBuy('${p.id}')">Buy now →</button>
+        <button class="product-buy-btn" style="padding:11px 24px;font-size:0.9rem;" data-onclick="handleBuy" data-args='${dataArgs([p.id])}'>Buy now →</button>
       </div>
     </div>`;
   document.getElementById('productDetailModal').classList.add('open');
@@ -5453,6 +5453,13 @@ Thanks`);
     showToast('Contact the bakery directly to purchase');
   }
 }
+
+// Shop page + product cards (also reused by the product detail modal's own
+// "Buy now" button). openProductDetail/handleBuy/applyShopFilters (the
+// filter bar's 3 selects, in index.html) had no call sites outside this
+// cluster, so all three come out of WINDOW EXPORTS entirely.
+// openBakeryProfile is already registered elsewhere — no change needed.
+registerActions({ openProductDetail, handleBuy, applyShopFilters });
 
 // ─── SHOP MANAGEMENT (business users) ────────────────────────────────────────
 async function openManageShopModal(bakeryName) {
@@ -9173,7 +9180,6 @@ if ('serviceWorker' in navigator && isFirebaseHosting) {
 // inside IIFEs/blocks are deliberately excluded, since they were never
 // reachable from onclick attributes in the original file either.
 Object.assign(window, {
-  applyShopFilters,
   buildBakeryCoords,
   buildBakeryIndex,
   buildBakeryMapHTML,
@@ -9234,7 +9240,6 @@ Object.assign(window, {
   goToStep,
   handleBakeryEditPhoto,
   handleBakeryPhoto,
-  handleBuy,
   handlePhotoChange,
   handleProductPhoto,
   handleSettingsPhoto,
@@ -9269,7 +9274,6 @@ Object.assign(window, {
   openBakeryEditModal,
   openBakeryProfile,
   openFeatureRequestModal,
-  openProductDetail,
   openProductModal,
   openProfileModal,
   openSettingsPage,

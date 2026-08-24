@@ -15,44 +15,52 @@ system in `src/events/` (see `src/events/delegate.js` and
 `src/events/actions.js` for how it works — `registerActions()` +
 `getAction()` instead of `window[name]` lookups).
 
-**Status as of 2026-08-24: ~79% converted** (231 delegated / 294 total
+**Status as of 2026-08-24: ~81% converted** (238 delegated / 294 total
 handler sites, raw + delegated, across both files, comments excluded — the
-total dropped by 1 from the previous count via REACTIONS' redundant-handler
-removal, see below, not a miscount).
+total is 294, not 295, from REACTIONS' one deliberate redundant-handler
+removal a couple of clusters back, not a miscount).
 
 | | raw (`onclick=`/`onchange=`/`oninput=`) | delegated (`data-on*=`) |
 |---|---|---|
-| `index.html` | 29 | 94 |
-| `src/legacy-app.js` | 34 | 137 |
-| **total** | **63** | **231** |
+| `index.html` | 26 | 97 |
+| `src/legacy-app.js` | 30 | 141 |
+| **total** | **56** | **238** |
 
 Converted clusters (fully delegated, 0 raw handlers left): **FOLLOWS**,
 **FILTER HELPERS**, Pre-order discovery page + My Pre-orders burger-menu
 sheet, **Manage Offerings incl. Pre-orders/Reservations**, **DATA**,
 **EDIT REVIEW**, **SHARE REVIEW WITH A FOLLOWED USER**, **IMAGE
-COMPRESSION**, **ADMIN PANEL RENDERERS**, **REACTIONS**, and everything
-else converted in earlier sessions per the git log. Notes on the trickier
-ones, most recent first:
+COMPRESSION**, **ADMIN PANEL RENDERERS**, **REACTIONS**, **SHOP**, and
+everything else converted in earlier sessions per the git log. Notes on the
+trickier ones, most recent first:
 
+- **SHOP** (`renderShopPage`/`productCardHTML` etc., `:5316`). Same
+  card-plus-nested-elements shape as DATA/ADMIN PANEL's bakery rows — the
+  product card, its nested bakery link, and its nested Buy button all
+  convert together, `openBakeryProfile`'s call explicitly passing `''` for
+  `catFilter` (same latent-trailing-arg guard as DATA/ADMIN PANEL). Also
+  converted the 3 filter `<select>`s in `index.html` (bakery/type/sort) —
+  not counted in the original "SHOP — 4" tally, since that was scoped to
+  `src/legacy-app.js` only, but genuinely this cluster's own UI, just
+  defined statically. `openProductDetail`/`handleBuy`/`applyShopFilters`
+  all come out of `WINDOW EXPORTS` entirely (no other call sites).
+  **Not automatically clicked**: `handleBuy` does a real
+  `window.open()`/`mailto:` navigation depending on the product's own
+  data — `tests/shop.spec.js` asserts its wiring instead, same approach as
+  the Send button in `tests/share-and-saved.spec.js`. Verified against real
+  shop product data in the target project (not skipped).
 - **REACTIONS** (`toggleReaction` etc., `:5048`, nested inside DATA's
-  `feedCardHTML`). Clean single-topic section — 4 raw sites, all 4
-  converted or removed. `toggleReactionPicker`'s param order reordered to
-  `(itemId, btn)` for the trailing-clicked-element convention (its only
-  call site, no other updates needed). The picker popup's own buttons did
-  `toggleReaction(...); this.closest('.reaction-picker').remove();` — a
-  parameterized action *followed* by cleanup, the reverse of the usual
-  "cleanup(s), then one parameterized action" shape — so that got a small
-  `toggleReactionFromPicker` wrapper instead, mirroring
-  `followAndRefreshProfile`. One handler didn't get converted at all: the
-  add-button's wrapper `<div>`'s own `onclick="event.stopPropagation()"`
-  turned out to be fully redundant once its sibling buttons are delegated
-  too — it only ever renders inside `feedCardHTML`'s `noop`-registered
-  guard div (DATA cluster, `:708`), which already protects the whole
-  reaction bar's padding the same way — so it was deleted outright rather
-  than converted, dropping the total handler-site count by 1 (not a
-  miscount, see the status line above). Also fixed a stale comment on
-  `noop()` itself, left over from the DATA session, that still described
-  REACTIONS as "raw, out of scope." Covered by `tests/reactions.spec.js`.
+  `feedCardHTML`). `toggleReactionPicker`'s param order reordered to
+  `(itemId, btn)` for the trailing-clicked-element convention. The picker
+  popup's buttons did `toggleReaction(...); this.closest('.reaction-picker').remove();`
+  — parameterized action *followed* by cleanup, the reverse of the usual
+  shape — so that got a small `toggleReactionFromPicker` wrapper instead.
+  One handler wasn't converted at all: the add-button's wrapper `<div>`'s
+  own `onclick="event.stopPropagation()"` was fully redundant once its
+  sibling buttons are delegated too (already covered by `feedCardHTML`'s
+  `noop`-registered guard, DATA cluster, `:708`) — deleted outright,
+  dropping the total handler-site count by 1. Covered by
+  `tests/reactions.spec.js`.
 - **ADMIN PANEL RENDERERS** (`renderAdminUsersHTML`/`renderAdminBakeriesHTML`,
   `:3536`, Settings page's Admin Panel). Clean single-topic section this
   time — no file-position surprise. `promoteUser`/`promptAssignBakery`/
@@ -129,7 +137,6 @@ Remaining clusters, by raw-handler count in `src/legacy-app.js` (run
 does; exclude comment lines):
 
 - BAKERY SEARCH — 6
-- SHOP — 4
 - Bakery-profile-modal internals — `toggleBakeryHours`, `saveBakeryBlurb`,
   its Cancel button (raw `onclick="openBakeryProfile(...)"`) — 3 sites.
   Note: `editBakeryBlurb` itself has no visible call site anywhere in
@@ -250,11 +257,11 @@ parser — cheap and low-false-positive, not a substitute for judgement).
 
 **Status as of 2026-08-24: verified green**, dedicated E2E account now
 in place (separate from the personal super-admin account used earlier).
-`npm run test:e2e` — 39 passed, 9 skipped (data-dependent — no candidates
+`npm run test:e2e` — 46 passed, 6 skipped (data-dependent — no candidates
 to test Send against, no location with 2+ bakeries, etc.), 0 failed. This
 covers everything converted since the migration started, including DATA,
 EDIT REVIEW, SHARE REVIEW WITH A FOLLOWED USER, IMAGE COMPRESSION, ADMIN
-PANEL RENDERERS, and REACTIONS.
+PANEL RENDERERS, REACTIONS, and SHOP.
 
 Getting to green — and staying there as REACTIONS landed and exercised the
 suite under slightly different conditions — took three rounds of fixes, all

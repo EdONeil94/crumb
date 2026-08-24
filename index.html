@@ -578,13 +578,13 @@
   <div class="section">
     <!-- Filter bar -->
     <div id="shopFilterBar" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:24px; padding-bottom:20px; border-bottom:1px solid var(--border);">
-      <select class="form-select" id="shopFilterBakery" onchange="applyShopFilters()" style="flex:1; min-width:160px; max-width:220px;">
+      <select class="form-select" id="shopFilterBakery" data-onchange="applyShopFilters" style="flex:1; min-width:160px; max-width:220px;">
         <option value="">All bakeries</option>
       </select>
-      <select class="form-select" id="shopFilterType" onchange="applyShopFilters()" style="flex:1; min-width:140px; max-width:180px;">
+      <select class="form-select" id="shopFilterType" data-onchange="applyShopFilters" style="flex:1; min-width:140px; max-width:180px;">
         <option value="">All types</option>
       </select>
-      <select class="form-select" id="shopSortPrice" onchange="applyShopFilters()" style="flex:1; min-width:140px; max-width:180px;">
+      <select class="form-select" id="shopSortPrice" data-onchange="applyShopFilters" style="flex:1; min-width:140px; max-width:180px;">
         <option value="">Sort: Featured</option>
         <option value="asc">Price: Low to high</option>
         <option value="desc">Price: High to low</option>
