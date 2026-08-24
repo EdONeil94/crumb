@@ -11,8 +11,9 @@ its own section below), and the **E2E test workflow** — all done on
 ## Carving src/legacy-app.js into src/pages/ and src/components/
 
 **Status as of 2026-08-24: Phases 0, 1, and 2 all complete, Phase 3 under
-way** (step 12 of 32 done — `reviewCard.js`). Phase 3's remaining 4 steps
-(`feed.js`, `follows.js`, `people.js`, `reservations.js`) not started.
+way** (steps 12-13 of 32 done — `reviewCard.js`, `feed.js`). Phase 3's
+remaining 3 steps (`follows.js`, `people.js`, `reservations.js`) not
+started.
 This is separate from — and comes after — the handler delegation migration
 above; don't conflate the two milestones. Plan approved 2026-08-24 (was
 drafted as a plan-mode file at `~/.claude/plans/logical-painting-kurzweil.md`,
@@ -140,7 +141,10 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
 - **Phase 3 — medium, cohesive, good coverage:**
   12. `src/components/reviewCard.js` — ✅ **done** (2026-08-24, commit
   `502e057`) — split, not clean: `openProfileIfSignedIn` deferred, see its
-  own extraction-log entry below · 13. `src/pages/feed.js` ·
+  own extraction-log entry below ·
+  13. `src/pages/feed.js` — ✅ **done** (2026-08-24, commit `bcb1366`) —
+  moved wholesale, but `switchFeedTab` keeps its `WINDOW EXPORTS` entry
+  (a new situation — see its own extraction-log entry below) ·
   14. `src/components/follows.js` · 15. `src/pages/people.js` (best-covered
   page in the app) · 16. `src/components/reservations.js`
 - **Phase 4 — large but well-tested (the "does this scale" milestone):**
@@ -276,6 +280,42 @@ boundaries — commits happen at the module/stage level throughout.
 
 ### Extraction log (most recent first)
 
+- **`src/pages/feed.js` — step 13** (2026-08-24, commit `bcb1366`). Moved
+  `feedCurrentTab`/`switchFeedTab`/`renderFeed` wholesale — every
+  dependency was already extracted (Phase 0/2), and `renderFeed`'s only
+  external caller, `showPage()`, stays in `legacy-app.js` (Phase 7 step
+  32) as a normal one-way import back, no cycle.
+  **A genuinely new situation, flagged before writing any code**: unlike
+  every function moved in steps 1-12, `switchFeedTab` is called from a
+  *raw, undelegated* `onclick="switchFeedTab(...)"` on both FEED TABS
+  buttons in `index.html` — that cluster was explicitly out of scope for
+  the handler-delegation migration (see its status table above). Every
+  prior step's `WINDOW EXPORTS` cleanup was pure staleness-removal; this
+  one is the opposite — `switchFeedTab` **must** keep its entry there,
+  re-imported from `feed.js`, since raw markup can only ever resolve
+  `window[name]`, never a delegated `data-onclick`. Dropping it the way
+  every previous step's stale entries were dropped would have silently
+  broken both buttons. `renderFeed`'s own `WINDOW EXPORTS` entry, by
+  contrast, genuinely was stale (no raw call site) — removed as usual.
+  **Worth remembering for later steps**: CLAUDE.md's own migration status
+  table lists several other clusters still out of scope for delegation —
+  RATING's own slider, the nav's "+ Add"/"Rate a Bake!" triggers, FEED
+  TABS (now handled here), SETTINGS, and the admin-only Manage Bakery
+  assignment modal — any future extraction step touching those needs the
+  same check (grep `index.html` for a raw `onclick=`/`onchange=`/
+  `oninput=` referencing the function before assuming a clean stale-entry
+  removal).
+  No existing spec clicks the feed tab buttons themselves (`feed.spec.js`
+  only navigates *to* the Feed page and exercises card clicks) — grepped
+  `tests/` directly to confirm zero hits for `feedTabAll`/
+  `feedTabFollowing`/`switchFeedTab`. That makes this exactly the failure
+  mode where a wrong `WINDOW EXPORTS` call would ship past `check:dead-refs`,
+  `npm run build`, *and* the full `test:e2e` suite undetected — manually
+  verified instead, using the real saved auth session: clicking
+  Following then All correctly toggled each button's active class and
+  `#feedTitle`'s text, zero console/page errors.
+  Verified: `check:dead-refs` clean, `npm run build` succeeds, full
+  `test:e2e` 61 passed/10 skipped/0 failed, including `feed.spec.js`.
 - **`src/components/reviewCard.js` — step 12** (2026-08-24, commit `502e057`).
   **Opens Phase 3.** Split, not clean — flagged and confirmed *before*
   writing any code this time (the pattern from step 10 onward): moved the
