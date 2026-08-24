@@ -106,7 +106,10 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
      imports it. Resolved by moving state + setters only for those three
      (mirroring 3a's `currentUser`/`fb` treatment), while the two genuinely
      self-contained functions (`loadItemRecords`, `ensureProfileExists`)
-     moved wholesale like 3a. **Re-confirm 3c's own scope the same way
+     moved wholesale like 3a. **This is a deferred follow-up, not a closed
+     question — see the ⚠️ callout under Phase 7 step 29
+     (`src/pages/explore.js`) below for when to revisit it.** Re-confirm
+     3c's own scope the same way
      before assuming — don't default to either pattern.**
   4. Extend `check:dead-refs` to cover the new directories.
 - **Phase 1 — foundational, high fan-in, implicitly covered by every spec:**
@@ -148,6 +151,18 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   below) · 31. `src/components/preordersSheet.js` (confirmed zero coverage) ·
   32. `src/pages/settings.js` (mostly composition of Phase 6's components
   by this point)
+
+  **⚠️ Deferred follow-up tied to this step (29, `explore.js`) — set up in
+  Phase 0 stage 3b, don't lose track of it by the time we're here.**
+  `loadData()` and `buildBakeryIndex()` stayed in `legacy-app.js` during 3b
+  specifically because `buildBakeryIndex()` reads `exploreCache`, owned by
+  Explore's still-unextracted state. **Once step 29 lands and Explore's
+  state (including `exploreCache`) has a real importable home, revisit
+  whether `loadData()`/`buildBakeryIndex()` (and `loadProfiles()`, deferred
+  for a different reason — see 3b's extraction log entry) can now move into
+  `appState.js` alongside `allItems`/`allBakeries`, completing what 3b left
+  half-done.** This is a deliberate, separate decision to make at that
+  point — not an automatic consequence of step 29 landing.
 
 **Coverage verified, not assumed, for the two originally-"unclear" items**:
 grepped `tests/` for every DOM id/function name tied to `#page-preorders`
