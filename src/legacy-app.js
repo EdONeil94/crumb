@@ -6277,7 +6277,7 @@ async function openShareReviewModal(itemId) {
 
     content.innerHTML = `
       <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px;">Sharing <strong style="color:var(--espresso);">${item.name || 'this review'}</strong> from ${item.bakeryName || 'this bakery'}</div>
-      <input type="text" class="form-input" id="shareUserSearch" placeholder="Search people you follow…" oninput="filterShareCandidates(this.value)" style="margin-bottom:14px;">
+      <input type="text" class="form-input" id="shareUserSearch" placeholder="Search people you follow…" data-oninput="filterShareCandidates" style="margin-bottom:14px;">
       <div id="shareUserRows">${renderShareCandidateRows(shareModalCandidates)}</div>`;
 
     // Focus search for quick typing on desktop
@@ -6304,13 +6304,16 @@ function renderShareCandidateRows(list) {
         <div class="share-user-name">${c.name}</div>
         ${subtitle}
       </div>
-      <button class="btn-espresso" style="font-size:0.78rem;padding:6px 14px;flex-shrink:0;" onclick="sendSharedReview('${shareModalItemId}','${c.uid}','${escJS(c.name)}',this)">Send</button>
+      <button class="btn-espresso" style="font-size:0.78rem;padding:6px 14px;flex-shrink:0;" data-onclick="sendSharedReview" data-args='${dataArgs([shareModalItemId, c.uid, c.name])}'>Send</button>
     </div>`;
   }).join('');
 }
 
-function filterShareCandidates(query) {
-  const q = query.trim().toLowerCase();
+// Takes the input element itself (delegate.js's trailing-clicked-element
+// convention for handlers that need the live value) rather than a string —
+// its one call site used to pass this.value explicitly.
+function filterShareCandidates(el) {
+  const q = el.value.trim().toLowerCase();
   const filtered = q ? shareModalCandidates.filter(c => c.name.toLowerCase().includes(q)) : shareModalCandidates;
   const rowsEl = document.getElementById('shareUserRows');
   if (rowsEl) rowsEl.innerHTML = renderShareCandidateRows(filtered);
@@ -6349,6 +6352,16 @@ async function sendSharedReview(itemId, toUserId, toUserName, btnEl) {
   }
 }
 
+// toggleBookmark(...).then(()=>switchProfileTab(...)) doesn't fit the plain
+// "cleanup, then one parameterized action" data-onclick shape (delegate.js)
+// — mirrors followAndRefreshProfile/followAndRefreshPeople (FOLLOWS
+// cluster). btnEl stays explicitly null, matching the original inline call:
+// this Remove button doesn't need the flip-my-own-class behavior toggleBookmark
+// offers other callers, since the whole saved-bakeries list re-renders anyway.
+function removeBookmarkAndRefreshSaved(bakeryName, address) {
+  toggleBookmark(bakeryName, address, null).then(() => switchProfileTab('saved', currentUser.uid));
+}
+
 async function renderSavedTab(container) {
   if (!currentUser) {
     container.innerHTML = '<div class="empty-state" style="padding:32px 0;"><div class="empty-state-icon">🔖</div><div class="empty-state-title">Sign in to see saved bakeries</div></div>';
@@ -6375,8 +6388,8 @@ async function renderSavedTab(container) {
               ${data.address ? `<div class="bookmark-card-address">📍 ${data.address}</div>` : ''}
             </div>
             <div class="bookmark-card-actions">
-              ${hasReviews ? `<button class="admin-btn primary" style="font-size:0.75rem;" onclick="closeProfileModal(); openBakeryProfile('${escJS(name)}')">View →</button>` : ''}
-              <button class="admin-btn" style="font-size:0.75rem;color:#e74c3c;" onclick="toggleBookmark('${escJS(name)}','${escJS(data.address)}',null).then(()=>switchProfileTab('saved','${currentUser.uid}'))">Remove</button>
+              ${hasReviews ? `<button class="admin-btn primary" style="font-size:0.75rem;" data-onclick="closeProfileModal,openBakeryProfile" data-args='${dataArgs([name, ''])}'>View →</button>` : ''}
+              <button class="admin-btn" style="font-size:0.75rem;color:#e74c3c;" data-onclick="removeBookmarkAndRefreshSaved" data-args='${dataArgs([name, data.address])}'>Remove</button>
             </div>
           </div>`;
       }).join('')}</div>`;
@@ -6391,13 +6404,13 @@ async function renderSavedTab(container) {
         const catDisp = CATEGORY_TREE[s.category]?.emoji || '🥐';
         const thumb = s.photoURL ? `<img src="${s.photoURL}" alt="${s.name}">` : catDisp;
         return `
-          <div class="saved-item-card" onclick="closeProfileModal(); openDetail('${s.itemId}')">
+          <div class="saved-item-card" data-onclick="closeProfileModal,openDetail" data-args='${dataArgs([s.itemId])}'>
             <div class="saved-item-thumb">${s.photoURL ? `<img src="${s.photoURL}" alt="${s.name}">` : catDisp}</div>
             <div class="saved-item-body">
               <div class="saved-item-name">${s.name}</div>
               <div class="saved-item-bakery">📍 ${s.bakeryName}</div>
             </div>
-            <button class="admin-btn" style="font-size:0.72rem;color:#e74c3c;flex-shrink:0;" onclick="event.stopPropagation(); removeSavedItem('${s.itemId}')">Remove</button>
+            <button class="admin-btn" style="font-size:0.72rem;color:#e74c3c;flex-shrink:0;" data-onclick="removeSavedItem" data-args='${dataArgs([s.itemId])}'>Remove</button>
           </div>`;
       }).join('')}</div>`;
 
@@ -6407,6 +6420,20 @@ async function renderSavedTab(container) {
     <div style="font-size:0.78rem;font-weight:700;color:var(--espresso);text-transform:uppercase;letter-spacing:0.5px;margin:24px 0 10px;">🥐 Items to try</div>
     ${itemsSectionHTML}`;
 }
+
+// Share Review modal, plus the Saved profile tab (renderSavedTab) that
+// happens to share this file section by position rather than topic.
+// filterShareCandidates/sendSharedReview/removeSavedItem/
+// removeBookmarkAndRefreshSaved had no call sites outside this section, so
+// none need WINDOW EXPORTS — closeProfileModal/openBakeryProfile stay there
+// (other unconverted call sites elsewhere); openDetail/switchProfileTab/
+// toggleBookmark just came out of WINDOW EXPORTS entirely, since
+// renderSavedTab's raw handlers were their last remaining call sites (see
+// the comments where each is registered, above).
+registerActions({
+  filterShareCandidates, sendSharedReview, removeSavedItem,
+  removeBookmarkAndRefreshSaved,
+});
 
 // ─── PRE-ORDER DISCOVERY PAGE ─────────────────────────────────────────────────
 let poActiveCountry = 'United Kingdom';
@@ -8657,9 +8684,10 @@ registerActions({ setPeopleView });
 // Leaderboard, Auth blocks) — no change needed for those here.
 // followAndRefreshProfile/followAndRefreshPeople are new wrapper functions
 // (see followBtnHTML) replacing two toggleFollow(...).then(...) chains that
-// didn't fit the plain data-onclick shape. switchProfileTab stays in WINDOW
-// EXPORTS too — the Saved tab's "Remove" button (a different section,
-// renderSavedTab) still calls it through a raw, unconverted onclick chain.
+// didn't fit the plain data-onclick shape. switchProfileTab no longer needs
+// WINDOW EXPORTS — its last raw call site was the Saved tab's "Remove"
+// button (renderSavedTab, SHARE REVIEW WITH A FOLLOWED USER's section by
+// file position — see removeBookmarkAndRefreshSaved), now delegated too.
 registerActions({
   renderRankings, populateRankingLocationFilter, switchProfileTab,
   followAndRefreshProfile, followAndRefreshPeople,
@@ -8758,7 +8786,8 @@ registerActions({
 // instead of needing a wrapper. The two filter <select>s' onchange are now
 // converted too (see onchange/oninput delegation, below).
 // openDetail is registered here for the leaderboard row's conditional
-// action; it has many other call sites elsewhere that stay un-converted.
+// action. No longer needs WINDOW EXPORTS — its last raw call site was the
+// same Saved tab "Remove" button noted above (switchProfileTab).
 registerActions({ switchLbMode, switchLbTab, closeLbAndOpenBakery, openDetail, onLbFilterChange });
 
 // Item detail modal. toggleSaveItem/openShareReviewModal/flagReview/
@@ -9135,7 +9164,6 @@ Object.assign(window, {
   fetchGoogleBakeries,
   fetchGoogleBakeriesNearPoint,
   fetchPlaceDetails,
-  filterShareCandidates,
   followBtnHTML,
   friendlyAuthError,
   generateOrderQRCodes,
@@ -9189,7 +9217,6 @@ Object.assign(window, {
   openAuthModal,
   openBakeryEditModal,
   openBakeryProfile,
-  openDetail,
   openFeatureRequestModal,
   openManageBakeryModal,
   openProductDetail,
@@ -9211,7 +9238,6 @@ Object.assign(window, {
   refreshReactionBar,
   removePhoto,
   removeReviewAndFlag,
-  removeSavedItem,
   removeUserRole,
   renderActivityTab,
   renderAdminBakeriesHTML,
@@ -9264,7 +9290,6 @@ Object.assign(window, {
   selectManualBakery,
   selectParentCategory,
   selectSubCategory,
-  sendSharedReview,
   showAdminTab,
   showAuthError,
   showBakeryItemHints,
@@ -9276,10 +9301,8 @@ Object.assign(window, {
   switchDmTab,
   switchFeedTab,
   switchLbTab,
-  switchProfileTab,
   timeAgo,
   toggleBakeryHours,
-  toggleBookmark,
   toggleReaction,
   toggleReactionPicker,
   unlockScroll,
