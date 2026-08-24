@@ -23,6 +23,10 @@ import {
   closeAvatarDropdown, signOutFromAvatarMenu, closeOnClickOutside,
   signOutFromMobileMenu,
 } from './components/nav.js';
+import {
+  openAuthModal, closeAuthModal, switchAuthTab, signInGoogle, signInEmail,
+  signUpEmail, showAuthError, friendlyAuthError,
+} from './components/authModal.js';
 
 // lockScroll/unlockScroll, showToast, timeAgo, escJS, distKm, extractCity,
 // extractCountry moved to src/utils/ (2026-08-24, pages/components carving
@@ -8193,68 +8197,11 @@ async function markAllNotifsRead() {
   } catch(e) { console.warn('Could not save notif seen time:', e); }
 }
 
-// ─── AUTH ─────────────────────────────────────────────────────────────────────
-function openAuthModal() {
-  document.getElementById('authModal').classList.add('open');
-  lockScroll();
-}
-function closeAuthModal() {
-  document.getElementById('authModal').classList.remove('open');
-  unlockScroll();
-}
-function switchAuthTab(tab) {
-  document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.auth-tab')[tab === 'signin' ? 0 : 1].classList.add('active');
-  document.getElementById('signinForm').style.display = tab === 'signin' ? 'block' : 'none';
-  document.getElementById('signupForm').style.display = tab === 'signup' ? 'block' : 'none';
-  document.getElementById('authError').style.display = 'none';
-}
-
-async function signInGoogle() {
-  try {
-    await fb.signInWithPopup(fb.auth, fb.googleProvider);
-    closeAuthModal();
-    showToast('Welcome to Crumbz! 🥐');
-  } catch (err) {
-    showAuthError(err.message);
-  }
-}
-
-async function signInEmail() {
-  const email = document.getElementById('authEmail').value;
-  const pw = document.getElementById('authPassword').value;
-  try {
-    await fb.signInWithEmailAndPassword(fb.auth, email, pw);
-    closeAuthModal();
-    showToast('Welcome back!');
-  } catch (err) {
-    showAuthError(friendlyAuthError(err.code));
-  }
-}
-
-async function signUpEmail() {
-  const name = document.getElementById('authName').value;
-  const email = document.getElementById('authEmailSignup').value;
-  const pw = document.getElementById('authPasswordSignup').value;
-  try {
-    const cred = await fb.createUserWithEmailAndPassword(fb.auth, email, pw);
-    if (name) await fb.updateProfile(cred.user, { displayName: name });
-    closeAuthModal();
-    showToast('Welcome to Crumbz! 🥐');
-  } catch (err) {
-    showAuthError(friendlyAuthError(err.code));
-  }
-}
-
-function showAuthError(msg) {
-  const el = document.getElementById('authError');
-  el.textContent = msg;
-  el.style.display = 'block';
-}
-function friendlyAuthError(code) {
-  const map = { 'auth/wrong-password': 'Incorrect password.', 'auth/user-not-found': 'No account with that email.', 'auth/email-already-in-use': 'That email is already registered.', 'auth/weak-password': 'Password must be at least 6 characters.', 'auth/invalid-email': 'Please enter a valid email.' };
-  return map[code] || 'Something went wrong. Please try again.';
-}
+// openAuthModal/closeAuthModal/switchAuthTab/signInGoogle/signInEmail/
+// signUpEmail/showAuthError/friendlyAuthError moved to
+// src/components/authModal.js (2026-08-24, Phase 1 step 6) — imported
+// above. Fully self-contained move, unlike nav.js's step 5 — no deferred
+// pieces here.
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
 // Close modals on overlay click
@@ -8276,7 +8223,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeAddMo
 // some onclick="closeXModal(); ..." call sites in dynamically-built HTML
 // haven't been converted yet.
 registerActions({
-  closeAddModal, closeAuthModal, closeDetailModal, closeBakeryModal,
+  closeAddModal, closeDetailModal, closeBakeryModal,
   closeManageShopModal, closeProductModal, closeProductDetailModal,
   closeProfileModal, closeBakeryEditModal, closeEditModal,
   closeManageBakeryModal, closeShareReviewModal, closeManagePreordersModal,
@@ -8295,14 +8242,13 @@ registerActions({ showPage });
 // index-based wrapper was the fix instead of a bigger redesign.
 registerActions({ openNotifItem });
 
-// Auth modal. openAuthModal has many plain-JS call sites elsewhere in this
-// file (e.g. `if (!currentUser) { openAuthModal(); return; }`) — those are
-// ordinary function calls, not markup-driven, so they need no conversion.
-// Left un-converted: the mobile menu's sign-in item (compound) and the
-// member-card ternary at line ~1268 (couples to openProfileModal, which
-// belongs to a People/Profile section pass, not this one) — both still rely
-// on openAuthModal/openProfileModal staying in WINDOW EXPORTS.
-registerActions({ openAuthModal, switchAuthTab, signInGoogle, signInEmail, signUpEmail });
+// Auth modal (openAuthModal/closeAuthModal/switchAuthTab/signInGoogle/
+// signInEmail/signUpEmail) registered from src/components/authModal.js now
+// (Phase 1 step 6) instead of here. openAuthModal/closeAuthModal still have
+// many plain-JS call sites elsewhere in this file (e.g.
+// `if (!currentUser) { openAuthModal(); return; }`, the keydown Escape
+// listener above) — those are ordinary imported-function calls now, not
+// markup-driven, so they need no registration of their own.
 
 // Mobile menu. openMyPreordersSheet/openFeatureRequestModal/
 // triggerPwaInstall are each also named directly in comma-chained
@@ -8806,7 +8752,6 @@ Object.assign(window, {
   fetchGoogleBakeriesNearPoint,
   fetchPlaceDetails,
   followBtnHTML,
-  friendlyAuthError,
   generateOrderQRCodes,
   geocodeBakeryAddress,
   geocodeMissingBakeries,
@@ -8833,7 +8778,6 @@ Object.assign(window, {
   loadReactionsForItems,
   mpItemBreakdownHTML,
   openAddModal,
-  openAuthModal,
   openBakeryProfile,
   openFeatureRequestModal,
   openSettingsPage,
@@ -8887,7 +8831,6 @@ Object.assign(window, {
   scanFrame,
   selectExploreCity,
   selectManualBakery,
-  showAuthError,
   showKnownBakeries,
   showMobileInstallBtn,
   showPage,
