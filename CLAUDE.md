@@ -11,9 +11,9 @@ its own section below), and the **E2E test workflow** — all done on
 ## Carving src/legacy-app.js into src/pages/ and src/components/
 
 **Status as of 2026-08-24: Phase 0 and Phase 1 both complete.** Phase 2
-under way — step 8 (`reactions.js`) done, steps 9-11
-(`editReviewModal.js`, `qrCode.js`, `src/pages/shop.js`) not started.
-8/32 extraction steps done.
+under way — steps 8 (`reactions.js`) and 9 (`editReviewModal.js`) done,
+steps 10-11 (`qrCode.js`, `src/pages/shop.js`) not started. 9/32
+extraction steps done.
 This is separate from — and comes after — the handler delegation migration
 above; don't conflate the two milestones. Plan approved 2026-08-24 (was
 drafted as a plan-mode file at `~/.claude/plans/logical-painting-kurzweil.md`,
@@ -129,7 +129,9 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   8. `src/components/reactions.js` — ✅ **done** (2026-08-24, commit
   `98e1120`) — genuinely clean, no split needed, matches the plan's own
   characterization of this phase ·
-  9. `src/components/editReviewModal.js` ·
+  9. `src/components/editReviewModal.js` — ✅ **done** (2026-08-24, commit
+  `a911b4f`) — split, not clean, unlike step 8; see step 18/29 callouts
+  below for the 3 deferred functions ·
   10. `src/components/qrCode.js` · 11. `src/pages/shop.js`
 - **Phase 3 — medium, cohesive, good coverage:**
   12. `src/components/reviewCard.js` · 13. `src/pages/feed.js` ·
@@ -142,6 +144,16 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   state is deeply cross-referential; this is the exact cluster where
   `modalNext`/`modalBack` broke during delegation, splitting further risks
   the same bug class via cross-module import mistakes instead)
+
+  **⚠️ Deferred follow-up tied to this step — set up in Phase 2 step 9,
+  don't lose track of it.** `handleEditPhoto()` (`editReviewModal.js`)
+  stayed in `legacy-app.js` because it calls `compressImage()`/
+  `compressToDataURL()`, part of IMAGE COMPRESSION — moving into
+  `addReviewModal.js` here. **Once step 18 lands, revisit whether
+  `handleEditPhoto()` can move into `editReviewModal.js`.** Separate from
+  `saveEdit()`/`deleteReview()`'s own deferral (tied to step 29 instead —
+  see that callout) — `handleEditPhoto()` doesn't need `loadData()` or
+  `renderLeaderboard()`, so it may unblock earlier than they do.
 - **Phase 5 — composite modals aggregating several historical clusters:**
   19. `src/components/itemDetailModal.js` ·
   20. `src/components/shareReviewModal.js` ·
@@ -176,6 +188,18 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   `appState.js` alongside `allItems`/`allBakeries`, completing what 3b left
   half-done.** This is a deliberate, separate decision to make at that
   point — not an automatic consequence of step 29 landing.
+
+  **⚠️ Second deferred follow-up also tied to this step — set up in Phase 2
+  step 9.** `saveEdit()`/`deleteReview()` (`editReviewModal.js`) stayed in
+  `legacy-app.js` because both call `loadData()` (itself deferred to this
+  same step, per the callout above); `deleteReview()` additionally calls
+  `renderLeaderboard()` and reads `lbCurrentTab`, both owned by
+  `leaderboard.js` (step 27 — lands before step 29, so already resolved by
+  the time this one does). **Once step 29 lands, revisit whether
+  `saveEdit()`/`deleteReview()` can move into `editReviewModal.js`,
+  alongside the `loadData()`/`buildBakeryIndex()` decision above** — a
+  natural point to make both calls together, though still two separate
+  decisions.
 
   **⚠️ Deferred follow-up tied to this step (32, `settings.js`, the last
   page) — set up in Phase 1 step 5, don't lose track of it.**
@@ -233,6 +257,41 @@ boundaries — commits happen at the module/stage level throughout.
 
 ### Extraction log (most recent first)
 
+- **`src/components/editReviewModal.js` — step 9** (2026-08-24, commit
+  `a911b4f`). Split, not clean, unlike step 8 — flagged and confirmed
+  before writing any code: `handleEditPhoto()`/`saveEdit()`/
+  `deleteReview()` each depend on not-yet-extracted code across 2
+  different future clusters (`compressImage()`/`compressToDataURL()` —
+  step 18; `loadData()` — already deferred since 3b; `renderLeaderboard()`/
+  `lbCurrentTab` — step 27), so they stayed in `legacy-app.js`. Moved the 5
+  clean functions (`openEditModal`, `updateDimDisplay`,
+  `updateEditSubCategory`, `closeEditModal`, `clearEditPhoto`). Two
+  separate deferred-follow-up callouts added — step 18's for
+  `handleEditPhoto()` (its own, earlier-possible unblock), step 29's for
+  `saveEdit()`/`deleteReview()` (piggybacking on 3b's existing callout
+  there, since both need `loadData()`).
+  `editingItemId`/`editPhotoFile`/`editPhotoDataURL` are read/written from
+  *both* sides of the split (`handleEditPhoto`, staying, writes the latter
+  two; `saveEdit`/`deleteReview`, also staying, read the first) —
+  exported as live bindings + setters for the two written from outside,
+  same pattern as `appState.js`; `editingItemId` needed no setter since
+  only moving-side code ever writes it.
+  **Caught and fixed a real bug of this session's own making before it
+  shipped**: `openEditModal` was missing from `editReviewModal.js`'s own
+  `registerActions()` call (it's reached via a comma-chained
+  `data-onclick`, `"closeDetailModal,openEditModal"`, from the item detail
+  modal), while `legacy-app.js`'s stale ITEM DETAIL registration still
+  referenced the now-undefined local binding — a `ReferenceError` during
+  module evaluation that silently halted script execution before
+  `initDelegatedEvents()` ran, breaking **every** delegated click handler
+  in the app, not just this one. `check:dead-refs` and `npm run build`
+  both passed clean regardless — this specific failure mode (a bare
+  identifier used as object-shorthand inside `registerActions({...})`) is
+  a newly-found, still-open blind spot in the checker, documented above
+  under "What `check:dead-refs` actually catches." Only caught because
+  `auth.setup.js`'s real sign-in stopped working — full `test:e2e`:
+  59 passed/12 skipped/0 failed, after the fix (first attempt failed at
+  `auth.setup.js` itself).
 - **`src/components/reactions.js` — step 8** (2026-08-24, commit
   `98e1120`). **Opens Phase 2** — genuinely clean, no split needed, first
   step where the plan's own "small, self-contained" characterization held
@@ -839,16 +898,38 @@ invisible until someone clicks the exact broken element — this is why step
 Both are checked statically (regex/line-based heuristics, not a real
 parser — cheap and low-false-positive, not a substitute for judgement).
 
-**Blind spot confirmed in practice (MODAL STEPS, this session):** the
-default invocation only scans `src/legacy-app.js` — a `data-onclick` in
-`index.html` with no matching `registerActions()` entry passes clean, since
-the checker never sees it. `modalNext`/`modalBack` shipped broken (removed
-from `WINDOW EXPORTS` but never actually registered) past both
+**Blind spot confirmed in practice (MODAL STEPS, delegation migration):**
+the default invocation only scanned `src/legacy-app.js` — a `data-onclick`
+in `index.html` with no matching `registerActions()` entry passed clean,
+since the checker never saw it. `modalNext`/`modalBack` shipped broken
+(removed from `WINDOW EXPORTS` but never actually registered) past both
 `check:dead-refs` and `npm run build` for exactly this reason, and was only
-caught once a real E2E spec clicked the button. Reinforces the same lesson
-this doc's conversion workflow already encodes in step 4 (run the full
-suite, not just build/lint) — worth being extra deliberate about it for any
-cluster whose new call sites live only in `index.html`.
+caught once a real E2E spec clicked the button. **Fixed** as part of the
+carving plan's own Phase 0 step 4 — see the "Carving" section above; the
+checker now scans all of `src/` + `index.html` with globally-aggregated
+registered-action/top-level-variable sets, not just `legacy-app.js` in
+isolation.
+
+**Second, different blind spot found in practice (`editReviewModal.js`,
+Phase 2 step 9 of the carving plan, 2026-08-24) — still open, not fixed.**
+`checkDeadStatementCalls` only recognizes a dead reference when it's the
+*entire* line as a standalone `name(args);` call — it does **not** check
+bare identifiers used as object-shorthand properties inside a
+`registerActions({ a, b, undefinedName })` call, which is exactly as real
+a `ReferenceError` risk as the statement-call form. Missing this let
+`openEditModal` (removed from `legacy-app.js`, forgotten from
+`editReviewModal.js`'s own `registerActions()` call) ship past both
+`check:dead-refs` and `npm run build` clean — the `ReferenceError` it threw
+during module evaluation silently halted script execution before
+`initDelegatedEvents()` ran, meaning **no delegated click handler worked
+at all**, not just this one. Only caught because `auth.setup.js`'s real
+sign-in click timed out waiting for the auth modal to open — the same
+"full E2E suite is what actually proves it, not just a clean checker/build"
+lesson as the `modalNext`/`modalBack` case above, now demonstrated twice.
+Worth extending `collectKnownCallableNames`'s reasoning (or a parallel
+check) to cover identifiers inside `registerActions({...})` object
+literals — flagged here, not yet done, since fixing it wasn't in scope for
+step 9 itself.
 
 ## Known pre-existing issues (out of scope for this migration)
 
