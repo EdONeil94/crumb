@@ -18,6 +18,11 @@ import {
   myFollowing, myFollowers, loadFollows, userBookmarks, loadBookmarks,
   userSavedItems, loadSavedItems,
 } from './state/appState.js';
+import {
+  updateNav, toggleMobileMenu, closeMobileMenu, toggleUserMenu,
+  closeAvatarDropdown, signOutFromAvatarMenu, closeOnClickOutside,
+  signOutFromMobileMenu,
+} from './components/nav.js';
 
 // lockScroll/unlockScroll, showToast, timeAgo, escJS, distKm, extractCity,
 // extractCountry moved to src/utils/ (2026-08-24, pages/components carving
@@ -203,154 +208,12 @@ function showPage(name) {
   if (name === 'settings') openSettingsPage();
 }
 
-function updateNav() {
-  const avatar = document.getElementById('navAvatar');
-  const signIn = document.getElementById('signInBtn');
-  const feedBtn = document.getElementById('feedNavBtn');
-  const peopleBtn = document.getElementById('peopleNavBtn');
-  const mobileProfileBtn = document.getElementById('mobileProfileBtn');
-  const mobileEditProfileBtn = document.getElementById('mobileEditProfileBtn');
-  const mobileSignOutBtn = document.getElementById('mobileSignOutBtn');
-  const mobileSignInBtn = document.getElementById('mobileSignInBtn');
-  const mobileMenuDivider = document.getElementById('mobileMenuDivider');
-
-  const bell = document.getElementById('navBell');
-  if (currentUser) {
-    avatar.style.display = 'flex';
-    if (bell) bell.style.display = 'flex';
-    if (signIn) signIn.style.display = 'none';
-    if (feedBtn) feedBtn.style.display = 'block';
-    if (peopleBtn) peopleBtn.style.display = 'block';
-    const dPeople = document.getElementById('desktopPeopleBtn');
-    const dFeed = document.getElementById('desktopFeedBtn');
-    if (dPeople) dPeople.style.display = 'block';
-    if (dFeed) dFeed.style.display = 'block';
-    const profile = allProfiles[currentUser.uid];
-    const photo = profile?.photoURL || currentUser.photoURL;
-    const initials = (currentUser.displayName || currentUser.email || '?').charAt(0).toUpperCase();
-    if (photo) {
-      avatar.innerHTML = `<img src="${photo}" alt="avatar">`;
-    } else {
-      avatar.textContent = initials;
-    }
-    if (mobileProfileBtn) mobileProfileBtn.style.display = 'block';
-    if (mobileEditProfileBtn) mobileEditProfileBtn.style.display = 'block';
-    if (mobileSignOutBtn) mobileSignOutBtn.style.display = 'block';
-    if (mobileSignInBtn) mobileSignInBtn.style.display = 'none';
-    if (mobileMenuDivider) mobileMenuDivider.style.display = 'block';
-    const accLabel = document.getElementById('mobileAccountLabel');
-    const signInDivider = document.getElementById('mobileSignInDivider');
-    if (accLabel) accLabel.style.display = 'block';
-    if (signInDivider) signInDivider.style.display = 'none';
-  } else {
-    avatar.style.display = 'none';
-    if (bell) bell.style.display = 'none';
-    if (signIn) signIn.style.display = 'block';
-    if (feedBtn) feedBtn.style.display = 'none';
-    if (peopleBtn) peopleBtn.style.display = 'none';
-    const dPeople2 = document.getElementById('desktopPeopleBtn');
-    const dFeed2 = document.getElementById('desktopFeedBtn');
-    if (dPeople2) dPeople2.style.display = 'none';
-    if (dFeed2) dFeed2.style.display = 'none';
-    if (mobileProfileBtn) mobileProfileBtn.style.display = 'none';
-    if (mobileEditProfileBtn) mobileEditProfileBtn.style.display = 'none';
-    if (mobileSignOutBtn) mobileSignOutBtn.style.display = 'none';
-    if (mobileSignInBtn) mobileSignInBtn.style.display = 'block';
-    if (mobileMenuDivider) mobileMenuDivider.style.display = 'none';
-    const accLabel = document.getElementById('mobileAccountLabel');
-    if (accLabel) accLabel.style.display = 'none';
-  }
-}
-
-function toggleMobileMenu() {
-  const menu = document.getElementById('mobileMenu');
-  const btn = document.getElementById('hamburgerBtn');
-  const backdrop = document.getElementById('mobileBackdrop');
-  const isOpen = menu.classList.contains('open');
-  if (isOpen) {
-    closeMobileMenu();
-  } else {
-    menu.classList.add('open');
-    btn.classList.add('open');
-    if (backdrop) backdrop.classList.add('open');
-  }
-}
-
-function closeMobileMenu() {
-  const menu = document.getElementById('mobileMenu');
-  const btn = document.getElementById('hamburgerBtn');
-  const backdrop = document.getElementById('mobileBackdrop');
-  menu.classList.remove('open');
-  btn.classList.remove('open');
-  if (backdrop) backdrop.classList.remove('open');
-}
-
-function toggleUserMenu() {
-  const existing = document.getElementById('avatarDropdown');
-  if (existing) { existing.remove(); return; }
-  const dropdown = document.createElement('div');
-  dropdown.id = 'avatarDropdown';
-  const navH = document.querySelector('nav')?.offsetHeight || 56;
-  dropdown.style.cssText = `
-    position:fixed; top:${navH}px; right:16px; z-index:300;
-    background:var(--cream-white); border:1.5px solid var(--border);
-    border-radius:var(--radius); box-shadow:var(--shadow-lg);
-    min-width:180px; overflow:hidden;`;
-  const profile = allProfiles[currentUser.uid];
-  const name = profile?.displayName || currentUser.displayName || currentUser.email?.split('@')[0] || 'My profile';
-  const roleBadgeHtml = isAdmin() ? '<span class="role-badge admin">Admin</span>' : isBusiness() ? '<span class="role-badge business">Business</span>' : '';
-  dropdown.innerHTML = `
-    <div style="padding:12px 16px; border-bottom:1px solid var(--border);">
-      <div style="font-size:0.82rem; font-weight:600; color:var(--espresso); display:flex; align-items:center; gap:8px;">${name} ${roleBadgeHtml}</div>
-      <div style="font-size:0.72rem; color:var(--text-muted);">${currentUser.email || ''}</div>
-    </div>
-    <div data-onclick="closeAvatarDropdown,openProfileModal" data-args='${dataArgs([currentUser.uid])}'
-      style="padding:11px 16px; font-size:0.85rem; color:var(--text-body); cursor:pointer; display:flex; align-items:center; gap:8px;"
-      onmouseover="this.style.background='var(--parchment)'" onmouseout="this.style.background=''">
-      👤 View my profile
-    </div>
-    <div data-onclick="closeAvatarDropdown,showPage" data-args='${dataArgs(['settings'])}'
-      style="padding:11px 16px; font-size:0.85rem; color:var(--text-body); cursor:pointer; display:flex; align-items:center; gap:8px;"
-      onmouseover="this.style.background='var(--parchment)'" onmouseout="this.style.background=''">
-      ⚙️ Settings
-    </div>
-    <div data-onclick="closeAvatarDropdown,openFeatureRequestModal"
-      style="padding:11px 16px; font-size:0.85rem; color:var(--text-body); cursor:pointer; display:flex; align-items:center; gap:8px;"
-      onmouseover="this.style.background='var(--parchment)'" onmouseout="this.style.background=''">
-      💡 Request a feature
-    </div>
-    <div style="border-top:1px solid var(--border);">
-      <div data-onclick="signOutFromAvatarMenu"
-        style="padding:11px 16px; font-size:0.85rem; color:#c0392b; cursor:pointer; display:flex; align-items:center; gap:8px;"
-        onmouseover="this.style.background='var(--parchment)'" onmouseout="this.style.background=''">
-        → Sign out
-      </div>
-    </div>`;
-  document.body.appendChild(dropdown);
-  setTimeout(() => document.addEventListener('click', closeOnClickOutside), 0);
-}
-
-function closeAvatarDropdown() {
-  const d = document.getElementById('avatarDropdown');
-  if (d) d.remove();
-  document.removeEventListener('click', closeOnClickOutside);
-}
-
-// fb.signOut(fb.auth) doesn't fit the plain "cleanup, then one named action"
-// data-onclick shape (delegate.js) — it's a direct method call, not a
-// registrable named function — so it gets this small wrapper instead,
-// mirroring signOutFromMobileMenu.
-function signOutFromAvatarMenu() {
-  closeAvatarDropdown();
-  fb.signOut(fb.auth);
-  showToast('Signed out');
-}
-
-function closeOnClickOutside(e) {
-  const d = document.getElementById('avatarDropdown');
-  const avatar = document.getElementById('navAvatar');
-  if (d && !d.contains(e.target) && !avatar.contains(e.target)) closeAvatarDropdown();
-}
+// updateNav/toggleMobileMenu/closeMobileMenu/toggleUserMenu/
+// closeAvatarDropdown/signOutFromAvatarMenu/closeOnClickOutside/
+// signOutFromMobileMenu moved to src/components/nav.js (2026-08-24, Phase 1
+// step 5) — imported above. showPage/navigateFromMobileMenu/
+// openMyProfileFromMobileMenu stay here — see nav.js's own header comment
+// for why.
 
 // Mobile menu items that close the menu before acting, so the destination
 // isn't rendered underneath a still-animating-out menu.
@@ -361,11 +224,6 @@ function navigateFromMobileMenu(page) {
 function openMyProfileFromMobileMenu() {
   closeMobileMenu();
   setTimeout(() => { if (currentUser) openProfileModal(currentUser.uid); }, 50);
-}
-function signOutFromMobileMenu() {
-  fb.signOut(fb.auth);
-  showToast('Signed out');
-  closeMobileMenu();
 }
 
 // ─── DATA ─────────────────────────────────────────────────────────────────────
@@ -8425,19 +8283,11 @@ registerActions({
   closeFeatureRequestModal, closeCalDayModal, closeReserveModal,
 });
 
-// Desktop nav bar — the mobile menu's onclick="closeMobileMenu(); ..." items
-// are compound and not converted yet, so showPage/toggleMobileMenu stay in
-// WINDOW EXPORTS too.
-registerActions({ showPage, toggleUserMenu, toggleMobileMenu });
-
-// Avatar dropdown (toggleUserMenu). Bug fix: "View my profile" and "Sign out"
-// used to inline bare `currentUser`/`fb` reads directly in their onclick
-// text — broken post-modularization, since those are plain module-scope
-// `let`s, invisible to inline onclick="..." (global scope), unlike this
-// module's functions, which WINDOW EXPORTS deliberately re-exposes.
-// signOutFromAvatarMenu is new, mirroring signOutFromMobileMenu, since
-// fb.signOut(fb.auth) is a direct method call, not a registrable name.
-registerActions({ closeAvatarDropdown, signOutFromAvatarMenu });
+// showPage still has a real raw call site (index.html's profileEditBtn,
+// SETTINGS cluster) so it stays in WINDOW EXPORTS — see its own note there.
+// toggleUserMenu/toggleMobileMenu/closeAvatarDropdown/signOutFromAvatarMenu
+// registered from src/components/nav.js now (Phase 1 step 5) instead of here.
+registerActions({ showPage });
 
 // Notifications panel item click. openNotifItem is new — replaces the raw
 // onclick="notifItems[i].onClick()", broken the same way (notifItems is a
@@ -8454,14 +8304,17 @@ registerActions({ openNotifItem });
 // on openAuthModal/openProfileModal staying in WINDOW EXPORTS.
 registerActions({ openAuthModal, switchAuthTab, signInGoogle, signInEmail, signUpEmail });
 
-// Mobile menu. closeMobileMenu/openMyPreordersSheet/openFeatureRequestModal/
+// Mobile menu. openMyPreordersSheet/openFeatureRequestModal/
 // triggerPwaInstall are each also named directly in comma-chained
-// data-onclick lists (zero-arg, synchronous, no delay) — see delegate.js —
-// so they need registering even though navigateFromMobileMenu etc. only
-// ever call closeMobileMenu() as a plain function, not through the registry.
+// data-onclick lists (zero-arg, synchronous, no delay) — see delegate.js.
+// closeMobileMenu/signOutFromMobileMenu registered from
+// src/components/nav.js now (Phase 1 step 5) instead of here —
+// navigateFromMobileMenu/openMyProfileFromMobileMenu (staying here, see
+// nav.js's own header comment) still call closeMobileMenu() as a plain
+// imported function, not through the registry.
 registerActions({
-  navigateFromMobileMenu, openMyProfileFromMobileMenu, signOutFromMobileMenu,
-  closeMobileMenu, openMyPreordersSheet, openFeatureRequestModal, triggerPwaInstall,
+  navigateFromMobileMenu, openMyProfileFromMobileMenu,
+  openMyPreordersSheet, openFeatureRequestModal, triggerPwaInstall,
 });
 
 // Feature requests. updateFeatureStatus's onchange is now converted (see
@@ -8939,8 +8792,6 @@ Object.assign(window, {
   buildSummary,
   buildTastingDims,
   cardHTML,
-  closeMobileMenu,
-  closeOnClickOutside,
   closeProfileModal,
   compressImage,
   compressToDataURL,
@@ -9044,7 +8895,6 @@ Object.assign(window, {
   switchFeedTab,
   switchLbTab,
   updateBellBadge,
-  updateNav,
   updateOverallRating,
   updatePreorderBadge,
   updateStats,
