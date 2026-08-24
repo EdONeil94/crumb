@@ -10,10 +10,10 @@ its own section below), and the **E2E test workflow** — all done on
 
 ## Carving src/legacy-app.js into src/pages/ and src/components/
 
-**Status as of 2026-08-24: Phase 0 in progress, 2/32 extraction steps
-done.** Next up: step 3 (`src/state/appState.js`) — the highest-risk step
-in the plan, paused for an explicit mode-switch confirmation before it
-starts (see extraction log below).
+**Status as of 2026-08-24: Phase 0 in progress, step 3 (`appState.js`)
+under way — sub-stage 3a (identity/roles) done, 3b (core data caches) and
+3c (social state) not started.** Stopped here deliberately per instruction
+after 3a's commit + full E2E run — waiting on explicit go-ahead before 3b.
 This is separate from — and comes after — the handler delegation migration
 above; don't conflate the two milestones. Plan approved 2026-08-24 (was
 drafted as a plan-mode file at `~/.claude/plans/logical-painting-kurzweil.md`,
@@ -85,10 +85,18 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   1. `src/data/categories.js` — ✅ **done** (2026-08-24, commit `2d06491`)
   2. `src/utils/*` — ✅ **done** (2026-08-24, commit `a372e56`)
   3. `src/state/appState.js` — **split into 3 checkpointed commits**, full
-     `test:e2e` after each: **3a** identity/roles, **3b** core data caches,
-     **3c** social state. Functions stay in `legacy-app.js` through all
-     three; only state declarations + read/write call sites get rewired to
-     import from `appState.js`.
+     `test:e2e` after each: **3a** identity/roles — ✅ **done** (2026-08-24,
+     commit `81c15a4`), **3b** core data caches — not started, **3c** social
+     state — not started. Resolved before 3a started: the plan's general
+     "functions stay in `legacy-app.js`, only state moves" framing
+     conflicted with 3a's own specific enumeration (which lists 6
+     functions) — confirmed with the user that the specific enumeration
+     wins where they conflict, so small self-contained state-management
+     functions (no DOM/UI rendering) move together with the state they
+     manage. Re-confirm this same resolution applies for 3b/3c before
+     assuming it by default — their own state-management functions
+     (`loadData()`, `buildBakeryIndex()`, etc.) are larger and more
+     UI-adjacent than 3a's, so the same reasoning may not transfer cleanly.
   4. Extend `check:dead-refs` to cover the new directories.
 - **Phase 1 — foundational, high fan-in, implicitly covered by every spec:**
   5. `src/components/nav.js` · 6. `src/components/authModal.js` ·
@@ -172,6 +180,30 @@ boundaries — commits happen at the module/stage level throughout.
 
 ### Extraction log (most recent first)
 
+- **`src/state/appState.js` — stage 3a, identity/roles** (2026-08-24, commit
+  `81c15a4`). Moved `SUPER_ADMIN_UID`, `currentUser`, `fb`,
+  `currentUserRole`, `currentUserBakery`, `allUserRoles`, `bakeryProfiles`,
+  `isAdmin()`/`isBusiness()`/`ownsBakery()`, and
+  `loadUserRole()`/`loadBakeryProfiles()`/`loadAllUserRoles()`. Resolved a
+  real conflict in the plan's own text before starting (see the step-3
+  bullet above) — confirmed with the user that 3a's specific function
+  enumeration overrides the plan's general "functions don't move yet"
+  framing, since this cluster is genuinely self-contained (Firestore reads
+  + state assignment, zero DOM/UI logic). `initFirebaseApp()` (stays in
+  `legacy-app.js` — app bootstrap, not identity-state logic) was the only
+  site outside the moved functions themselves that ever assigned these 6
+  variables (verified via grep) — rewired to use new
+  `setCurrentUser`/`setFb`/`setCurrentUserRole`/`setCurrentUserBakery`
+  setters instead of direct assignment, since ES module imports are
+  read-only bindings from the consumer's side. All 6 moved functions had
+  stale `WINDOW EXPORTS` entries (verified zero raw markup call sites each)
+  — removed, same class of finding as steps 1-2. Full `test:e2e`: 61
+  passed/10 skipped/0 failed, including `auth.setup.js`'s real sign-in and
+  every admin/business/role-gated spec that depends on
+  `isAdmin()`/`isBusiness()`/`ownsBakery()` working through the new module
+  boundary — the highest-confidence signal available that this, the
+  highest-risk step in the whole plan, didn't silently break auth. Stopped
+  here per instruction; 3b/3c not started.
 - **`src/utils/{dom,geo,strings}.js`** (2026-08-24, commit `a372e56`).
   `lockScroll`/`unlockScroll`/`showToast`/`timeAgo` → `dom.js`;
   `distKm`/`extractCity`/`extractCountry` → `geo.js`; `escJS` → `strings.js`.
