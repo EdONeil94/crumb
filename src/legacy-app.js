@@ -1592,7 +1592,7 @@ function buildOpeningHoursHTML(openingHours) {
   }).join('');
   return `
     <div>
-      <button class="bakery-hours-toggle" onclick="toggleBakeryHours(this)">
+      <button class="bakery-hours-toggle" data-onclick="toggleBakeryHours">
         <span class="bakery-info-icon">🕐</span>
         <span>Opening hours</span>
         ${statusBadge}
@@ -1869,27 +1869,17 @@ async function switchBakeryTab(tab, bakeryName, tabEl) {
   content.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;padding-top:8px;">${bakeryProducts.map(p => productCardHTML(p, false)).join('')}</div>`;
 }
 
-function editBakeryBlurb(bakeryName, currentBlurb) {
-  const section = document.getElementById('bakeryBlurbSection');
-  section.innerHTML = `
-    <textarea class="form-textarea" id="blurbInput" style="min-height:80px; margin-bottom:8px;" placeholder="A short description of the bakery — what makes it special, what to order, when to visit…">${currentBlurb}</textarea>
-    <div style="display:flex; gap:8px;">
-      <button class="btn-espresso" style="font-size:0.85rem; padding:8px 16px;" onclick="saveBakeryBlurb('${escJS(bakeryName)}')">Save</button>
-      <button class="btn-ghost" style="font-size:0.85rem;" onclick="openBakeryProfile('${escJS(bakeryName)}')">Cancel</button>
-    </div>`;
-}
-
-async function saveBakeryBlurb(bakeryName) {
-  const blurb = document.getElementById('blurbInput')?.value?.trim() || '';
-  try {
-    const { db, doc, setDoc } = fb;
-    await setDoc(doc(db, 'bakeries', encodeURIComponent(bakeryName)), { blurb, updatedBy: currentUser?.uid, name: bakeryName }, { merge: true });
-    showToast('Description saved ✓');
-    openBakeryProfile(bakeryName);
-  } catch(e) {
-    showToast('Could not save — check your connection');
-  }
-}
+// Bakery profile modal's opening-hours toggle. editBakeryBlurb/
+// saveBakeryBlurb (an inline blurb-edit UI) were deleted rather than
+// converted — dead code with zero call sites anywhere, and even if
+// something had called it, editBakeryBlurb's own target
+// (getElementById('bakeryBlurbSection')) doesn't exist in the real
+// template (only a similarly-named CSS *class*, `bakery-blurb-section`, on
+// the actual read-only blurb display, `:1821`) — it would have thrown.
+// Blurb editing is already fully handled by the real "✏️ Edit page" button
+// (`openManageBakeryModal`, `manageBakeryBlurb` field), which has worked
+// this whole time regardless.
+registerActions({ toggleBakeryHours });
 
 // ─── LEADERBOARD ──────────────────────────────────────────────────────────────
 let lbCurrentMode = 'items';
@@ -3257,7 +3247,7 @@ function renderBusinessSection() {
           <div style="font-weight:600; color:var(--espresso);">${name}</div>
           <div style="font-size:0.78rem; color:var(--text-muted);">${b ? b.items.length : 0} reviews · avg ${avg}</div>
         </div>
-        <button class="btn-caramel" style="font-size:0.82rem; padding:8px 14px;" onclick="openBakeryEditModal('${escJS(name)}')">✏️ Edit page</button>
+        <button class="btn-caramel" style="font-size:0.82rem; padding:8px 14px;" data-onclick="openBakeryEditModal" data-args='${dataArgs([name])}'>✏️ Edit page</button>
       </div>`;
   }).join('');
 }
@@ -3283,7 +3273,7 @@ async function openBakeryEditModal(bakeryName) {
   const photoPreview = bData.coverPhotoURL
     ? `<div class="photo-preview"><img src="${bData.coverPhotoURL}" style="max-height:180px;width:100%;object-fit:cover;border-radius:var(--radius);"></div>`
     : `<div class="photo-upload" style="height:120px;">
-        <input type="file" accept="image/*" id="bakeryEditPhotoInput" onchange="handleBakeryEditPhoto(this)">
+        <input type="file" accept="image/*" id="bakeryEditPhotoInput" data-onchange="handleBakeryEditPhoto">
         <div class="photo-upload-icon">🏪</div>
         <div class="photo-upload-text">Add a cover photo</div>
        </div>`;
@@ -3293,7 +3283,7 @@ async function openBakeryEditModal(bakeryName) {
       <div class="form-group" style="margin:0;">
         <label class="form-label">Cover photo</label>
         <div id="bakeryEditPhotoWrap">${photoPreview}</div>
-        ${bData.coverPhotoURL ? `<label style="cursor:pointer;font-size:0.78rem;color:var(--caramel);margin-top:6px;display:inline-block;">🔄 Change photo<input type="file" accept="image/*" style="display:none;" onchange="handleBakeryEditPhoto(this)"></label>` : ''}
+        ${bData.coverPhotoURL ? `<label style="cursor:pointer;font-size:0.78rem;color:var(--caramel);margin-top:6px;display:inline-block;">🔄 Change photo<input type="file" accept="image/*" style="display:none;" data-onchange="handleBakeryEditPhoto"></label>` : ''}
       </div>
       <div class="form-group" style="margin:0;">
         <label class="form-label">About this bakery</label>
@@ -3362,6 +3352,12 @@ function closeBakeryEditModal() {
   unlockScroll();
   editingBakeryName = null;
 }
+
+// handleBakeryEditPhoto/saveBakeryPage had no call sites outside this
+// cluster, so both come out of WINDOW EXPORTS entirely.
+// closeBakeryEditModal is already registered elsewhere (the modal-close
+// pilot block) — no change needed here.
+registerActions({ handleBakeryEditPhoto, saveBakeryPage });
 
 // ─── REVIEW FLAGGING ──────────────────────────────────────────────────────────
 
@@ -5776,7 +5772,7 @@ function renderCalendar() {
     const hasReview = reviews.length > 0;
     const countBadge = reviews.length > 1 ? `<span class="cal-review-count">${reviews.length}</span>` : '';
     const classes = `cal-day${hasReview ? ' has-review' : ''}${isToday ? ' today' : ''}`;
-    const click = hasReview ? `onclick="onCalDayClick(${d})"` : '';
+    const click = hasReview ? `data-onclick="onCalDayClick" data-args='${dataArgs([d])}'` : '';
     cells += `<div class="${classes}" ${click}>${d}${countBadge}</div>`;
   }
 
@@ -5786,8 +5782,8 @@ function renderCalendar() {
     <div class="activity-month-header">
       <div class="activity-month-title">${monthName}</div>
       <div class="activity-month-nav">
-        <button onclick="calNav(-1)">‹</button>
-        <button onclick="calNav(1)" ${!canGoNext ? 'disabled style="opacity:0.3;cursor:default;"' : ''}>›</button>
+        <button data-onclick="calNav" data-args='${dataArgs([-1])}'>‹</button>
+        <button data-onclick="calNav" data-args='${dataArgs([1])}' ${!canGoNext ? 'disabled style="opacity:0.3;cursor:default;"' : ''}>›</button>
       </div>
     </div>
     <div class="activity-month-stats">
@@ -5817,6 +5813,14 @@ function onCalDayClick(day) {
   if (!reviews.length) return;
 
   if (reviews.length === 1) {
+    // Close the profile modal first — both it and #bakeryModal share the
+    // same .modal-overlay z-index (src/styles/main.css), and #profileModal
+    // sits later in index.html's DOM order, so leaving it open would make
+    // it visually/interactively sit on top of the bakery modal we're about
+    // to open (blocking its own close button). Same pattern already used
+    // everywhere else in the app for a profile-modal-relative "jump to a
+    // bakery" action (follow-list rows, location chips, etc.).
+    closeProfileModal();
     openBakeryProfile(reviews[0].bakeryName);
     return;
   }
@@ -5859,7 +5863,7 @@ function onCalDayClick(day) {
   // Attach click handlers with item data
   overlay.querySelectorAll('[data-calday-idx]').forEach(el => {
     const item = reviews[parseInt(el.dataset.caldayIdx)];
-    el.addEventListener('click', () => { closeCalDayModal(); if (item?.bakeryName) openBakeryProfile(item.bakeryName); });
+    el.addEventListener('click', () => { closeCalDayModal(); closeProfileModal(); if (item?.bakeryName) openBakeryProfile(item.bakeryName); });
   });
 
   overlay.addEventListener('click', e => { if (e.target === overlay) closeCalDayModal(); });
@@ -5868,6 +5872,10 @@ function onCalDayClick(day) {
 function closeCalDayModal() {
   document.getElementById('calDayModal')?.remove();
 }
+
+// calNav/onCalDayClick had no call sites outside this cluster, so both
+// come out of WINDOW EXPORTS entirely.
+registerActions({ calNav, onCalDayClick });
 
 // ─── DINING MAP ───────────────────────────────────────────────────────────────
 let diningMapInstance = null;
@@ -5923,9 +5931,9 @@ function renderDiningMapTab(container, uid) {
         </div>
       </div>
       <div style="display:flex; border-bottom:1px solid var(--border); background:var(--cream-white);">
-        <button class="dm-stat-tab active" onclick="switchDmTab(this,'bakes')" style="flex:1; padding:10px; font-size:0.8rem; font-weight:600; border:none; background:none; cursor:pointer; color:var(--espresso); border-bottom:2px solid var(--honey);">Bakes</button>
-        <button class="dm-stat-tab" onclick="switchDmTab(this,'cities')" style="flex:1; padding:10px; font-size:0.8rem; font-weight:500; border:none; background:none; cursor:pointer; color:var(--text-muted); border-bottom:2px solid transparent;">Cities</button>
-        <button class="dm-stat-tab" onclick="switchDmTab(this,'countries')" style="flex:1; padding:10px; font-size:0.8rem; font-weight:500; border:none; background:none; cursor:pointer; color:var(--text-muted); border-bottom:2px solid transparent;">Countries</button>
+        <button class="dm-stat-tab active" data-onclick="switchDmTab" data-args='${dataArgs(['bakes'])}' style="flex:1; padding:10px; font-size:0.8rem; font-weight:600; border:none; background:none; cursor:pointer; color:var(--espresso); border-bottom:2px solid var(--honey);">Bakes</button>
+        <button class="dm-stat-tab" data-onclick="switchDmTab" data-args='${dataArgs(['cities'])}' style="flex:1; padding:10px; font-size:0.8rem; font-weight:500; border:none; background:none; cursor:pointer; color:var(--text-muted); border-bottom:2px solid transparent;">Cities</button>
+        <button class="dm-stat-tab" data-onclick="switchDmTab" data-args='${dataArgs(['countries'])}' style="flex:1; padding:10px; font-size:0.8rem; font-weight:500; border:none; background:none; cursor:pointer; color:var(--text-muted); border-bottom:2px solid transparent;">Countries</button>
       </div>
       <div id="dmStatContent" style="padding:0 20px 24px;"></div>
     </div>`;
@@ -6067,7 +6075,9 @@ function loadLeafletThenMap(myItems) {
   withLeaflet();
 }
 
-function switchDmTab(btn, tab) {
+// Parameter order follows delegate.js's trailing-clicked-element convention
+// (tab, then btn) — its only call sites are its own data-onclick attribute.
+function switchDmTab(tab, btn) {
   document.querySelectorAll('.dm-stat-tab').forEach(t => {
     t.style.fontWeight = '500';
     t.style.color = 'var(--text-muted)';
@@ -6123,6 +6133,10 @@ function renderDmStatRows(rows, subtitle) {
         </div>
       </div>`).join('')}`;
 }
+
+// switchDmTab had no call sites outside this cluster, so it comes out of
+// WINDOW EXPORTS entirely.
+registerActions({ switchDmTab });
 
 // ─── BOOKMARKS ────────────────────────────────────────────────────────────────
 let userBookmarks = {}; // bakeryName -> { id, address }
@@ -8299,7 +8313,7 @@ async function openQRScanner(bakeryName) {
       <div class="qr-scanner-line"></div>
     </div>
     <div class="qr-scanner-status" id="qrStatus">Point camera at customer's QR code</div>
-    <button style="color:white;background:none;border:1.5px solid rgba(255,255,255,0.4);border-radius:100px;padding:10px 28px;font-size:0.85rem;cursor:pointer;" onclick="closeQRScanner()">Cancel</button>`;
+    <button style="color:white;background:none;border:1.5px solid rgba(255,255,255,0.4);border-radius:100px;padding:10px 28px;font-size:0.85rem;cursor:pointer;" data-onclick="closeQRScanner">Cancel</button>`;
   document.body.appendChild(overlay);
 
   try {
@@ -8362,6 +8376,15 @@ async function processScannedReservation(reservationId, bakeryName) {
     // Show confirmation before marking collected
     const ref = reservationId.slice(-6).toUpperCase();
     const confirmOverlay = document.createElement('div');
+    // A dedicated class to close by, rather than the generic `div[style]`
+    // this used to close by — every element in this overlay has an inline
+    // style attribute, including the immediate parent of the buttons
+    // themselves, so `closest('div[style]')` from a button matched that
+    // inner row instead of the overlay: Cancel only ever removed the
+    // button row, leaving a headless dialog stuck on screen (confirmed by
+    // reading the actual markup, not just suspected — fixed here rather
+    // than converted as-is).
+    confirmOverlay.className = 'qr-confirm-overlay';
     confirmOverlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:2000;display:flex;align-items:flex-end;justify-content:center;';
     confirmOverlay.innerHTML = `
       <div style="background:var(--cream-white);border-radius:var(--radius) var(--radius) 0 0;width:100%;max-width:480px;padding:24px;">
@@ -8371,8 +8394,8 @@ async function processScannedReservation(reservationId, bakeryName) {
           🕐 ${r.slot} · Ref: <code>${ref}</code>
         </div>
         <div style="display:flex;gap:10px;">
-          <button class="btn-ghost" style="flex:1;" onclick="this.closest('div[style]').remove()">Cancel</button>
-          <button class="btn-espresso" style="flex:2;" onclick="confirmCollected('${reservationId}','${bakeryName}',this)">✓ Mark as collected</button>
+          <button class="btn-ghost" style="flex:1;" data-onclick="closeQrConfirmOverlay">Cancel</button>
+          <button class="btn-espresso" style="flex:2;" data-onclick="confirmCollected" data-args='${dataArgs([reservationId, bakeryName])}'>✓ Mark as collected</button>
         </div>
       </div>`;
     document.body.appendChild(confirmOverlay);
@@ -8381,11 +8404,19 @@ async function processScannedReservation(reservationId, bakeryName) {
   } catch(e) { showToast('Could not look up reservation'); console.error(e); }
 }
 
+function closeQrConfirmOverlay(el) {
+  el.closest('.qr-confirm-overlay')?.remove();
+}
+
 async function confirmCollected(reservationId, bakeryName, btn) {
   btn.disabled = true; btn.textContent = 'Saving…';
   await markCollected(reservationId, bakeryName);
-  btn.closest('div[style]').remove();
+  btn.closest('.qr-confirm-overlay')?.remove();
 }
+
+// closeQRScanner/confirmCollected had no call sites outside this cluster,
+// so both come out of WINDOW EXPORTS entirely. closeQrConfirmOverlay is new.
+registerActions({ closeQRScanner, closeQrConfirmOverlay, confirmCollected });
 
 // ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
 let notifLastSeen = null; // timestamp of last time user opened panel
@@ -8758,13 +8789,13 @@ registerActions({
 // call sites anywhere else in the file, so they've been removed from WINDOW
 // EXPORTS entirely (not just registered) — first functions to be fully
 // migrated off the global. openManageBakeryModal's last raw call site was
-// ADMIN PANEL RENDERERS' bakeries table (renderAdminBakeriesHTML), now
-// delegated too, so it comes out of WINDOW EXPORTS entirely as well.
-// openBakeryEditModal still has another unconverted call site elsewhere
-// and stays. openProfileModal/openAddModalForBakery also show zero raw call
-// sites now, but neither was touched by ADMIN PANEL RENDERERS — pre-existing
-// staleness, not cleaned up here; worth a skim before assuming either is
-// still needed.
+// ADMIN PANEL RENDERERS' bakeries table (renderAdminBakeriesHTML);
+// openBakeryEditModal's was BUSINESS — BAKERY PAGE MANAGEMENT's own
+// settings-page "Edit page" button (renderBusinessSection) — both now
+// delegated too, so both come out of WINDOW EXPORTS entirely as well.
+// openProfileModal/openAddModalForBakery also verified at zero raw call
+// sites (flagged as pre-existing staleness in two earlier sessions, neither
+// of which touched them either — cleaned up now while already here).
 registerActions({
   openProfileModal, openBakeryEditModal, openManageBakeryModal,
   openManageShopModal, openManagePreordersModal, switchBakeryTab,
@@ -9190,19 +9221,16 @@ Object.assign(window, {
   buildReactionBarInner,
   buildSummary,
   buildTastingDims,
-  calNav,
   cardHTML,
   clearBakery,
   clearItemMatch,
   closeMobileMenu,
   closeOnClickOutside,
   closeProfileModal,
-  closeQRScanner,
   compressImage,
   compressToDataURL,
   computeCountryRank,
   computeUserScore,
-  confirmCollected,
   createNewItem,
   deactivateExploreNearby,
   deleteProduct,
@@ -9210,7 +9238,6 @@ Object.assign(window, {
   dismissFlag,
   distKm,
   distKmUser,
-  editBakeryBlurb,
   ensureProfileExists,
   escJS,
   exploreMapLog,
@@ -9238,7 +9265,6 @@ Object.assign(window, {
   getTastingDims,
   getTrendingBakeriesNearCity,
   goToStep,
-  handleBakeryEditPhoto,
   handleBakeryPhoto,
   handlePhotoChange,
   handleProductPhoto,
@@ -9268,14 +9294,11 @@ Object.assign(window, {
   modalBack,
   modalNext,
   mpItemBreakdownHTML,
-  onCalDayClick,
   openAddModal,
   openAuthModal,
-  openBakeryEditModal,
   openBakeryProfile,
   openFeatureRequestModal,
   openProductModal,
-  openProfileModal,
   openSettingsPage,
   ownsBakery,
   populateBakeryLocationFilter,
@@ -9323,8 +9346,6 @@ Object.assign(window, {
   renderShopPage,
   resetAddModal,
   runExploreNearbySearch,
-  saveBakeryBlurb,
-  saveBakeryPage,
   saveBakeryProfile,
   saveProduct,
   saveReview,
@@ -9345,11 +9366,9 @@ Object.assign(window, {
   showPage,
   showToast,
   signOutFromSettings,
-  switchDmTab,
   switchFeedTab,
   switchLbTab,
   timeAgo,
-  toggleBakeryHours,
   unlockScroll,
   updateBellBadge,
   updateNav,

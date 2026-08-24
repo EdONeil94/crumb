@@ -15,25 +15,105 @@ system in `src/events/` (see `src/events/delegate.js` and
 `src/events/actions.js` for how it works — `registerActions()` +
 `getAction()` instead of `window[name]` lookups).
 
-**Status as of 2026-08-24: ~81% converted** (238 delegated / 294 total
+**Status as of 2026-08-24: ~86% converted** (252 delegated / 292 total
 handler sites, raw + delegated, across both files, comments excluded — the
-total is 294, not 295, from REACTIONS' one deliberate redundant-handler
-removal a couple of clusters back, not a miscount).
+total dropped from 294 to 292 this session: REACTIONS' earlier deliberate
+redundant-handler removal (-1) plus this session's deletion of the dead
+`editBakeryBlurb`/`saveBakeryBlurb` pair, whose Cancel button's raw
+`onclick="openBakeryProfile(...)"` went with it (-1), not a miscount).
 
 | | raw (`onclick=`/`onchange=`/`oninput=`) | delegated (`data-on*=`) |
 |---|---|---|
-| `index.html` | 26 | 97 |
-| `src/legacy-app.js` | 30 | 141 |
-| **total** | **56** | **238** |
+| `index.html` | 25 | 98 |
+| `src/legacy-app.js` | 15 | 154 |
+| **total** | **40** | **252** |
 
 Converted clusters (fully delegated, 0 raw handlers left): **FOLLOWS**,
 **FILTER HELPERS**, Pre-order discovery page + My Pre-orders burger-menu
 sheet, **Manage Offerings incl. Pre-orders/Reservations**, **DATA**,
 **EDIT REVIEW**, **SHARE REVIEW WITH A FOLLOWED USER**, **IMAGE
-COMPRESSION**, **ADMIN PANEL RENDERERS**, **REACTIONS**, **SHOP**, and
+COMPRESSION**, **ADMIN PANEL RENDERERS**, **REACTIONS**, **SHOP**,
+**Bakery-profile-modal internals**, **BUSINESS — BAKERY PAGE MANAGEMENT**,
+**ACTIVITY CALENDAR**, **DINING MAP**, **QR SCANNER (baker side)**, and
 everything else converted in earlier sessions per the git log. Notes on the
 trickier ones, most recent first:
 
+- **QR SCANNER (baker side)** (`openQRScanner`/`closeQRScanner`/
+  `confirmCollected`, `:8291`). Found and fixed a real, pre-existing bug
+  while converting: the collected-confirm overlay's Cancel button used
+  `this.closest('div[style]')` to find its own overlay to remove — but a
+  sibling inner wrapper `<div>` also carries an inline `style` attribute,
+  so `closest()` matched *that* one instead, leaving the actual overlay
+  stuck on screen (a real, silent, user-facing bug, not something this
+  conversion introduced). `confirmCollected` had the identical bug
+  internally. Fixed both by giving the overlay a dedicated
+  `.qr-confirm-overlay` class and a new `closeQrConfirmOverlay(el)` action
+  scoped to it. `openQRScanner`/`closeQRScanner`/`confirmCollected` come out
+  of `WINDOW EXPORTS` entirely. Camera/jsQR decoding itself isn't driveable
+  in this environment — `tests/qr-scanner-baker.spec.js` exercises the
+  overlay open/Cancel for real, then bypasses the scan step by calling
+  `window.processScannedReservation(id, bakeryName)` directly (the same
+  function `scanFrame()` calls on a successful decode) to exercise the
+  rest of the cluster.
+- **DINING MAP** (`switchDmTab`, profile modal's My Map tab stat toggle,
+  `:5872`). `switchDmTab(btn, tab)` reordered to `switchDmTab(tab, btn)`
+  for the trailing-clicked-element convention; comes out of `WINDOW
+  EXPORTS` entirely. Noticed, not touched: the initial static markup's
+  "active" tab uses `font-weight:600` (via a CSS class plus inline style)
+  while `switchDmTab()` itself sets `700` via pure inline-style
+  manipulation on click — a pre-existing inconsistency between the
+  hand-written initial HTML and the function's own behavior, harmless but
+  worth a skim if that tab's styling changes.
+- **ACTIVITY CALENDAR** (`calNav`/`onCalDayClick`, profile modal's Activity
+  tab, `:5810`). Both come out of `WINDOW EXPORTS` entirely. Found and
+  fixed a real, pre-existing bug directly in `onCalDayClick`: it opened a
+  bakery profile (`openBakeryProfile`) from *within* an already-open
+  `#profileModal` without closing it first — unlike every other
+  profile-modal-relative "jump to a bakery" action elsewhere in the app
+  (Followers/Following rows, a profile's location chips), which all close
+  the profile modal first. Since every `.modal-overlay` shares the exact
+  same `z-index: 2000` (`src/styles/main.css`) and `#profileModal` sits
+  later than `#bakeryModal` in `index.html`'s DOM order, leaving it open
+  meant it visually/interactively sat on top of the bakery modal just
+  opened underneath it — blocking that modal's own close button (found via
+  `tests/activity-calendar.spec.js`'s first test timing out on exactly that
+  click). Fixed by adding `closeProfileModal()` before both
+  `openBakeryProfile()` call sites in `onCalDayClick` (the single-review
+  direct-open path and the multi-review bottom-sheet's row click), matching
+  the pattern used everywhere else. The underlying z-index tie itself is
+  unchanged — see "Known pre-existing issues" below.
+- **BUSINESS — BAKERY PAGE MANAGEMENT** (`openBakeryEditModal`/
+  `handleBakeryEditPhoto`/`saveBakeryPage`, reached from Settings' Business
+  section, `:3230`). Converting the Edit page button resolved
+  `openBakeryEditModal`'s last raw call site; converting both photo-input
+  `onchange`s and the modal's own Save button resolved
+  `handleBakeryEditPhoto`/`saveBakeryPage`'s only call sites — all three
+  come out of `WINDOW EXPORTS` entirely. Along the way, cleaned up a stale
+  multi-line `WINDOW EXPORTS` comment (from the ADMIN PANEL RENDERERS
+  session) that still described `openProfileModal`/`openAddModalForBakery`
+  as having other raw call sites they didn't. **Not automatically
+  clicked**: `saveBakeryPage` writes real content (blurb/website/instagram/
+  cover photo) to a real bakery's public page in the target project, even
+  though the form starts pre-filled with that bakery's own current values —
+  `tests/bakery-profile-management.spec.js` asserts its `data-onclick`
+  wiring instead, same approach as `handleBuy`/`promoteUser` elsewhere.
+  Found (not fixed, out of scope): `renderBusinessSection()` reads the
+  module-level `allBakeries` with no `buildBakeryIndex()` call of its own —
+  see "Known pre-existing issues" below.
+- **Bakery-profile-modal internals** (`toggleBakeryHours`, `:1579`).
+  Converting its one call site was the easy part; the other two functions
+  originally flagged in this cluster, `editBakeryBlurb`/`saveBakeryBlurb`
+  (an inline blurb-edit UI), turned out to be genuinely dead code — zero
+  call sites anywhere, and `editBakeryBlurb`'s own target
+  (`getElementById('bakeryBlurbSection')`) doesn't exist in the real
+  template (only a similarly-named CSS *class* on the actual read-only
+  blurb display) — it would have thrown if anything had called it. Blurb
+  editing is already fully handled by the real "✏️ Edit page" button
+  (`openBakeryEditModal`, part of the next cluster below). Deleted both
+  rather than converting. `tests/bakery-profile-management.spec.js`'s
+  opening-hours test is skipped in the current target project — no bakery
+  there shows hours (the documented Google Places 403 issue below, not a
+  bug in this cluster).
 - **SHOP** (`renderShopPage`/`productCardHTML` etc., `:5316`). Same
   card-plus-nested-elements shape as DATA/ADMIN PANEL's bakery rows — the
   product card, its nested bakery link, and its nested Buy button all
@@ -137,13 +217,6 @@ Remaining clusters, by raw-handler count in `src/legacy-app.js` (run
 does; exclude comment lines):
 
 - BAKERY SEARCH — 6
-- Bakery-profile-modal internals — `toggleBakeryHours`, `saveBakeryBlurb`,
-  its Cancel button (raw `onclick="openBakeryProfile(...)"`) — 3 sites.
-  Note: `editBakeryBlurb` itself has no visible call site anywhere in
-  either file — worth confirming it's genuinely reachable (maybe rendered
-  from a path this migration hasn't touched yet) before assuming it's dead.
-- BUSINESS — BAKERY PAGE MANAGEMENT / ACTIVITY CALENDAR / DINING MAP /
-  QR SCANNER (baker side) — 3 each
 - ADD ITEM MODAL / ITEM MATCHING / ADMIN PANEL / SHOP MANAGEMENT (business
   users) — 2 each
 - MODAL STEPS — 1
@@ -194,9 +267,12 @@ parser — cheap and low-false-positive, not a substitute for judgement).
   delegation — don't try to fix it while converting that cluster, just
   don't let it block the conversion or get misread as something the
   migration broke.
-- **`loadData()`'s unawaited reconcile can clobber recent state**
-  (`src/legacy-app.js`) — a real robustness gap, two manifestations found
-  so far, both unrelated to handler delegation and not touched here:
+- **`loadData()`'s unawaited reconcile can clobber recent state, and
+  `allBakeries` needs a page visit nobody guarantees happened**
+  (`src/legacy-app.js`) — a real robustness gap in how this app's shared
+  module-level caches (`allItems`, `allBakeries`) get populated, three
+  manifestations found so far, all unrelated to handler delegation and not
+  touched here:
   - **Bakeries page.** `loadData()` (populates `allItems`, the only thing
     `renderBakeries()` reads via `buildBakeryIndex()`) runs async and
     unawaited from `onAuthStateChanged` — `#navAvatar` becoming visible
@@ -227,10 +303,40 @@ parser — cheap and low-false-positive, not a substitute for judgement).
     a page reload if the card doesn't show up, since a reload forces a
     fresh `loadData()` after enough wall-clock time has passed for
     consistency to catch up.
+  - **Settings' Business section can show "No bakeries assigned yet" for
+    an admin who manages all of them.** Different root cause from the
+    other two — not a timing race, a genuinely missing call.
+    `renderBusinessSection()` reads the module-level `allBakeries` directly
+    (`isAdmin() ? Object.keys(allBakeries) : ...`) with no
+    `buildBakeryIndex()` call of its own; that cache is only ever populated
+    as a side effect of visiting a page that *does* call it (Bakeries,
+    a bakery profile). Going straight to Settings on a fresh session — no
+    amount of waiting fixes this one — leaves it empty regardless of how
+    much data actually exists. Found via
+    `tests/bakery-profile-management.spec.js`, worked around there by
+    visiting a bakery profile first.
 
   Worth fixing in the app itself eventually (e.g. `loadData()` re-rendering
   whichever page/state is currently active instead of only what called it,
-  or the reconcile merging rather than overwriting).
+  the reconcile merging rather than overwriting, or `buildBakeryIndex()`
+  becoming part of the same startup sequence as `loadData()` instead of an
+  incidental side effect of unrelated pages).
+- **Every `.modal-overlay` shares the same `z-index: 2000`**
+  (`src/styles/main.css`), so when two modals are open simultaneously,
+  which one is interactively on top is decided purely by DOM order in
+  `index.html` (later wins), not by which one was opened more recently.
+  Found via ACTIVITY CALENDAR: `onCalDayClick` used to open a bakery
+  profile from within an already-open `#profileModal` without closing it
+  first, and since `#profileModal` sits later than `#bakeryModal` in the
+  DOM, it sat on top and blocked the bakery modal's own close button. That
+  one call site is now fixed (`onCalDayClick` closes `#profileModal`
+  first, matching every other profile→bakery jump in the app), but the
+  underlying tie-break-by-DOM-order architecture is unchanged — any future
+  code path that opens one modal from within another, open one, without
+  closing the first, can hit the same problem depending on those two
+  elements' relative position in `index.html`. Worth a real fix eventually
+  (e.g. bumping `z-index` on open so the most-recently-opened modal always
+  wins, regardless of source order).
 - **Manual Firestore cleanup still needed** in the live project (`crumb-ddeb6`)
   — two separate items, neither touched by `tests/cleanup.teardown.js`:
   - **"Test Croissant"** seeded test data. Not `E2E_`/`E2E `-prefixed, so
@@ -257,11 +363,14 @@ parser — cheap and low-false-positive, not a substitute for judgement).
 
 **Status as of 2026-08-24: verified green**, dedicated E2E account now
 in place (separate from the personal super-admin account used earlier).
-`npm run test:e2e` — 46 passed, 6 skipped (data-dependent — no candidates
-to test Send against, no location with 2+ bakeries, etc.), 0 failed. This
-covers everything converted since the migration started, including DATA,
-EDIT REVIEW, SHARE REVIEW WITH A FOLLOWED USER, IMAGE COMPRESSION, ADMIN
-PANEL RENDERERS, REACTIONS, and SHOP.
+`npm run test:e2e` — 53 passed, 7 skipped (data-dependent — no candidates
+to test Send against, no location with 2+ bakeries, no bakery showing
+opening hours in the target project, etc.), 0 failed. This covers
+everything converted since the migration started, including DATA, EDIT
+REVIEW, SHARE REVIEW WITH A FOLLOWED USER, IMAGE COMPRESSION, ADMIN PANEL
+RENDERERS, REACTIONS, SHOP, Bakery-profile-modal internals, BUSINESS —
+BAKERY PAGE MANAGEMENT, ACTIVITY CALENDAR, DINING MAP, and QR SCANNER
+(baker side).
 
 Getting to green — and staying there as REACTIONS landed and exercised the
 suite under slightly different conditions — took three rounds of fixes, all
