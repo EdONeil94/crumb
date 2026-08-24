@@ -5,19 +5,13 @@ import {
   TASTING_DIMS_UNIVERSAL, TASTING_DIM_5TH, DEFAULT_DIM_5TH, getTastingDims,
   TASTING_DIMS,
 } from './data/categories.js';
+import { lockScroll, unlockScroll, showToast, timeAgo } from './utils/dom.js';
+import { distKm, extractCity, extractCountry } from './utils/geo.js';
+import { escJS } from './utils/strings.js';
 
-// ─── SCROLL LOCK ──────────────────────────────────────────────────────────────
-let scrollY = 0;
-function lockScroll() {
-  scrollY = window.scrollY;
-  document.body.style.top = `-${scrollY}px`;
-  document.body.classList.add('scroll-locked');
-}
-function unlockScroll() {
-  document.body.classList.remove('scroll-locked');
-  document.body.style.top = '';
-  window.scrollTo(0, scrollY);
-}
+// lockScroll/unlockScroll, showToast, timeAgo, escJS, distKm, extractCity,
+// extractCountry moved to src/utils/ (2026-08-24, pages/components carving
+// Phase 0 step 2) — imported above.
 
 // ─── ROLES ────────────────────────────────────────────────────────────────────
 const SUPER_ADMIN_UID = 'KTpBS4yJx2h8LpcryCTfJDFCHlr2';
@@ -661,23 +655,6 @@ registerActions({ openProfileIfSignedIn, noop });
 
 // ─── BAKERIES ─────────────────────────────────────────────────────────────────
 let allBakeries = {}; // keyed by bakeryName
-
-function extractCity(address) {
-  if (!address) return '';
-  // Google Places UK format: "3 Bootham, York YO30 7BN, UK"
-  // or "50 Goodramgate, York YO1 7LF, UK"
-  const parts = address.split(',').map(p => p.trim()).filter(Boolean);
-
-  // Drop trailing country names
-  const countryWords = ['uk', 'england', 'scotland', 'wales', 'ireland', 'united kingdom', 'gb'];
-  const filtered = parts.filter(p => !countryWords.includes(p.toLowerCase()));
-
-  // Within each part, strip postcodes (e.g. "York YO30 7BN" → "York")
-  const cleaned = filtered.map(p => p.replace(/\b[A-Z]{1,2}\d[\d A-Z]*\d[A-Z]{2}\b/gi, '').trim()).filter(Boolean);
-
-  // City is typically the last remaining part (after street address)
-  return cleaned.length >= 2 ? cleaned[cleaned.length - 1] : (cleaned[0] || '');
-}
 
 function buildBakeryIndex() {
   allBakeries = {};
@@ -2400,15 +2377,6 @@ function renderKnownMatches(query) {
       </div>`).join('');
 }
 
-function distKm(lat1, lng1, lat2, lng2) {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLng/2) * Math.sin(dLng/2);
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-}
 
 // Takes the input element itself (delegate.js's trailing-clicked-element
 // convention for handlers that need the live value) rather than a string —
@@ -5758,16 +5726,6 @@ registerActions({ calNav, onCalDayClick });
 // ─── DINING MAP ───────────────────────────────────────────────────────────────
 let diningMapInstance = null;
 
-function extractCountry(address) {
-  if (!address) return '';
-  const parts = address.split(',').map(p => p.trim()).filter(Boolean);
-  const ukRegions = ['england', 'scotland', 'wales', 'northern ireland'];
-  const last = (parts[parts.length - 1] || '').toLowerCase();
-  if (last === 'uk' || last === 'united kingdom' || ukRegions.includes(last)) return 'United Kingdom';
-  // Also catch "UK" embedded in last segment e.g. "York YO1, UK"
-  if (parts.some(p => p.toLowerCase() === 'uk')) return 'United Kingdom';
-  return parts[parts.length - 1] || '';
-}
 
 function renderDiningMapTab(container, uid) {
   const myItems = allItems.filter(i => i.userId === uid && i.bakeryName);
@@ -8539,26 +8497,6 @@ function friendlyAuthError(code) {
 }
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2800);
-}
-
-function timeAgo(date) {
-  const s = Math.round((Date.now() - date) / 1000);
-  if (s < 60) return 'just now';
-  if (s < 3600) return Math.round(s / 60) + 'm ago';
-  if (s < 86400) return Math.round(s / 3600) + 'h ago';
-  if (s < 604800) return Math.round(s / 86400) + 'd ago';
-  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-}
-
-function escJS(str) {
-  return (str || '').replace(/'/g, "\\'").replace(/"/g, '\\"');
-}
-
 // Close modals on overlay click
 document.getElementById('addModal').addEventListener('click', e => { if (e.target === document.getElementById('addModal')) closeAddModal(); });
 document.getElementById('authModal').addEventListener('click', e => { if (e.target === document.getElementById('authModal')) closeAuthModal(); });
@@ -9109,13 +9047,9 @@ Object.assign(window, {
   computeUserScore,
   deactivateExploreNearby,
   detectExploreLocation,
-  distKm,
   distKmUser,
   ensureProfileExists,
-  escJS,
   exploreMapLog,
-  extractCity,
-  extractCountry,
   feedCardHTML,
   fetchGoogleBakeries,
   fetchGoogleBakeriesNearPoint,
@@ -9157,7 +9091,6 @@ Object.assign(window, {
   loadReactionsForItems,
   loadSavedItems,
   loadUserRole,
-  lockScroll,
   mpItemBreakdownHTML,
   openAddModal,
   openAuthModal,
@@ -9219,12 +9152,9 @@ Object.assign(window, {
   showKnownBakeries,
   showMobileInstallBtn,
   showPage,
-  showToast,
   signOutFromSettings,
   switchFeedTab,
   switchLbTab,
-  timeAgo,
-  unlockScroll,
   updateBellBadge,
   updateNav,
   updateOverallRating,
