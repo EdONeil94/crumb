@@ -40,6 +40,7 @@ import {
 import {
   allProducts, loadProducts, renderShopPage, productCardHTML,
 } from './pages/shop.js';
+import { cardHTML, feedCardHTML } from './components/reviewCard.js';
 // Side-effect only — PWA install/update-check/status-bar-fix/pull-to-refresh/
 // keyboard-scroll all self-execute on import, no exports needed here.
 import './app/lifecycle.js';
@@ -350,130 +351,28 @@ async function renderFeed() {
   }).join('');
 }
 
-// Used by feedCardHTML/cardHTML's username link. It used to inline
+// Used by feedCardHTML/cardHTML's username link (both now in
+// src/components/reviewCard.js, Phase 3 step 12). It used to inline
 // `if(currentUser) ...` directly in the raw onclick, which broke
 // post-modularization: bare top-level `let`/`const` bindings in an ES
 // module aren't visible to inline onclick="..." attributes (which always
 // run in plain global scope), unlike this module's functions, which the
 // WINDOW EXPORTS Object.assign(window, {...}) block re-exposes. This
 // wrapper does the same for the currentUser check, and is now registered as
-// a delegated action instead.
+// a delegated action instead. Stayed behind rather than moving with
+// cardHTML/feedCardHTML: it calls openProfileModal, still in this file
+// (future src/components/profileModal.js, Phase 5 step 22) — moving it
+// would've meant reviewCard.js importing back from here while this file
+// already needs cardHTML/feedCardHTML imported the normal direction, a
+// genuine two-file cycle. The GLOBAL registerActions() registry means the
+// data-onclick="openProfileIfSignedIn" references inside cardHTML/
+// feedCardHTML's markup still resolve fine despite living in a different
+// file now. Revisit once step 22 lands.
 function openProfileIfSignedIn(uid) {
   if (currentUser) openProfileModal(uid);
 }
 
-// feedCardHTML wraps the reaction bar in this no-op action instead of the
-// old raw onclick="event.stopPropagation()". The reaction bar's own buttons
-// (REACTIONS cluster, now delegated too) resolve to their own action via
-// delegate.js's closest()-based dispatch, same as this wrapper — but a
-// click landing on the bar's own padding/gaps, not on any button, needs
-// something to stop it too: giving this wrapper a registered no-op gives
-// closest() an inner match to stop at there as well, so a stray click here
-// never falls through to the card's own openDetail action.
-function noop() {}
-
-function feedCardHTML(item, reactionBarHTML, followedBadge) {
-  const catDisp = getCategoryDisplay(item);
-  const record = item.itemRecordId ? allItemRecords.find(r => r.id === item.itemRecordId) : null;
-  const score = record ? record.communityAvg.toFixed(1) : (item.communityAvg ? item.communityAvg.toFixed(1) : (item.overallRating ? item.overallRating.toFixed(1) : '–'));
-  // reviewCount: prefer itemRecord, then count sibling reviews in allItems, then fall back to 1
-  let ratingCount;
-  if (record) {
-    ratingCount = record.reviewCount || 1;
-  } else if (item.itemRecordId) {
-    // record not loaded yet — count items sharing the same itemRecordId
-    ratingCount = allItems.filter(i => i.itemRecordId === item.itemRecordId).length || 1;
-  } else {
-    // legacy item with no itemRecordId — count by name+bakery
-    ratingCount = allItems.filter(i =>
-      (i.name || '').toLowerCase() === (item.name || '').toLowerCase() &&
-      (i.bakeryName || '').toLowerCase() === (item.bakeryName || '').toLowerCase()
-    ).length || 1;
-  }
-  const avgPrice = record?.avgPrice ?? item.price ?? null;
-  const price = avgPrice !== null ? ('£' + parseFloat(avgPrice).toFixed(2)) : '';
-  const priceLabel = record && record.priceCount > 1 ? ('avg ' + price) : price;
-  const imageTag = item.photoURL
-    ? `<img src="${item.photoURL}" alt="${item.name}" loading="lazy">`
-    : `<div class="card-image-placeholder">${catDisp.emoji}</div>`;
-  const catLabel = catDisp.sub ? `${catDisp.main} · ${catDisp.sub}` : catDisp.main;
-  return `
-    <div class="card" data-onclick="openDetail" data-args='${dataArgs([item.id])}'>
-      <div class="card-image">
-        ${imageTag}
-        <div class="card-badge">${catLabel}</div>
-      </div>
-      <div class="card-body">
-        <div class="card-meta">
-          <span style="cursor:pointer;color:var(--caramel);" data-onclick="openProfileIfSignedIn" data-args='${dataArgs([item.userId])}'>${item.userName || 'Anonymous'}</span>
-          ${item.createdAt ? `<span>·</span><span>${timeAgo(item.createdAt.toDate ? item.createdAt.toDate() : new Date(item.createdAt))}</span>` : ''}
-          ${followedBadge || ''}
-        </div>
-        <div class="card-name">${item.name || 'Unknown bake'}</div>
-        <div class="card-bakery" data-onclick="openBakeryProfile" data-args='${dataArgs([item.bakeryName || 'Unknown bakery', ''])}'>📍 ${item.bakeryName || 'Unknown bakery'}</div>
-        <div class="card-footer">
-          <div class="rating-display">
-            <div class="rating-circle">${score}</div>
-            <div class="rating-label">Community<br><span class="rating-count">${ratingCount} review${ratingCount !== 1 ? 's' : ''}</span></div>
-          </div>
-          ${priceLabel ? `<div class="card-price">${priceLabel}</div>` : ''}
-        </div>
-      </div>
-      <div data-onclick="noop">${reactionBarHTML}</div>
-    </div>`;
-}
-
-function cardHTML(item) {
-  const catDisp = getCategoryDisplay(item);
-  const emoji = catDisp.emoji;
-  const record = item.itemRecordId ? allItemRecords.find(r => r.id === item.itemRecordId) : null;
-  const score = record ? record.communityAvg.toFixed(1) : (item.communityAvg ? item.communityAvg.toFixed(1) : (item.overallRating ? item.overallRating.toFixed(1) : '–'));
-  let ratingCount;
-  if (record) {
-    ratingCount = record.reviewCount || 1;
-  } else if (item.itemRecordId) {
-    ratingCount = allItems.filter(i => i.itemRecordId === item.itemRecordId).length || 1;
-  } else {
-    ratingCount = allItems.filter(i =>
-      (i.name || '').toLowerCase() === (item.name || '').toLowerCase() &&
-      (i.bakeryName || '').toLowerCase() === (item.bakeryName || '').toLowerCase()
-    ).length || 1;
-  }
-  const avgPrice = record?.avgPrice ?? (record?.priceCount > 0 ? record.avgPrice : null) ?? item.price ?? null;
-  const price = avgPrice !== null && avgPrice !== undefined ? ('£' + parseFloat(avgPrice).toFixed(2)) : '';
-  const priceLabel = record && record.priceCount > 1 ? ('avg ' + price) : price;
-  const imageTag = item.photoURL
-    ? `<img src="${item.photoURL}" alt="${item.name}" loading="lazy">`
-    : `<div class="card-image-placeholder">${emoji}</div>`;
-  const catLabel = catDisp.sub ? `${catDisp.main} · ${catDisp.sub}` : catDisp.main;
-  return `
-    <div class="card" data-onclick="openDetail" data-args='${dataArgs([item.id])}'>
-      <div class="card-image">
-        ${imageTag}
-        <div class="card-badge">${catLabel}</div>
-      </div>
-      <div class="card-body">
-        <div class="card-meta">
-          <span style="cursor:pointer;color:var(--caramel);" data-onclick="openProfileIfSignedIn" data-args='${dataArgs([item.userId])}'>${item.userName || 'Anonymous'}</span>
-          ${item.createdAt ? `<span>·</span><span>${timeAgo(item.createdAt.toDate ? item.createdAt.toDate() : new Date(item.createdAt))}</span>` : ''}
-        </div>
-        <div class="card-name">${item.name || 'Unknown bake'}</div>
-        <div class="card-bakery" data-onclick="openBakeryProfile" data-args='${dataArgs([item.bakeryName || 'Unknown bakery', ''])}'>📍 ${item.bakeryName || 'Unknown bakery'}</div>
-        <div class="card-footer">
-          <div class="rating-display">
-            <div class="rating-circle">${score}</div>
-            <div class="rating-label">Community<br><span class="rating-count">${ratingCount} review${ratingCount !== 1 ? 's' : ''}</span></div>
-          </div>
-          ${priceLabel ? `<div class="card-price">${priceLabel}</div>` : ''}
-        </div>
-      </div>
-    </div>`;
-}
-
-// DATA cluster's card rendering (feedCardHTML/cardHTML). openDetail and
-// openBakeryProfile are already registered elsewhere (Bakeries page,
-// Leaderboard, ...) — no change needed for those here.
-registerActions({ openProfileIfSignedIn, noop });
+registerActions({ openProfileIfSignedIn });
 
 // ─── BAKERIES ─────────────────────────────────────────────────────────────────
 // allBakeries moved to src/state/appState.js (2026-08-24, Phase 0 step
@@ -7891,7 +7790,6 @@ Object.assign(window, {
   buildOpeningHoursHTML,
   buildSummary,
   buildTastingDims,
-  cardHTML,
   closeProfileModal,
   compressImage,
   compressToDataURL,
@@ -7901,7 +7799,6 @@ Object.assign(window, {
   detectExploreLocation,
   distKmUser,
   exploreMapLog,
-  feedCardHTML,
   fetchGoogleBakeries,
   fetchGoogleBakeriesNearPoint,
   fetchPlaceDetails,
