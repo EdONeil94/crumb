@@ -2394,7 +2394,7 @@ async function handlePhotoChange(input) {
   document.getElementById('photoUploadWrap').innerHTML = `
     <div class="photo-preview">
       <img src="${photoDataURL}" alt="Preview">
-      <button class="photo-preview-remove" onclick="removePhoto()">✕</button>
+      <button class="photo-preview-remove" data-onclick="removePhoto">✕</button>
     </div>`;
 
 }
@@ -2403,7 +2403,7 @@ function removePhoto() {
   photoFile = null; photoDataURL = null;
   document.getElementById('photoUploadWrap').innerHTML = `
     <div class="photo-upload" id="photoUploadArea">
-      <input type="file" accept="image/*" id="photoInput" onchange="handlePhotoChange(this)">
+      <input type="file" accept="image/*" id="photoInput" data-onchange="handlePhotoChange">
       <div class="photo-upload-icon">📷</div>
       <div class="photo-upload-text">Tap to take a photo or <strong>upload from your camera roll</strong></div>
     </div>`;
@@ -2424,7 +2424,7 @@ function buildCategoryChips() {
 
 function renderParentChips(parentWrap) {
   parentWrap.innerHTML = Object.entries(CATEGORY_TREE).map(([key, cat]) =>
-    `<div class="category-chip" onclick="selectParentCategory('${key}')">${cat.emoji} ${cat.label}</div>`
+    `<div class="category-chip" data-onclick="selectParentCategory" data-args='${dataArgs([key])}'>${cat.emoji} ${cat.label}</div>`
   ).join('');
 }
 
@@ -2440,7 +2440,7 @@ function selectParentCategory(parentKey) {
   parentWrap.innerHTML = `
     <div class="category-chip selected" style="display:flex; align-items:center; gap:6px;">
       ${cat.emoji} ${cat.label}
-      <span onclick="event.stopPropagation(); clearParentCategory()" style="
+      <span data-onclick="clearParentCategory" style="
         display:inline-flex; align-items:center; justify-content:center;
         width:16px; height:16px; border-radius:50%;
         background:rgba(255,255,255,0.25); font-size:0.7rem;
@@ -2452,7 +2452,7 @@ function selectParentCategory(parentKey) {
   const subs = cat.subs || {};
   subWrap.innerHTML = `<div style="font-size:0.72rem; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--text-muted); width:100%; margin-bottom:4px;">Choose type</div>` +
     Object.entries(subs).map(([key, label]) =>
-      `<div class="category-chip" onclick="selectSubCategory(this,'${key}')">${label}</div>`
+      `<div class="category-chip" data-subcat="${key}" data-onclick="selectSubCategory" data-args='${dataArgs([key])}'>${label}</div>`
     ).join('');
   subWrap.style.display = 'flex';
   subWrap.style.flexWrap = 'wrap';
@@ -2475,17 +2475,31 @@ function clearParentCategory() {
   buildTastingDims('other'); // reset to default
 }
 
-function selectSubCategory(el, subKey) {
+// Parameter order follows delegate.js's trailing-clicked-element convention
+// (subKey, then el) — its only two call sites are its own data-onclick
+// attribute and one plain call from prefillItemForReview, both updated here.
+function selectSubCategory(subKey, el) {
   document.querySelectorAll('#categorySubChips .category-chip').forEach(c => c.classList.remove('selected'));
   el.classList.add('selected');
   selectedSubCategory = subKey;
   selectedCategory = SUB_TO_PARENT[subKey] || selectedCategory;
 }
 
-function selectCategory(el, cat) {
-  // legacy shim for AI auto-select
-  selectParentCategory(cat);
-}
+// IMAGE COMPRESSION + the category-chip picker, which shares this file
+// section by position rather than topic (no header of its own).
+// handlePhotoChange is registered here for the first time (this cluster's
+// removePhoto rebuild is its first delegated call site) but stays in
+// WINDOW EXPORTS too — ADD ITEM MODAL (resetAddModal, index.html) still
+// calls it through two other raw, unconverted onchange= sites. The other 4
+// had no call site anywhere else, so they come out of WINDOW EXPORTS
+// entirely. selectCategory (an unused "legacy shim for AI auto-select",
+// per its own comment, with zero call sites anywhere) was deleted rather
+// than converted — same treatment as buildItemRowHTML/buildLocationFilterBar
+// in FILTER HELPERS.
+registerActions({
+  removePhoto, handlePhotoChange, selectParentCategory, clearParentCategory,
+  selectSubCategory,
+});
 
 // ─── BAKERY SEARCH ────────────────────────────────────────────────────────────
 let searchTimeout;
@@ -2914,8 +2928,8 @@ function selectItemMatch(recordId) {
     selectParentCategory(record.category);
     if (record.subCategory) {
       setTimeout(() => {
-        const subChip = document.querySelector(`#categorySubChips .category-chip[onclick*="'${record.subCategory}'"]`);
-        if (subChip) selectSubCategory(subChip, record.subCategory);
+        const subChip = document.querySelector(`#categorySubChips .category-chip[data-subcat="${record.subCategory}"]`);
+        if (subChip) selectSubCategory(record.subCategory, subChip);
       }, 50);
     }
   }
@@ -9136,7 +9150,6 @@ Object.assign(window, {
   cardHTML,
   clearBakery,
   clearItemMatch,
-  clearParentCategory,
   closeMobileMenu,
   closeOnClickOutside,
   closeProfileModal,
@@ -9236,7 +9249,6 @@ Object.assign(window, {
   refreshAdminUsersPanel,
   refreshFollowButtons,
   refreshReactionBar,
-  removePhoto,
   removeReviewAndFlag,
   removeUserRole,
   renderActivityTab,
@@ -9284,12 +9296,9 @@ Object.assign(window, {
   searchBakery,
   searchExistingItems,
   selectBakery,
-  selectCategory,
   selectExploreCity,
   selectItemMatch,
   selectManualBakery,
-  selectParentCategory,
-  selectSubCategory,
   showAdminTab,
   showAuthError,
   showBakeryItemHints,

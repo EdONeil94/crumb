@@ -15,59 +15,59 @@ system in `src/events/` (see `src/events/delegate.js` and
 `src/events/actions.js` for how it works — `registerActions()` +
 `getAction()` instead of `window[name]` lookups).
 
-**Status as of 2026-08-24: ~74% converted** (218 delegated / 295 total
+**Status as of 2026-08-24: ~76% converted** (223 delegated / 295 total
 handler sites, raw + delegated, across both files, comments excluded).
 
 | | raw (`onclick=`/`onchange=`/`oninput=`) | delegated (`data-on*=`) |
 |---|---|---|
 | `index.html` | 29 | 94 |
-| `src/legacy-app.js` | 48 | 124 |
-| **total** | **77** | **218** |
+| `src/legacy-app.js` | 43 | 129 |
+| **total** | **72** | **223** |
 
 Converted clusters (fully delegated, 0 raw handlers left): **FOLLOWS**,
 **FILTER HELPERS**, Pre-order discovery page + My Pre-orders burger-menu
 sheet, **Manage Offerings incl. Pre-orders/Reservations**, **DATA**,
-**EDIT REVIEW**, **SHARE REVIEW WITH A FOLLOWED USER**, and everything else
-converted in earlier sessions per the git log. Notes on the trickier ones,
-most recent first:
+**EDIT REVIEW**, **SHARE REVIEW WITH A FOLLOWED USER**, **IMAGE
+COMPRESSION**, and everything else converted in earlier sessions per the
+git log. Notes on the trickier ones, most recent first:
 
-- **SHARE REVIEW WITH A FOLLOWED USER** (`openShareReviewModal` etc.,
-  `src/legacy-app.js:6192`). Its own raw count was only 2 (`filterShareCandidates`
-  now takes the search `<input>` element directly, delegate.js's
-  live-value convention, instead of `this.value`; the Send button's
-  `data-args` no longer needs `escJS()` — `dataArgs()` already handles
-  attribute-safe encoding). The other 4 the doc's count included belong to
-  `renderSavedTab` (Saved profile tab: bookmarked bakeries + saved items) —
-  it shares this file section by *position*, not topic (no section header
-  of its own). Its `toggleBookmark(...).then(()=>switchProfileTab(...))`
-  chain got a `removeBookmarkAndRefreshSaved` wrapper (mirrors
-  `followAndRefreshProfile`); the saved-item card + its nested Remove
-  button is another DATA-style "card wraps a clickable" case, dropped the
-  `event.stopPropagation()` the same way. Converting these 4 turned out to
-  resolve 3 other functions' `WINDOW EXPORTS` entirely: `openDetail`,
-  `switchProfileTab`, and `toggleBookmark` had no raw call sites left
-  anywhere once `renderSavedTab`'s were gone (their old comments,
-  now fixed, both already claimed this — worth a skim if a future session
-  finds another stale one). **Not automatically tested**: actually clicking
-  a candidate's Send button writes a real `sharedReviews` doc with no
-  cleanup path in `tests/cleanup.teardown.js`, so `tests/share-and-saved.spec.js`
-  verifies that button's `data-onclick`/`data-args` wiring directly instead
-  of clicking it — manually verify a real Send if that path changes.
-  Also noticed, not touched: the "Item detail modal" `registerActions` block's
-  own comment (`:8778`) claims `toggleSaveItem`/`closeDetailAndOpenProfile`/
-  `flagReview`/`prefillItemForReview`/`openEditModal` still have other raw
-  call sites keeping them in `WINDOW EXPORTS` — none of them do (verified),
-  so that whole block's `WINDOW EXPORTS` entries look safe to drop, but
-  none of it was caused by this session's edits — leaving it for whoever
-  picks up ITEM DETAIL.
-- **EDIT REVIEW** (`openEditModal` etc., `:4665`, plus the modal's
-  Save/Delete footer buttons in `index.html`). Both rating sliders shared
-  one new `updateEditDimDisplay(displayId, el)` action instead of two
-  near-identical ones. Covered by `tests/edit-review.spec.js` (via a new
-  `tests/utils/reviews.js` helper that drives the real "Rate a Bake!" flow
-  — self-cleans by deleting what it creates, since `items`/`itemRecords`
-  aren't covered by `tests/cleanup.teardown.js`; `share-and-saved.spec.js`
-  above reuses this same helper).
+- **IMAGE COMPRESSION** (`removePhoto`/`handlePhotoChange`, `:2351`). Same
+  file-position-vs-topic split as SHARE REVIEW: its own raw count was only
+  2, the other 3 belong to the category-chip picker
+  (`selectParentCategory`/`clearParentCategory`/`selectSubCategory`) that's
+  co-located here. `selectSubCategory`'s param order got reordered to
+  `(subKey, el)` for the trailing-clicked-element convention (mirrors
+  `switchLbTab`'s precedent) — its one other, non-attribute call site
+  (`prefillItemForReview`) was updated too. That call site also did
+  `document.querySelector('...[onclick*="'+subCategory+'"]')` to find a
+  specific sub-chip — a real dependency on the raw attribute text, not just
+  cosmetic, that would've silently broken; replaced with a dedicated
+  `data-subcat="${key}"` attribute instead of trying to match into the new
+  `data-args` JSON. Also deleted `selectCategory(el, cat)`, an unused
+  "legacy shim for AI auto-select" (its own comment) with zero call sites
+  anywhere — same treatment as `buildItemRowHTML`/`buildLocationFilterBar`
+  in FILTER HELPERS. `handlePhotoChange` stays in `WINDOW EXPORTS` (ADD ITEM
+  MODAL still has two raw, unconverted call sites for it) but needed
+  registering as an action for the first time. Covered by
+  `tests/image-compression.spec.js`.
+- **SHARE REVIEW WITH A FOLLOWED USER**: own raw count was 2
+  (`filterShareCandidates` now takes the search `<input>` directly, the
+  live-value convention). The other 4 belonged to `renderSavedTab` (Saved
+  profile tab), same file-position-vs-topic split as above — converting
+  those resolved `openDetail`/`switchProfileTab`/`toggleBookmark`'s
+  `WINDOW EXPORTS` entries entirely. Send button's real click isn't
+  exercised in `tests/share-and-saved.spec.js` (writes an uncleaned
+  `sharedReviews` doc) — its wiring is asserted directly instead; manually
+  verify a real Send if that path changes. Noticed, not touched: the "Item
+  detail modal" `registerActions` block's own comment (`:8778`) claims 5
+  functions still have other raw call sites keeping them in `WINDOW
+  EXPORTS` — none of them do (verified) — left for whoever picks up ITEM
+  DETAIL.
+- **EDIT REVIEW**: both rating sliders shared one new
+  `updateEditDimDisplay(displayId, el)` action. Covered by
+  `tests/edit-review.spec.js` via a new `tests/utils/reviews.js` helper
+  (drives the real "Rate a Bake!" flow, self-cleans by deleting what it
+  creates) — reused by `share-and-saved.spec.js` too.
 - **DATA** (`feedCardHTML`/`cardHTML`, `:609`). First cluster where a card
   and its own nested clickables needed converting together — per
   `delegate.js`'s header comment, `closest()`-based dispatch resolves to
@@ -98,7 +98,6 @@ Remaining clusters, by raw-handler count in `src/legacy-app.js` (run
 does; exclude comment lines):
 
 - BAKERY SEARCH — 6
-- IMAGE COMPRESSION — 5
 - ADMIN PANEL RENDERERS — 5
 - REACTIONS — 4
 - SHOP — 4
@@ -170,10 +169,11 @@ parser — cheap and low-false-positive, not a substitute for judgement).
 environment, and the suite hasn't been run since the Manage Offerings
 catalogue-overlay fix (`closeCatalogueManager`/`removeCatalogueItem`
 delegation), the bakery-profile Pre-order tab Reserve-button conversion,
-DATA (`tests/feed.spec.js`), EDIT REVIEW (`tests/edit-review.spec.js`), and
-SHARE REVIEW WITH A FOLLOWED USER (`tests/share-and-saved.spec.js`) landed —
-all are covered by specs (new and existing) but **unverified by an actual
-run**. A dedicated E2E test account, separate from the personal
+DATA (`tests/feed.spec.js`), EDIT REVIEW (`tests/edit-review.spec.js`),
+SHARE REVIEW WITH A FOLLOWED USER (`tests/share-and-saved.spec.js`), and
+IMAGE COMPRESSION (`tests/image-compression.spec.js`) landed — all are
+covered by specs (new and existing) but **unverified by an actual run**.
+A dedicated E2E test account, separate from the personal
 super-admin account `E2E_EMAIL`/`E2E_PASSWORD` pointed at until now, is
 being set up — once it exists and can open "Manage pre-orders" on a bakery
 (see `tests/utils/preorders.js`'s module comment for why that's required),
