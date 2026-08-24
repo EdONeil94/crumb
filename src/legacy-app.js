@@ -4685,17 +4685,17 @@ function openEditModal(id) {
         </div>
         <input type="range" class="rating-slider" id="edit_${d.key}"
           min="0" max="5" step="0.1" value="${val}"
-          oninput="document.getElementById('edit_display_${d.key}').textContent=parseFloat(this.value).toFixed(1)">
+          data-oninput="updateEditDimDisplay" data-args='${dataArgs([`edit_display_${d.key}`])}'>
       </div>`;
   }).join('');
 
   const photoSection = item.photoURL
     ? `<div class="photo-preview" id="editPhotoWrap">
         <img src="${item.photoURL}" alt="Current photo" style="max-height:180px;width:100%;object-fit:cover;border-radius:var(--radius);">
-        <button class="photo-preview-remove" onclick="clearEditPhoto()">✕</button>
+        <button class="photo-preview-remove" data-onclick="clearEditPhoto">✕</button>
        </div>`
     : `<div class="photo-upload" id="editPhotoWrap">
-        <input type="file" accept="image/*" id="editPhotoInput" onchange="handleEditPhoto(this)">
+        <input type="file" accept="image/*" id="editPhotoInput" data-onchange="handleEditPhoto">
         <div class="photo-upload-icon">📷</div>
         <div class="photo-upload-text">Tap to add a photo</div>
        </div>`;
@@ -4717,7 +4717,7 @@ function openEditModal(id) {
         <label class="form-label">Photo</label>
         ${photoSection}
         <label class="form-label" style="font-size:0.72rem;cursor:pointer;color:var(--caramel);margin-top:8px;display:inline-block;">
-          <input type="file" accept="image/*" style="display:none;" onchange="handleEditPhoto(this)"> 🔄 Replace photo
+          <input type="file" accept="image/*" style="display:none;" data-onchange="handleEditPhoto"> 🔄 Replace photo
         </label>
       </div>
       <div class="form-group" style="margin:0;">
@@ -4726,7 +4726,7 @@ function openEditModal(id) {
       </div>
       <div class="form-group" style="margin:0;">
         <label class="form-label">Category</label>
-        <select class="form-select" id="editCategory" onchange="updateEditSubCategory()">
+        <select class="form-select" id="editCategory" data-onchange="updateEditSubCategory">
           ${parentOptions}
         </select>
       </div>
@@ -4748,7 +4748,7 @@ function openEditModal(id) {
         <label class="form-label">Overall rating</label>
         <div class="rating-value-display" id="editOverallDisplay">${parseFloat(item.overallRating || 0).toFixed(1)}</div>
         <input type="range" class="rating-slider" id="editOverallRating" min="0" max="5" step="0.1" value="${item.overallRating || 0}"
-          oninput="document.getElementById('editOverallDisplay').textContent=parseFloat(this.value).toFixed(1)">
+          data-oninput="updateEditDimDisplay" data-args='${dataArgs(['editOverallDisplay'])}'>
         <div class="rating-scale-labels"><span>0 — Stale</span><span>2.5 — Decent</span><span>5 — Legendary</span></div>
       </div>
       <div class="form-group" style="margin:0;">
@@ -4763,6 +4763,15 @@ function openEditModal(id) {
 
   document.getElementById('editModal').classList.add('open');
   lockScroll();
+}
+
+// Shared by every rating slider in the edit form (per-dimension and
+// overall) — each one's own live-value display span id is passed via
+// data-args, and the slider itself arrives as the trailing element
+// (delegate.js's convention for handlers that need the live value, since
+// that's more robust than threading `this.value` through as a string).
+function updateEditDimDisplay(displayId, el) {
+  document.getElementById(displayId).textContent = parseFloat(el.value).toFixed(1);
 }
 
 function updateEditSubCategory() {
@@ -4897,6 +4906,14 @@ async function deleteReview() {
     console.error(e);
   }
 }
+
+// Edit Review modal. saveEdit/deleteReview's onclick= call sites are in
+// index.html (the modal's static footer buttons), not here — none of these
+// 6 had any other call site, so all come out of WINDOW EXPORTS entirely.
+registerActions({
+  updateEditDimDisplay, updateEditSubCategory, clearEditPhoto,
+  handleEditPhoto, saveEdit, deleteReview,
+});
 
 // ─── CATEGORY MIGRATION ───────────────────────────────────────────────────────
 const CATEGORY_MIGRATION_MAP = {
@@ -9089,7 +9106,6 @@ Object.assign(window, {
   calNav,
   cardHTML,
   clearBakery,
-  clearEditPhoto,
   clearItemMatch,
   clearParentCategory,
   closeMobileMenu,
@@ -9104,7 +9120,6 @@ Object.assign(window, {
   createNewItem,
   deactivateExploreNearby,
   deleteProduct,
-  deleteReview,
   detectExploreLocation,
   dismissFlag,
   distKm,
@@ -9141,7 +9156,6 @@ Object.assign(window, {
   handleBakeryEditPhoto,
   handleBakeryPhoto,
   handleBuy,
-  handleEditPhoto,
   handlePhotoChange,
   handleProductPhoto,
   handleSettingsPhoto,
@@ -9236,7 +9250,6 @@ Object.assign(window, {
   saveBakeryBlurb,
   saveBakeryPage,
   saveBakeryProfile,
-  saveEdit,
   saveProduct,
   saveReview,
   saveSettingsProfile,
@@ -9271,7 +9284,6 @@ Object.assign(window, {
   toggleReactionPicker,
   unlockScroll,
   updateBellBadge,
-  updateEditSubCategory,
   updateNav,
   updateOverallRating,
   updatePreorderBadge,

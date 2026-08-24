@@ -15,69 +15,58 @@ system in `src/events/` (see `src/events/delegate.js` and
 `src/events/actions.js` for how it works — `registerActions()` +
 `getAction()` instead of `window[name]` lookups).
 
-**Status as of 2026-08-24: ~69% converted** (204 delegated / 295 total
+**Status as of 2026-08-24: ~72% converted** (212 delegated / 295 total
 handler sites, raw + delegated, across both files, comments excluded).
 
 | | raw (`onclick=`/`onchange=`/`oninput=`) | delegated (`data-on*=`) |
 |---|---|---|
-| `index.html` | 31 | 92 |
-| `src/legacy-app.js` | 60 | 112 |
-| **total** | **91** | **204** |
+| `index.html` | 29 | 94 |
+| `src/legacy-app.js` | 54 | 118 |
+| **total** | **83** | **212** |
 
 Converted clusters (fully delegated, 0 raw handlers left): **FOLLOWS**,
-**FILTER HELPERS** (the actual filter logic — `buildItemRowHTML` and
-`buildLocationFilterBar` were dead code and got deleted rather than
-converted), Pre-order
-discovery page + My Pre-orders burger-menu sheet, **Manage Offerings incl.
-Pre-orders/Reservations**, **DATA** (`feedCardHTML`/`cardHTML` — see below),
-and everything else converted in earlier sessions per the git log.
+**FILTER HELPERS**, Pre-order discovery page + My Pre-orders burger-menu
+sheet, **Manage Offerings incl. Pre-orders/Reservations**, **DATA**,
+**EDIT REVIEW**, and everything else converted in earlier sessions per the
+git log. Notes on the trickier ones, most recent first:
 
-**DATA** (`feedCardHTML`/`cardHTML`, `src/legacy-app.js:609`) was the first
-cluster where a card and its own nested clickable elements (username,
-bakery name) both needed converting together — per `delegate.js`'s header
-comment, once BOTH are delegated, `closest()`-based dispatch resolves to the
-innermost match on its own and no `event.stopPropagation()` is needed for
-those. One wrinkle that pattern doesn't cover: `feedCardHTML` also wraps the
-reaction bar (REACTIONS cluster, still raw, out of scope here) in a plain
-`onclick="event.stopPropagation()"` guard div, protecting clicks that land
-on the bar's own padding rather than one of its (self-stopping) buttons. A
-pure `event.stopPropagation()` doesn't fit the data-onclick model (no
-action to name), so it's now a tiny registered no-op action
-(`noop()`, `data-onclick="noop"`) instead — `closest()` stops at that
-wrapper the same way it would at a real action, so the guard still works
-under the delegated system. Also: converting `openBakeryProfile`'s two new
-call sites explicitly passed `''` for its `catFilter` parameter
-(`dataArgs([bakeryName, ''])`) rather than the single-arg
-`dataArgs([bakeryName])` shorthand used elsewhere — with only one arg, the
-delegated system's trailing-clicked-element argument lands in `catFilter`'s
-position instead, which is a latent bug at the one existing call site that
-does this (`src/legacy-app.js:1040`, from an earlier session, not touched
-here) worth fixing if it's ever revisited. Covered by a new
-`tests/feed.spec.js`.
-
-"Manage Offerings incl. Pre-orders/Reservations" needed a follow-up pass
-after being assumed done: it had 2 stragglers, both easy to miss because the
-bulk of that flow was already delegated.
-- Manage Offerings → Catalogue picker overlay (`openCatalogueManager`,
-  `src/legacy-app.js:8059`): the ✕ close button and the per-item Remove
-  button were raw `onclick=`. Fixed with a new `closeCatalogueManager()`
-  helper (mirrors `closeMpDayDetail`/`closeEditOfferingOverlay`) and
-  delegating `removeCatalogueItem` directly; both are now registered in the
-  same `registerActions()` block as the rest of that cluster (no new
-  `WINDOW EXPORTS`). Covered by a new test in
-  `tests/manage-offerings.spec.js`.
-- Bakery profile's own Pre-order tab (`renderPreorderTab`) built its
-  "Reserve" button with a raw `onclick="openReserveModal(...)"` — a second,
-  unconverted copy of a button that was already fully delegated in the
-  *other* render path for the same action (the My Pre-orders /
-  discovery-page listing, `:6570`). Now delegated the same way; this let
-  `openReserveModal` come out of `WINDOW EXPORTS` entirely (it had no other
-  external call sites). Already covered by existing tests that go through
-  `reserveFromBakeryProfile` (`tests/utils/preorders.js`).
-
-FOLLOWS, by contrast, turned out to already be fully converted — the one
-`onclick=` string that greps as a hit inside its section (`:5183`) is a
-comment describing the old code, not a live handler.
+- **EDIT REVIEW** (`openEditModal` etc., `src/legacy-app.js:4665`, plus the
+  modal's Save/Delete footer buttons in `index.html`). Both rating sliders
+  (per-dimension and overall) shared one new `updateEditDimDisplay(displayId,
+  el)` action instead of two near-identical ones — each slider passes its own
+  display-span id via `data-args`, the slider itself arrives as the trailing
+  clicked-element argument. Covered by a new `tests/edit-review.spec.js`
+  (via a new `tests/utils/reviews.js` helper that drives the real "Rate a
+  Bake!" flow — self-cleans by deleting what it creates, since
+  `items`/`itemRecords` aren't covered by `tests/cleanup.teardown.js`).
+- **DATA** (`feedCardHTML`/`cardHTML`, `:609`). First cluster where a card
+  and its own nested clickables (username, bakery name) needed converting
+  together — per `delegate.js`'s header comment, `closest()`-based dispatch
+  resolves to the innermost match on its own once both are delegated, no
+  `event.stopPropagation()` needed. One wrinkle that doesn't cover:
+  `feedCardHTML` wraps the reaction bar (REACTIONS, still raw, out of scope)
+  in a plain `onclick="event.stopPropagation()"` guard div, protecting
+  clicks on the bar's own padding. A pure `stopPropagation()` has no action
+  to name, so it's now a registered no-op (`noop()`, `data-onclick="noop"`)
+  instead — `closest()` stops there the same way it would at a real action.
+  Also flagged, not fixed: `openBakeryProfile`'s single-arg call-site
+  shorthand (`dataArgs([bakeryName])`, used at `:1040` from an earlier
+  session) lets the trailing clicked-element argument land in its
+  `catFilter` parameter — a latent bug, worth fixing if that site is
+  revisited. Covered by `tests/feed.spec.js`.
+- **Manage Offerings incl. Pre-orders/Reservations** needed a follow-up pass
+  after being assumed done: the catalogue picker overlay's ✕ close and
+  per-item Remove buttons (`openCatalogueManager`, `:8059`), and a second
+  raw copy of the Reserve button in the bakery profile's own Pre-order tab
+  (duplicating one already delegated at the My Pre-orders/discovery-page
+  listing, `:6570`) — letting `openReserveModal` come out of `WINDOW
+  EXPORTS` entirely. Covered by `tests/manage-offerings.spec.js`.
+- **FILTER HELPERS**: the actual filter logic was already fully converted;
+  `buildItemRowHTML`/`buildLocationFilterBar` turned out to be dead code and
+  got deleted rather than converted.
+- **FOLLOWS** turned out to already be fully converted — the one
+  `onclick=` string that greps as a hit inside its section (`:5183`) is a
+  comment describing the old code, not a live handler.
 
 Remaining clusters, by raw-handler count in `src/legacy-app.js` (run
 `npm run check:dead-refs` — it doesn't print this breakdown, but a quick
@@ -85,7 +74,6 @@ Remaining clusters, by raw-handler count in `src/legacy-app.js` (run
 does; exclude comment lines):
 
 - BAKERY SEARCH — 6
-- EDIT REVIEW — 6
 - SHARE REVIEW WITH A FOLLOWED USER — 6
 - IMAGE COMPRESSION — 5
 - ADMIN PANEL RENDERERS — 5
@@ -158,9 +146,10 @@ parser — cheap and low-false-positive, not a substitute for judgement).
 **Pending: dedicated E2E test account.** `.env` doesn't exist yet in this
 environment, and the suite hasn't been run since the Manage Offerings
 catalogue-overlay fix (`closeCatalogueManager`/`removeCatalogueItem`
-delegation) and the bakery-profile Pre-order tab Reserve-button conversion
-landed — both are covered by specs (new and existing) but **unverified by
-an actual run**. A dedicated E2E test account, separate from the personal
+delegation), the bakery-profile Pre-order tab Reserve-button conversion,
+DATA (`tests/feed.spec.js`), and EDIT REVIEW (`tests/edit-review.spec.js`)
+landed — all are covered by specs (new and existing) but **unverified by an
+actual run**. A dedicated E2E test account, separate from the personal
 super-admin account `E2E_EMAIL`/`E2E_PASSWORD` pointed at until now, is
 being set up — once it exists and can open "Manage pre-orders" on a bakery
 (see `tests/utils/preorders.js`'s module comment for why that's required),
