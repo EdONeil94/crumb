@@ -13,9 +13,8 @@ its own section below), and the **E2E test workflow** — all done on
 **Status as of 2026-08-24: Phase 0 complete** (all 4 steps: `categories.js`,
 `utils/`, `appState.js` across 3 sub-stages, and `check:dead-refs` now
 covering all of `src/` + `index.html`, not just `legacy-app.js`). **Phase 1
-under way** (nav.js/authModal.js/lifecycle.js) — approved to proceed
-without a stop-and-review gate after step 4, given its low blast radius
-(a dev-tool script, zero runtime/bundle impact).
+under way** — step 5 (`nav.js`) done, step 6 (`authModal.js`) and step 7
+(`lifecycle.js`) not started.
 This is separate from — and comes after — the handler delegation migration
 above; don't conflate the two milestones. Plan approved 2026-08-24 (was
 drafted as a plan-mode file at `~/.claude/plans/logical-painting-kurzweil.md`,
@@ -119,8 +118,10 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   4. Extend `check:dead-refs` to cover the new directories — ✅ **done**
      (2026-08-24, commit `d72d04e`).
 - **Phase 1 — foundational, high fan-in, implicitly covered by every spec:**
-  5. `src/components/nav.js` · 6. `src/components/authModal.js` ·
-  7. `src/app/lifecycle.js`
+  5. `src/components/nav.js` — ✅ **done** (2026-08-24, commit `a2e5c61`) —
+  split, not moved wholesale: `showPage`/`navigateFromMobileMenu`/
+  `openMyProfileFromMobileMenu` deferred, see step 32's callout below ·
+  6. `src/components/authModal.js` · 7. `src/app/lifecycle.js`
 - **Phase 2 — small, self-contained, strongly direct-tested:**
   8. `src/components/reactions.js` · 9. `src/components/editReviewModal.js` ·
   10. `src/components/qrCode.js` · 11. `src/pages/shop.js`
@@ -170,6 +171,20 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   half-done.** This is a deliberate, separate decision to make at that
   point — not an automatic consequence of step 29 landing.
 
+  **⚠️ Deferred follow-up tied to this step (32, `settings.js`, the last
+  page) — set up in Phase 1 step 5, don't lose track of it.**
+  `showPage()`/`navigateFromMobileMenu()`/`openMyProfileFromMobileMenu()`
+  stayed in `legacy-app.js` during step 5 because `showPage()` alone
+  directly calls 12 functions spread across all 9 pages (`leaderboard.js`,
+  `feed.js`, `bakeries.js`, `explore.js`, `preorders.js`, `shop.js`,
+  `people.js`, `settings.js`) and `openMyProfileFromMobileMenu()` calls
+  `openProfileModal()` (`profileModal.js`, step 22). Unlike 3b's
+  single-dependency deferral, this one needs *every* page extracted
+  before it can move cleanly — step 32 landing is the actual point all
+  of `showPage()`'s dependencies finally exist as real imports. **Once
+  step 32 lands, revisit whether these 3 functions can move into
+  `nav.js`.** Deliberate, separate decision at that point, same as above.
+
 **Coverage verified, not assumed, for the two originally-"unclear" items**:
 grepped `tests/` for every DOM id/function name tied to `#page-preorders`
 (`poCountrySelect`/`poCitySelect`/`poBakeryFilter`/`onPoCountryChange`/
@@ -212,6 +227,26 @@ boundaries — commits happen at the module/stage level throughout.
 
 ### Extraction log (most recent first)
 
+- **`src/components/nav.js` — step 5** (2026-08-24, commit `a2e5c61`). First
+  real page/component extraction (Phase 0 was infrastructure only). Split
+  rather than moved wholesale, per confirmation: moved the 8 self-contained
+  functions (`updateNav`, `toggleMobileMenu`, `closeMobileMenu`,
+  `toggleUserMenu`, `closeAvatarDropdown`, `signOutFromAvatarMenu`,
+  `closeOnClickOutside`, `signOutFromMobileMenu`); `showPage`/
+  `navigateFromMobileMenu`/`openMyProfileFromMobileMenu` stayed in
+  `legacy-app.js` — `showPage()` alone calls 12 functions across all 9
+  not-yet-extracted pages. Deferred follow-up logged at step 32 above, not
+  just buried here. `registerActions()` calls split accordingly for the 6
+  moved functions with real markup call sites; verified this resolves
+  correctly at runtime (not just the static checker) since
+  `src/events/actions.js`'s registry is a single module-level singleton
+  shared by every importer regardless of which file calls
+  `registerActions()`. Removed 3 more stale `WINDOW EXPORTS` entries
+  (`updateNav`, `closeMobileMenu`, `closeOnClickOutside`) — `showPage`'s own
+  entry correctly stays (real raw call site: `index.html`'s
+  `profileEditBtn`). Full `test:e2e`: 59 passed/12 skipped/0 failed (one
+  `manage-offerings.spec.js` flake on the first run, confirmed
+  non-reproducing via isolated rerun before this clean full rerun).
 - **`scripts/check-dead-refs.js` extended — step 4** (2026-08-24, commit
   `d72d04e`). Default targets now walk `index.html` + every `.js` under
   `src/` recursively (12 targets, up from 1), instead of hardcoding
