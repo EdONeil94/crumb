@@ -3566,9 +3566,9 @@ function renderAdminUsersHTML() {
           <div class="admin-user-email">${u.reviews} review${u.reviews !== 1 ? 's' : ''}</div>
         </div>
         <div class="admin-user-actions">
-          ${role?.role !== 'admin' ? `<button class="admin-btn" onclick="promoteUser('${u.uid}','admin','')">Make admin</button>` : ''}
-          <button class="admin-btn" onclick="promptAssignBakery('${u.uid}','${escJS(u.name)}')">${role?.role === 'business' ? 'Change bakery' : 'Assign bakery'}</button>
-          ${role ? `<button class="admin-btn danger" onclick="removeUserRole('${u.uid}')">Remove role</button>` : ''}
+          ${role?.role !== 'admin' ? `<button class="admin-btn" data-onclick="promoteUser" data-args='${dataArgs([u.uid, 'admin', ''])}'>Make admin</button>` : ''}
+          <button class="admin-btn" data-onclick="promptAssignBakery" data-args='${dataArgs([u.uid, u.name])}'>${role?.role === 'business' ? 'Change bakery' : 'Assign bakery'}</button>
+          ${role ? `<button class="admin-btn danger" data-onclick="removeUserRole" data-args='${dataArgs([u.uid])}'>Remove role</button>` : ''}
         </div>
       </div>`;
   }).join('');
@@ -3594,12 +3594,18 @@ function renderAdminBakeriesHTML() {
           <div class="admin-user-email">${b.items.length} review${b.items.length !== 1 ? 's' : ''} · Owner: ${ownerName}</div>
         </div>
         <div class="admin-user-actions">
-          <button class="admin-btn" onclick="openBakeryProfile('${escJS(name)}')">View page</button>
-          ${isAdmin() ? `<button class="admin-btn primary" onclick="openManageBakeryModal('${escJS(name)}')">Edit page</button>` : ''}
+          <button class="admin-btn" data-onclick="openBakeryProfile" data-args='${dataArgs([name, ''])}'>View page</button>
+          ${isAdmin() ? `<button class="admin-btn primary" data-onclick="openManageBakeryModal" data-args='${dataArgs([name])}'>Edit page</button>` : ''}
         </div>
       </div>`;
   }).join('');
 }
+
+// Admin panel's Users/Bakeries tables. promoteUser/promptAssignBakery/
+// removeUserRole had no call sites outside this cluster, so all come out of
+// WINDOW EXPORTS entirely. openBakeryProfile/openManageBakeryModal are
+// already registered elsewhere — no change needed for those here.
+registerActions({ promoteUser, promptAssignBakery, removeUserRole });
 
 // ─── EXPLORE PAGE ─────────────────────────────────────────────────────────────
 // ─── EXPLORE: WORLD CITIES DATA ───────────────────────────────────────────────
@@ -8717,9 +8723,14 @@ registerActions({
 // switchBakeryTab, openManageShopModal, and openManagePreordersModal had no
 // call sites anywhere else in the file, so they've been removed from WINDOW
 // EXPORTS entirely (not just registered) — first functions to be fully
-// migrated off the global. openProfileModal/openBakeryEditModal/
-// openManageBakeryModal/openAddModalForBakery all still have other
-// unconverted call sites elsewhere and stay in WINDOW EXPORTS.
+// migrated off the global. openManageBakeryModal's last raw call site was
+// ADMIN PANEL RENDERERS' bakeries table (renderAdminBakeriesHTML), now
+// delegated too, so it comes out of WINDOW EXPORTS entirely as well.
+// openBakeryEditModal still has another unconverted call site elsewhere
+// and stays. openProfileModal/openAddModalForBakery also show zero raw call
+// sites now, but neither was touched by ADMIN PANEL RENDERERS — pre-existing
+// staleness, not cleaned up here; worth a skim before assuming either is
+// still needed.
 registerActions({
   openProfileModal, openBakeryEditModal, openManageBakeryModal,
   openManageShopModal, openManagePreordersModal, switchBakeryTab,
@@ -9231,7 +9242,6 @@ Object.assign(window, {
   openBakeryEditModal,
   openBakeryProfile,
   openFeatureRequestModal,
-  openManageBakeryModal,
   openProductDetail,
   openProductModal,
   openProfileModal,
@@ -9244,13 +9254,10 @@ Object.assign(window, {
   populatePoCityDropdown,
   processScannedReservation,
   productCardHTML,
-  promoteUser,
-  promptAssignBakery,
   refreshAdminUsersPanel,
   refreshFollowButtons,
   refreshReactionBar,
   removeReviewAndFlag,
-  removeUserRole,
   renderActivityTab,
   renderAdminBakeriesHTML,
   renderAdminFeatures,

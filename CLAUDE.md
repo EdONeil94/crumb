@@ -15,41 +15,51 @@ system in `src/events/` (see `src/events/delegate.js` and
 `src/events/actions.js` for how it works — `registerActions()` +
 `getAction()` instead of `window[name]` lookups).
 
-**Status as of 2026-08-24: ~76% converted** (223 delegated / 295 total
+**Status as of 2026-08-24: ~77% converted** (228 delegated / 295 total
 handler sites, raw + delegated, across both files, comments excluded).
 
 | | raw (`onclick=`/`onchange=`/`oninput=`) | delegated (`data-on*=`) |
 |---|---|---|
 | `index.html` | 29 | 94 |
-| `src/legacy-app.js` | 43 | 129 |
-| **total** | **72** | **223** |
+| `src/legacy-app.js` | 38 | 134 |
+| **total** | **67** | **228** |
 
 Converted clusters (fully delegated, 0 raw handlers left): **FOLLOWS**,
 **FILTER HELPERS**, Pre-order discovery page + My Pre-orders burger-menu
 sheet, **Manage Offerings incl. Pre-orders/Reservations**, **DATA**,
 **EDIT REVIEW**, **SHARE REVIEW WITH A FOLLOWED USER**, **IMAGE
-COMPRESSION**, and everything else converted in earlier sessions per the
-git log. Notes on the trickier ones, most recent first:
+COMPRESSION**, **ADMIN PANEL RENDERERS**, and everything else converted in
+earlier sessions per the git log. Notes on the trickier ones, most recent
+first:
 
-- **IMAGE COMPRESSION** (`removePhoto`/`handlePhotoChange`, `:2351`). Same
-  file-position-vs-topic split as SHARE REVIEW: its own raw count was only
-  2, the other 3 belong to the category-chip picker
-  (`selectParentCategory`/`clearParentCategory`/`selectSubCategory`) that's
-  co-located here. `selectSubCategory`'s param order got reordered to
-  `(subKey, el)` for the trailing-clicked-element convention (mirrors
-  `switchLbTab`'s precedent) — its one other, non-attribute call site
-  (`prefillItemForReview`) was updated too. That call site also did
-  `document.querySelector('...[onclick*="'+subCategory+'"]')` to find a
-  specific sub-chip — a real dependency on the raw attribute text, not just
-  cosmetic, that would've silently broken; replaced with a dedicated
-  `data-subcat="${key}"` attribute instead of trying to match into the new
-  `data-args` JSON. Also deleted `selectCategory(el, cat)`, an unused
-  "legacy shim for AI auto-select" (its own comment) with zero call sites
-  anywhere — same treatment as `buildItemRowHTML`/`buildLocationFilterBar`
-  in FILTER HELPERS. `handlePhotoChange` stays in `WINDOW EXPORTS` (ADD ITEM
-  MODAL still has two raw, unconverted call sites for it) but needed
-  registering as an action for the first time. Covered by
-  `tests/image-compression.spec.js`.
+- **ADMIN PANEL RENDERERS** (`renderAdminUsersHTML`/`renderAdminBakeriesHTML`,
+  `:3536`, Settings page's Admin Panel). Clean single-topic section this
+  time — no file-position surprise. `promoteUser`/`promptAssignBakery`/
+  `removeUserRole` come out of `WINDOW EXPORTS` entirely; converting the
+  Bakeries table's "Edit page" button also resolved `openManageBakeryModal`'s
+  `WINDOW EXPORTS` entry (its last raw call site). Along the way, noticed
+  `openProfileModal`/`openAddModalForBakery` in that same `WINDOW EXPORTS`
+  comment block also show zero raw call sites now — pre-existing staleness,
+  not caused by this session, not cleaned up (worth a skim). **Not
+  automatically tested**: `promoteUser`/`promptAssignBakery`/`removeUserRole`
+  grant/revoke real admin or business access for real accounts in the
+  target Firebase project (the Users tab lists real users, not `E2E_`-
+  prefixed throwaway data) — `tests/admin-panel.spec.js` asserts their
+  `data-onclick`/`data-args` wiring instead of clicking them, same approach
+  as the Send button in `tests/share-and-saved.spec.js`.
+- **IMAGE COMPRESSION**: same file-position-vs-topic split as SHARE
+  REVIEW — its own raw count was only 2, the other 3 belonged to the
+  category-chip picker (`selectParentCategory`/`clearParentCategory`/
+  `selectSubCategory`), co-located by position. `selectSubCategory`'s param
+  order got reordered to `(subKey, el)` for the trailing-clicked-element
+  convention (mirrors `switchLbTab`'s precedent); its one other,
+  non-attribute call site (`prefillItemForReview`) relied on
+  `document.querySelector('[onclick*="..."]')` to find a specific sub-chip
+  — a real dependency on the raw attribute text that would've silently
+  broken, replaced with a dedicated `data-subcat` attribute. Also deleted
+  `selectCategory(el, cat)`, a dead "legacy shim" with zero call sites
+  anywhere (same treatment as `buildItemRowHTML`/`buildLocationFilterBar`
+  in FILTER HELPERS). Covered by `tests/image-compression.spec.js`.
 - **SHARE REVIEW WITH A FOLLOWED USER**: own raw count was 2
   (`filterShareCandidates` now takes the search `<input>` directly, the
   live-value convention). The other 4 belonged to `renderSavedTab` (Saved
@@ -98,7 +108,6 @@ Remaining clusters, by raw-handler count in `src/legacy-app.js` (run
 does; exclude comment lines):
 
 - BAKERY SEARCH — 6
-- ADMIN PANEL RENDERERS — 5
 - REACTIONS — 4
 - SHOP — 4
 - Bakery-profile-modal internals — `toggleBakeryHours`, `saveBakeryBlurb`,
@@ -170,13 +179,16 @@ environment, and the suite hasn't been run since the Manage Offerings
 catalogue-overlay fix (`closeCatalogueManager`/`removeCatalogueItem`
 delegation), the bakery-profile Pre-order tab Reserve-button conversion,
 DATA (`tests/feed.spec.js`), EDIT REVIEW (`tests/edit-review.spec.js`),
-SHARE REVIEW WITH A FOLLOWED USER (`tests/share-and-saved.spec.js`), and
-IMAGE COMPRESSION (`tests/image-compression.spec.js`) landed — all are
-covered by specs (new and existing) but **unverified by an actual run**.
-A dedicated E2E test account, separate from the personal
-super-admin account `E2E_EMAIL`/`E2E_PASSWORD` pointed at until now, is
-being set up — once it exists and can open "Manage pre-orders" on a bakery
-(see `tests/utils/preorders.js`'s module comment for why that's required),
+SHARE REVIEW WITH A FOLLOWED USER (`tests/share-and-saved.spec.js`), IMAGE
+COMPRESSION (`tests/image-compression.spec.js`), and ADMIN PANEL RENDERERS
+(`tests/admin-panel.spec.js`) landed — all are covered by specs (new and
+existing) but **unverified by an actual run**. A dedicated E2E test
+account, separate from the personal super-admin account
+`E2E_EMAIL`/`E2E_PASSWORD` pointed at until now, is being set up — once it
+exists and can open "Manage pre-orders" on a bakery (see
+`tests/utils/preorders.js`'s module comment for why that's required; note
+`tests/admin-panel.spec.js`'s own tests additionally skip unless that
+account is also an admin — see that spec's module comment),
 run the full suite before trusting anything converted since this note was
 added, then delete this paragraph.
 
