@@ -2520,7 +2520,7 @@ function showKnownBakeries() {
 
   resultsEl.innerHTML = `<div style="font-size:0.72rem; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Previously reviewed</div>` +
     known.slice(0, 5).map(b => `
-      <div onclick="selectBakery('${b.placeId || ''}','${escJS(b.name)}','${escJS(b.address)}')"
+      <div data-onclick="selectBakery" data-args='${dataArgs([b.placeId || '', b.name, b.address])}'
         style="padding:10px 12px; background:var(--parchment); border-radius:var(--radius-sm); cursor:pointer; border:1.5px solid var(--sage); transition:border-color 0.2s; margin-bottom:6px;"
         onmouseover="this.style.borderColor='var(--honey)'" onmouseout="this.style.borderColor='var(--sage)'">
         <div style="font-size:0.88rem; font-weight:600; color:var(--espresso); display:flex; align-items:center; gap:6px;">
@@ -2565,7 +2565,7 @@ function renderKnownMatches(query) {
 
   el.innerHTML = `<div style="font-size:0.72rem; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--sage); margin-bottom:4px;">⭐ Already on Crumbz</div>` +
     matches.slice(0, 5).map(b => `
-      <div onclick="selectBakery('${b.placeId || ''}','${escJS(b.name)}','${escJS(b.address)}')"
+      <div data-onclick="selectBakery" data-args='${dataArgs([b.placeId || '', b.name, b.address])}'
         style="padding:10px 12px; background:var(--parchment); border-radius:var(--radius-sm); cursor:pointer; border:1.5px solid var(--sage); transition:border-color 0.2s; margin-bottom:6px;"
         onmouseover="this.style.borderColor='var(--honey)'" onmouseout="this.style.borderColor='var(--sage)'">
         <div style="font-size:0.88rem; font-weight:600; color:var(--espresso); display:flex; align-items:center; gap:6px;">
@@ -2586,7 +2586,11 @@ function distKm(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
-function searchBakery(val) {
+// Takes the input element itself (delegate.js's trailing-clicked-element
+// convention for handlers that need the live value) rather than a string —
+// same as filterShareCandidates/searchExistingItems.
+function searchBakery(el) {
+  const val = el.value;
   clearTimeout(searchTimeout);
   if (!val) { showKnownBakeries(); return; }
   if (val.length < 2) {
@@ -2604,7 +2608,7 @@ async function fetchBakeryPlaces(query) {
   if (!GOOGLE_MAPS_KEY) {
     googleEl.innerHTML = `
       <div style="font-size:0.8rem; color:var(--text-muted); padding:8px; background:var(--parchment); border-radius:var(--radius-sm);">
-        Google Maps API key required. <strong><span style="cursor:pointer; color:var(--caramel);" onclick="selectManualBakery('${query}')">Use "${query}" as entered →</span></strong>
+        Google Maps API key required. <strong><span style="cursor:pointer; color:var(--caramel);" data-onclick="selectManualBakery" data-args='${dataArgs([query])}'>Use "${query}" as entered →</span></strong>
       </div>`;
     return;
   }
@@ -2654,7 +2658,7 @@ async function fetchBakeryPlaces(query) {
     if (!filtered.length) {
       // Only show "no results" messaging if there were no known matches either
       if (!knownMatchNamesLower.length) {
-        googleEl.innerHTML = `<div style="font-size:0.82rem; color:var(--text-muted); padding:8px;">No bakeries found — <span style="color:var(--caramel); cursor:pointer;" onclick="selectManualBakery('${query}')">use this name anyway</span></div>`;
+        googleEl.innerHTML = `<div style="font-size:0.82rem; color:var(--text-muted); padding:8px;">No bakeries found — <span style="color:var(--caramel); cursor:pointer;" data-onclick="selectManualBakery" data-args='${dataArgs([query])}'>use this name anyway</span></div>`;
       } else {
         googleEl.innerHTML = '';
       }
@@ -2669,7 +2673,7 @@ async function fetchBakeryPlaces(query) {
       const lat = p.location?.latitude || '';
       const lng = p.location?.longitude || '';
       return `
-      <div onclick="selectBakery('${p.id}','${escJS(p.displayName?.text || '')}','${escJS(p.formattedAddress || '')}','${lat}','${lng}')"
+      <div data-onclick="selectBakery" data-args='${dataArgs([p.id, p.displayName?.text || '', p.formattedAddress || '', lat, lng])}'
         style="padding:10px 12px; background:var(--parchment); border-radius:var(--radius-sm); cursor:pointer; border:1.5px solid var(--border); transition:border-color 0.2s; margin-bottom:6px;"
         onmouseover="this.style.borderColor='var(--honey)'" onmouseout="this.style.borderColor='var(--border)'">
         <div style="font-size:0.88rem; font-weight:600; color:var(--espresso);">${p.displayName?.text || ''}</div>
@@ -2677,7 +2681,7 @@ async function fetchBakeryPlaces(query) {
       </div>`;
     }).join('');
   } catch(e) {
-    googleEl.innerHTML = `<div style="font-size:0.82rem; color:var(--text-muted); padding:8px;">Search unavailable — <span style="color:var(--caramel); cursor:pointer;" onclick="selectManualBakery('${query}')">use this name anyway</span></div>`;
+    googleEl.innerHTML = `<div style="font-size:0.82rem; color:var(--text-muted); padding:8px;">Search unavailable — <span style="color:var(--caramel); cursor:pointer;" data-onclick="selectManualBakery" data-args='${dataArgs([query])}'>use this name anyway</span></div>`;
   }
 }
 
@@ -2716,6 +2720,22 @@ function clearBakery() {
   const matchResults = document.getElementById('itemMatchResults');
   if (matchResults) matchResults.innerHTML = '';
 }
+
+// searchBakery/selectBakery/clearBakery had no call sites outside this
+// cluster, so all three come out of WINDOW EXPORTS entirely.
+// renderKnownMatches/fetchBakeryPlaces never had any attribute call site of
+// their own (only called internally by searchBakery) — also removed from
+// WINDOW EXPORTS, they were never genuinely needed there. showKnownBakeries
+// stays: index.html's #bakerySearch onfocus="if(!this.value)
+// showKnownBakeries()" is delegate.js's one deliberately-unconverted
+// onfocus site (see its own header comment — not worth wiring up for a
+// single call site), so this is a real remaining raw call site, not
+// staleness. selectManualBakery also stays, for a different reason: it has
+// no raw call site left either, but tests/utils/reviews.js and several
+// specs call window.selectManualBakery() directly to bypass the Google
+// Places results UI (see that file's module comment) — removing it would
+// break every spec that creates a review.
+registerActions({ searchBakery, selectBakery, selectManualBakery, clearBakery });
 
 // ─── RATING ───────────────────────────────────────────────────────────────────
 function updateOverallRating(val) {
@@ -9256,7 +9276,6 @@ Object.assign(window, {
   buildSummary,
   buildTastingDims,
   cardHTML,
-  clearBakery,
   closeMobileMenu,
   closeOnClickOutside,
   closeProfileModal,
@@ -9274,7 +9293,6 @@ Object.assign(window, {
   extractCity,
   extractCountry,
   feedCardHTML,
-  fetchBakeryPlaces,
   fetchGoogleBakeries,
   fetchGoogleBakeriesNearPoint,
   fetchPlaceDetails,
@@ -9351,7 +9369,6 @@ Object.assign(window, {
   renderExploreMap,
   renderExploreResults,
   renderFeed,
-  renderKnownMatches,
   renderLeaderboard,
   renderManageShop,
   renderMpForecast,
@@ -9374,8 +9391,6 @@ Object.assign(window, {
   saveSettingsProfile,
   saveToCatalogue,
   scanFrame,
-  searchBakery,
-  selectBakery,
   selectExploreCity,
   selectManualBakery,
   showAuthError,

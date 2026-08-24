@@ -337,7 +337,7 @@
       <div class="modal-step active" id="step1">
         <div class="form-group">
           <label class="form-label">Bakery</label>
-          <input type="text" class="form-input" id="bakerySearch" placeholder="Search for a bakery…" oninput="searchBakery(this.value)" onfocus="if(!this.value) showKnownBakeries()">
+          <input type="text" class="form-input" id="bakerySearch" placeholder="Search for a bakery…" data-oninput="searchBakery" onfocus="if(!this.value) showKnownBakeries()">
           <div id="bakeryResults" style="margin-top:8px; display:flex; flex-direction:column; gap:6px; scroll-margin-bottom:240px;">
             <div id="bakeryResultsKnown"></div>
             <div id="bakeryResultsGoogle"></div>
@@ -348,7 +348,7 @@
               <div class="location-selected-name" id="selectedBakeryName"></div>
               <div class="location-selected-address" id="selectedBakeryAddress"></div>
             </div>
-            <button class="btn-ghost" onclick="clearBakery()" style="font-size:0.8rem;">Change</button>
+            <button class="btn-ghost" data-onclick="clearBakery" style="font-size:0.8rem;">Change</button>
           </div>
         </div>
 

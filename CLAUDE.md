@@ -15,20 +15,21 @@ system in `src/events/` (see `src/events/delegate.js` and
 `src/events/actions.js` for how it works — `registerActions()` +
 `getAction()` instead of `window[name]` lookups).
 
-**Status as of 2026-08-24: ~93% converted** (273 delegated / 292 total
-handler sites, raw + delegated, across both files, comments excluded). Only
-**BAKERY SEARCH** (6 raw sites, all in `src/legacy-app.js`) remains, plus a
-handful of raw sites in `index.html` belonging to clusters this migration
-hasn't reached yet (top-level nav's "+ Add"/"Rate a Bake!" triggers, FEED
-TABS, RATING's own overall-rating slider, SETTINGS, and the admin-only
-Manage Bakery assignment modal) — none of which were in scope for the
-clusters converted so far.
+**Status as of 2026-08-24: migration complete** — every cluster that was
+ever in scope, including the last one (**BAKERY SEARCH**), is now fully
+delegated. 281 of 292 total handler sites (raw + delegated, across both
+files, comments excluded) are delegated; the 11 remaining raw sites are all
+in `index.html` and all belong to clusters that were never in scope for this
+migration (top-level nav's "+ Add"/"Rate a Bake!" triggers, FEED TABS,
+RATING's own overall-rating slider, SETTINGS, and the admin-only Manage
+Bakery assignment modal). `src/legacy-app.js` itself is now 100% delegated —
+0 raw sites left.
 
 | | raw (`onclick=`/`onchange=`/`oninput=`) | delegated (`data-on*=`) |
 |---|---|---|
-| `index.html` | 13 | 110 |
-| `src/legacy-app.js` | 6 | 163 |
-| **total** | **19** | **273** |
+| `index.html` | 11 | 112 |
+| `src/legacy-app.js` | 0 | 169 |
+| **total** | **11** | **281** |
 
 Converted clusters (fully delegated, 0 raw handlers left): **FOLLOWS**,
 **FILTER HELPERS**, Pre-order discovery page + My Pre-orders burger-menu
@@ -38,9 +39,49 @@ COMPRESSION**, **ADMIN PANEL RENDERERS**, **REACTIONS**, **SHOP**,
 **Bakery-profile-modal internals**, **BUSINESS — BAKERY PAGE MANAGEMENT**,
 **ACTIVITY CALENDAR**, **DINING MAP**, **QR SCANNER (baker side)**, **ADD
 ITEM MODAL**, **MODAL STEPS**, **ITEM MATCHING**, **ADMIN PANEL**, **SHOP
-MANAGEMENT (business users)**, and everything else converted in earlier
-sessions per the git log. Notes on the trickier ones, most recent first:
+MANAGEMENT (business users)**, **BAKERY SEARCH**, and everything else
+converted in earlier sessions per the git log. Notes on the trickier ones,
+most recent first:
 
+- **BAKERY SEARCH** (`searchBakery`/`selectBakery`/`selectManualBakery`/
+  `clearBakery`, `:2494`–`:2722`, the "Rate a Bake!" modal's step 1 —
+  `renderKnownMatches`/`fetchBakeryPlaces` also live in this range but never
+  had attribute call sites of their own). The last remaining cluster,
+  deferred until a real Google Places API key started working from this
+  environment (see below). `searchBakery` switched from taking the search
+  query as a string to taking the `#bakerySearch` input element itself
+  (delegate.js's trailing-live-value convention, same as
+  `filterShareCandidates`/`searchExistingItems`) — its one internal
+  (non-attribute) caller, `selectBakery` (via `searchExistingItems`), was
+  already passing the element per the ITEM MATCHING note below.
+  `searchBakery`/`selectBakery`/`clearBakery` come out of `WINDOW EXPORTS`
+  entirely. `showKnownBakeries` stays exported — `index.html`'s
+  `#bakerySearch onfocus="if(!this.value) showKnownBakeries()"` is
+  delegate.js's one deliberately-unconverted `onfocus` site (a single call
+  site isn't worth wiring up), so this is a real remaining raw call site,
+  not staleness. `selectManualBakery` also stays exported, for a different
+  reason: it has no raw call site left either, but `tests/utils/reviews.js`
+  and several specs call `window.selectManualBakery()` directly to bypass
+  the Google Places results UI — removing it would break every spec that
+  creates a review. New spec: `tests/bakery-search.spec.js` (known-bakery
+  list, "Already on Crumbz" substring matching, live Google Places search,
+  and the manual-entry fallback). First full suite run: 58 passed, 12
+  skipped (expected, data-dependent), the live-Google-Places test failed —
+  but on a real external API blocker (the Places API key's referrer
+  restriction), not anything wrong with the conversion itself (every other
+  assertion in that same spec file, including known-bakery selection and
+  manual entry, passed even on that first run). That referrer restriction
+  turned out to have a mundane cause: the allowlist edit in Cloud Console
+  had never actually been saved (page-level "Save" button, separate from
+  adding items to the list, wasn't clicked) — once actually saved and
+  verified via a fresh page reload, a live `curl` against
+  `places.googleapis.com` with `Referer: http://localhost:5173/` returned
+  real results immediately, and a re-run of
+  `npx playwright test tests/bakery-search.spec.js` came back **6/6
+  passed**, including the live Google Places test. Worth remembering if a
+  similar "I added the config but it's still failing" situation comes up
+  elsewhere — check whether the edit actually persisted (reload and
+  re-open) before assuming it's a propagation delay.
 - **ADD ITEM MODAL / MODAL STEPS / ITEM MATCHING / ADMIN PANEL / SHOP
   MANAGEMENT (business users)** — the last five small clusters, converted
   together in one pass:
@@ -73,8 +114,9 @@ sessions per the git log. Notes on the trickier ones, most recent first:
     `#itemName` input element itself (delegate.js's trailing-live-value
     convention, same as `filterShareCandidates`) — its two *internal*
     (non-attribute) call sites, in `goToStep` and `selectBakery`
-    (BAKERY SEARCH, still deferred), were updated to pass the element
-    instead of a string read out of `.value` beforehand. `showBakeryItemHints`
+    (BAKERY SEARCH, converted in a later session — see its own note above),
+    were updated to pass the element instead of a string read out of
+    `.value` beforehand. `showBakeryItemHints`
     turned out to be stale in `WINDOW EXPORTS` too (zero attribute call
     sites, purely an internal helper) — cleaned up while already here,
     same as `openProfileModal`/`openAddModalForBakery` in earlier sessions.
@@ -288,13 +330,13 @@ sessions per the git log. Notes on the trickier ones, most recent first:
   string that greps as a hit inside its section (`:5183`) is a comment, not
   a live handler.
 
-Remaining clusters, by raw-handler count in `src/legacy-app.js` (run
-`npm run check:dead-refs` — it doesn't print this breakdown, but a quick
-`grep -noE '\son(click|change|input)=' src/legacy-app.js | grep -v data-on`
-does; exclude comment lines):
-
-- BAKERY SEARCH — 6 (deferred — see "Known pre-existing issues" below;
-  this is the only cluster left)
+Remaining clusters: **none.** BAKERY SEARCH was the last one, converted
+2026-08-24. `src/legacy-app.js` now has 0 raw handler sites left (run
+`npm run check:dead-refs` to re-verify, or a quick
+`grep -noE '\son(click|change|input)=' src/legacy-app.js | grep -v data-on`,
+excluding comment lines). The 11 raw sites still in `index.html` all belong
+to clusters that were never in scope for this migration (see the status
+summary at the top of this section).
 
 ### Conversion workflow (every cluster — this is the definition of done)
 
@@ -347,12 +389,6 @@ cluster whose new call sites live only in `index.html`.
 
 ## Known pre-existing issues (out of scope for this migration)
 
-- **Google Places API returns 403s** in the bakery-search flow (see the
-  "Google Maps API key required" fallback text `src/legacy-app.js` renders
-  around the `BAKERY SEARCH` cluster). Pre-existing, unrelated to handler
-  delegation — don't try to fix it while converting that cluster, just
-  don't let it block the conversion or get misread as something the
-  migration broke.
 - **`loadData()`'s unawaited reconcile can clobber recent state, and
   `allBakeries` needs a page visit nobody guarantees happened**
   (`src/legacy-app.js`) — a real robustness gap in how this app's shared
@@ -447,17 +483,24 @@ cluster whose new call sites live only in `index.html`.
 
 ## E2E tests (Playwright)
 
-**Status as of 2026-08-24: verified green**, dedicated E2E account now
-in place (separate from the personal super-admin account used earlier).
-`npm run test:e2e` — 55 passed, 12 skipped (data-dependent — no candidates
-to test Send against, no location with 2+ bakeries, no bakery showing
-opening hours in the target project, no flagged reviews/admin users/shop
-products to list, etc.), 0 failed. This covers everything converted since
-the migration started, including DATA, EDIT REVIEW, SHARE REVIEW WITH A
+**Status as of 2026-08-24: verified green**, dedicated E2E account in place
+(separate from the personal super-admin account used earlier), Google
+Places API key referrer restriction confirmed working from this
+environment. A full `npm run test:e2e` run showed 58 passed, 12 skipped
+(data-dependent — no candidates to test Send against, no location with 2+
+bakeries, no bakery showing opening hours in the target project, no
+flagged reviews/admin users/shop products to list, etc.), 1 failed (the
+Places API referrer issue described in the BAKERY SEARCH note above); after
+that got fixed in Cloud Console, a re-run of just
+`tests/bakery-search.spec.js` came back 6/6 passed, including the
+previously-failing live Google Places test. This covers everything
+converted since the migration started, including DATA, EDIT REVIEW, SHARE
+REVIEW WITH A
 FOLLOWED USER, IMAGE COMPRESSION, ADMIN PANEL RENDERERS, REACTIONS, SHOP,
 Bakery-profile-modal internals, BUSINESS — BAKERY PAGE MANAGEMENT, ACTIVITY
 CALENDAR, DINING MAP, QR SCANNER (baker side), ADD ITEM MODAL, MODAL STEPS,
-ITEM MATCHING, ADMIN PANEL, and SHOP MANAGEMENT (business users).
+ITEM MATCHING, ADMIN PANEL, SHOP MANAGEMENT (business users), and BAKERY
+SEARCH — the last cluster in the migration.
 
 Getting to green — and staying there as REACTIONS landed and exercised the
 suite under slightly different conditions — took three rounds of fixes, all
