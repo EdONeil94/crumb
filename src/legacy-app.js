@@ -8,38 +8,22 @@ import {
 import { lockScroll, unlockScroll, showToast, timeAgo } from './utils/dom.js';
 import { distKm, extractCity, extractCountry } from './utils/geo.js';
 import { escJS } from './utils/strings.js';
+import {
+  SUPER_ADMIN_UID, currentUser, fb, currentUserRole, currentUserBakery,
+  allUserRoles, bakeryProfiles, setCurrentUser, setFb, setCurrentUserRole,
+  setCurrentUserBakery, isAdmin, isBusiness, ownsBakery, loadUserRole,
+  loadBakeryProfiles, loadAllUserRoles,
+} from './state/appState.js';
 
 // lockScroll/unlockScroll, showToast, timeAgo, escJS, distKm, extractCity,
 // extractCountry moved to src/utils/ (2026-08-24, pages/components carving
 // Phase 0 step 2) — imported above.
 
 // ─── ROLES ────────────────────────────────────────────────────────────────────
-const SUPER_ADMIN_UID = 'KTpBS4yJx2h8LpcryCTfJDFCHlr2';
-let currentUserRole = null; // null | 'business' | 'admin'
-let currentUserBakery = null; // bakery name if business user
-let allUserRoles = {}; // uid -> role record
-let bakeryProfiles = {}; // bakeryName -> profile { blurb, photoURL, instagram, website, ownerId }
-
-function isAdmin() { return currentUser?.uid === SUPER_ADMIN_UID || currentUserRole === 'admin'; }
-function isBusiness() { return currentUserRole === 'business' || isAdmin(); }
-function ownsBakery(name) { return isAdmin() || (isBusiness() && currentUserBakery === name); }
-
-async function loadUserRole() {
-  if (!currentUser || !fb) return;
-  if (currentUser.uid === SUPER_ADMIN_UID) { currentUserRole = 'admin'; currentUserBakery = null; return; }
-  try {
-    const { db, doc, getDoc } = fb;
-    const snap = await getDoc(doc(db, 'userRoles', currentUser.uid));
-    if (snap.exists()) {
-      const data = snap.data();
-      currentUserRole = data.role || null;
-      currentUserBakery = data.bakeryName || null;
-    } else {
-      currentUserRole = null;
-      currentUserBakery = null;
-    }
-  } catch(e) { console.log('Role load error:', e.message); }
-}
+// SUPER_ADMIN_UID/currentUserRole/currentUserBakery/allUserRoles/
+// bakeryProfiles/isAdmin/isBusiness/ownsBakery/loadUserRole/
+// loadBakeryProfiles/loadAllUserRoles moved to src/state/appState.js
+// (2026-08-24, pages/components carving Phase 0 step 3a) — imported above.
 
 async function loadProfiles() {
   if (!fb) return;
@@ -52,26 +36,6 @@ async function loadProfiles() {
     const peoplePage = document.getElementById('page-people');
     if (peoplePage && peoplePage.classList.contains('active')) renderPeople();
   } catch(e) { console.log('Profiles load error:', e.message); }
-}
-
-async function loadBakeryProfiles() {
-  if (!fb) return;
-  const { db, collection, getDocs } = fb;
-  try {
-    const snap = await getDocs(collection(db, 'bakeryProfiles'));
-    bakeryProfiles = {};
-    snap.docs.forEach(d => { bakeryProfiles[d.id] = d.data(); });
-  } catch(e) { console.log('BakeryProfiles load:', e.message); }
-}
-
-async function loadAllUserRoles() {
-  if (!isAdmin() || !fb) return;
-  const { db, collection, getDocs } = fb;
-  try {
-    const snap = await getDocs(collection(db, 'userRoles'));
-    allUserRoles = {};
-    snap.docs.forEach(d => { allUserRoles[d.id] = d.data(); });
-  } catch(e) {}
 }
 
 async function refreshAdminUsersPanel() {
@@ -136,8 +100,6 @@ async function removeUserRole(uid) {
    attributes throughout index.html.
    ──────────────────────────────────────────────────────────────────────── */
 
-let currentUser = null;
-let fb = null;
 let allProfiles = {}; // uid -> profile data
 let currentStep = 1;
 let totalSteps = 4;
@@ -188,12 +150,12 @@ async function ensureProfileExists(user) {
 // event listener stays only as a defensive fallback for the unlikely case
 // this module ever ends up running before firebase.js for some future reason.
 function initFirebaseApp() {
-  fb = window._crumb;
+  setFb(window._crumb);
   const { onAuthStateChanged, auth } = fb;
   onAuthStateChanged(auth, async (user) => {
-    currentUser = user;
-    currentUserRole = null;
-    currentUserBakery = null;
+    setCurrentUser(user);
+    setCurrentUserRole(null);
+    setCurrentUserBakery(null);
     if (user) {
       await ensureProfileExists(user);
       await loadUserRole();
@@ -9072,13 +9034,9 @@ Object.assign(window, {
   handleSettingsPhoto,
   initExplorePage,
   initPreorderPage,
-  isAdmin,
   isBookmarked,
-  isBusiness,
   isSavedItem,
-  loadAllUserRoles,
   loadBakeryCatalogue,
-  loadBakeryProfiles,
   loadBookmarks,
   loadData,
   loadFollows,
@@ -9090,14 +9048,12 @@ Object.assign(window, {
   loadProfiles,
   loadReactionsForItems,
   loadSavedItems,
-  loadUserRole,
   mpItemBreakdownHTML,
   openAddModal,
   openAuthModal,
   openBakeryProfile,
   openFeatureRequestModal,
   openSettingsPage,
-  ownsBakery,
   populateBakeryLocationFilter,
   populateExploreCityDropdown,
   populateExploreCountryDropdown,
