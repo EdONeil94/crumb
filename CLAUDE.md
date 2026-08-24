@@ -10,11 +10,12 @@ its own section below), and the **E2E test workflow** — all done on
 
 ## Carving src/legacy-app.js into src/pages/ and src/components/
 
-**Status as of 2026-08-24: Phase 0 complete** (all 4 steps: `categories.js`,
-`utils/`, `appState.js` across 3 sub-stages, and `check:dead-refs` now
-covering all of `src/` + `index.html`, not just `legacy-app.js`). **Phase 1
-under way** — steps 5 (`nav.js`) and 6 (`authModal.js`) done, step 7
-(`lifecycle.js`) not started.
+**Status as of 2026-08-24: Phase 0 and Phase 1 both complete** (Phase 0:
+`categories.js`, `utils/`, `appState.js` across 3 sub-stages,
+`check:dead-refs` extended. Phase 1: `nav.js`, `authModal.js`,
+`lifecycle.js`). 7/32 extraction steps done. Phase 2 (small self-contained
+components: `reactions.js`, `editReviewModal.js`, `qrCode.js`,
+`src/pages/shop.js`) not started.
 This is separate from — and comes after — the handler delegation migration
 above; don't conflate the two milestones. Plan approved 2026-08-24 (was
 drafted as a plan-mode file at `~/.claude/plans/logical-painting-kurzweil.md`,
@@ -123,7 +124,9 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   `openMyProfileFromMobileMenu` deferred, see step 32's callout below ·
   6. `src/components/authModal.js` — ✅ **done** (2026-08-24, commit
   `1e56987`) — fully self-contained, no deferred pieces, unlike step 5 ·
-  7. `src/app/lifecycle.js`
+  7. `src/app/lifecycle.js` — ✅ **done** (2026-08-24, commit `01419f1`) —
+  side-effect-only import, execution-order change verified safe by
+  inspection (no dedicated tests for this cluster)
 - **Phase 2 — small, self-contained, strongly direct-tested:**
   8. `src/components/reactions.js` · 9. `src/components/editReviewModal.js` ·
   10. `src/components/qrCode.js` · 11. `src/pages/shop.js`
@@ -229,6 +232,25 @@ boundaries — commits happen at the module/stage level throughout.
 
 ### Extraction log (most recent first)
 
+- **`src/app/lifecycle.js` — step 7** (2026-08-24, commit `01419f1`).
+  **Closes out Phase 1.** Different shape of move from steps 5/6 — all 5
+  blocks (keyboard-aware scrolling, app update check, mobile status bar
+  fix, pull to refresh, PWA install) are self-executing IIFEs or top-level
+  side effects, not functions called elsewhere, so this is a side-effect-
+  only import (`import './app/lifecycle.js'`, no named bindings). The real
+  risk here wasn't a missing dependency (there wasn't one — verified each
+  block only touches static DOM or sets up listeners/timers with zero
+  reliance on other `legacy-app.js` init running first) but **execution
+  order**: ES import hoisting means this file now runs considerably
+  earlier in the load sequence than its old position (near the very end of
+  `legacy-app.js`) would suggest. Confirmed harmless by code inspection
+  before moving, not just assumed — there's no dedicated spec for any of
+  these 5 behaviors, so the full `test:e2e` run's real signal was "the app
+  still boots and nothing else broke," not direct coverage of this
+  cluster. `triggerPwaInstall` pulled out of `legacy-app.js`'s shared
+  mobile-menu `registerActions()` call, now registers from here instead.
+  Removed 1 more stale `WINDOW EXPORTS` entry (`showMobileInstallBtn`).
+  Full `test:e2e`: 61 passed/10 skipped/0 failed.
 - **`src/components/authModal.js` — step 6** (2026-08-24, commit
   `1e56987`). Fully self-contained move, unlike step 5 — the whole
   8-function AUTH section only ever touched `fb`/`showToast`/
