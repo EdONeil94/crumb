@@ -10,12 +10,10 @@ its own section below), and the **E2E test workflow** — all done on
 
 ## Carving src/legacy-app.js into src/pages/ and src/components/
 
-**Status as of 2026-08-24: Phase 0 and Phase 1 both complete** (Phase 0:
-`categories.js`, `utils/`, `appState.js` across 3 sub-stages,
-`check:dead-refs` extended. Phase 1: `nav.js`, `authModal.js`,
-`lifecycle.js`). 7/32 extraction steps done. Phase 2 (small self-contained
-components: `reactions.js`, `editReviewModal.js`, `qrCode.js`,
-`src/pages/shop.js`) not started.
+**Status as of 2026-08-24: Phase 0 and Phase 1 both complete.** Phase 2
+under way — step 8 (`reactions.js`) done, steps 9-11
+(`editReviewModal.js`, `qrCode.js`, `src/pages/shop.js`) not started.
+8/32 extraction steps done.
 This is separate from — and comes after — the handler delegation migration
 above; don't conflate the two milestones. Plan approved 2026-08-24 (was
 drafted as a plan-mode file at `~/.claude/plans/logical-painting-kurzweil.md`,
@@ -128,7 +126,10 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   side-effect-only import, execution-order change verified safe by
   inspection (no dedicated tests for this cluster)
 - **Phase 2 — small, self-contained, strongly direct-tested:**
-  8. `src/components/reactions.js` · 9. `src/components/editReviewModal.js` ·
+  8. `src/components/reactions.js` — ✅ **done** (2026-08-24, commit
+  `98e1120`) — genuinely clean, no split needed, matches the plan's own
+  characterization of this phase ·
+  9. `src/components/editReviewModal.js` ·
   10. `src/components/qrCode.js` · 11. `src/pages/shop.js`
 - **Phase 3 — medium, cohesive, good coverage:**
   12. `src/components/reviewCard.js` · 13. `src/pages/feed.js` ·
@@ -232,6 +233,20 @@ boundaries — commits happen at the module/stage level throughout.
 
 ### Extraction log (most recent first)
 
+- **`src/components/reactions.js` — step 8** (2026-08-24, commit
+  `98e1120`). **Opens Phase 2** — genuinely clean, no split needed, first
+  step where the plan's own "small, self-contained" characterization held
+  exactly as expected. Every dependency (`currentUser`/`fb`/`allItems`,
+  `openAuthModal`, `showToast`, `dataArgs`) was already extracted in
+  Phase 0/1. `buildReactionBarInner()`/`loadReactionsForItems()` are
+  called from `feedCardHTML` (still in `legacy-app.js`, step 12) —
+  imported back, ordinary one-way direction. The other 4 functions
+  (`toggleReaction`/`toggleReactionPicker`/`toggleReactionFromPicker`/
+  `refreshReactionBar`) have no external call sites at all — they register
+  their own actions from `reactions.js` and don't need importing back into
+  `legacy-app.js`. Removed 3 more stale `WINDOW EXPORTS` entries. Full
+  `test:e2e`: 59 passed/12 skipped/0 failed, including `reactions.spec.js`
+  directly.
 - **`src/app/lifecycle.js` — step 7** (2026-08-24, commit `01419f1`).
   **Closes out Phase 1.** Different shape of move from steps 5/6 — all 5
   blocks (keyboard-aware scrolling, app update check, mobile status bar
