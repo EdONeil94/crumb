@@ -11,9 +11,8 @@ its own section below), and the **E2E test workflow** — all done on
 ## Carving src/legacy-app.js into src/pages/ and src/components/
 
 **Status as of 2026-08-24: Phases 0, 1, and 2 all complete, Phase 3 under
-way** (steps 12-13 of 32 done — `reviewCard.js`, `feed.js`). Phase 3's
-remaining 3 steps (`follows.js`, `people.js`, `reservations.js`) not
-started.
+way** (steps 12-14 of 32 done — `reviewCard.js`, `feed.js`, `follows.js`).
+Phase 3's remaining 2 steps (`people.js`, `reservations.js`) not started.
 This is separate from — and comes after — the handler delegation migration
 above; don't conflate the two milestones. Plan approved 2026-08-24 (was
 drafted as a plan-mode file at `~/.claude/plans/logical-painting-kurzweil.md`,
@@ -145,8 +144,11 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   13. `src/pages/feed.js` — ✅ **done** (2026-08-24, commit `bcb1366`) —
   moved wholesale, but `switchFeedTab` keeps its `WINDOW EXPORTS` entry
   (a new situation — see its own extraction-log entry below) ·
-  14. `src/components/follows.js` · 15. `src/pages/people.js` (best-covered
-  page in the app) · 16. `src/components/reservations.js`
+  14. `src/components/follows.js` — ✅ **done** (2026-08-24, commit
+  `df961f0`) — split 5-and-5, see its own extraction-log entry below for
+  the two different deferral targets ·
+  15. `src/pages/people.js` (best-covered page in the app) ·
+  16. `src/components/reservations.js`
 - **Phase 4 — large but well-tested (the "does this scale" milestone):**
   17. `src/components/manageOfferingsModal.js` (biggest single cluster,
   ~1,020 lines, 11 real-click tests — deepest coverage in the app)
@@ -280,6 +282,41 @@ boundaries — commits happen at the module/stage level throughout.
 
 ### Extraction log (most recent first)
 
+- **`src/components/follows.js` — step 14** (2026-08-24, commit `df961f0`).
+  Split, not clean — flagged before writing any code: moved the 5
+  self-contained functions (`getFollowState`, `followBtnHTML`,
+  `getFollowersForUser`, `getFollowingForUser`, `buildFollowUserRowHTML`)
+  — every dependency (`currentUser`/`fb`/`allItems`/`myFollowing`/
+  `myFollowers`, `dataArgs`) was already extracted in Phase 0.
+  The other 5 (`toggleFollow`, `refreshFollowButtons`,
+  `followAndRefreshProfile`, `followAndRefreshPeople`, `refreshOpenProfile`)
+  stayed in `legacy-app.js`, split across **two different deferral
+  targets** — the first time this carving has had a cluster split three
+  ways (moved / deferred-to-imminent-step / deferred-to-distant-step)
+  rather than the usual two:
+  - `toggleFollow`/`refreshFollowButtons`/`followAndRefreshPeople` each
+    reach `renderPeople()` — still in `legacy-app.js`, but only because
+    it's *literally the next step* (15, `people.js`). Revisit whether
+    these three can move into `follows.js` once step 15 lands — an
+    explicit decision to make at that point, not an automatic consequence
+    (same framing as every other deferral in this plan).
+  - `followAndRefreshProfile`/`refreshOpenProfile` reach
+    `openProfileModal()` and `profileModalUid`/`profileActiveCatFilter`/
+    `profileActiveLocFilter` — `refreshOpenProfile` turned out to have no
+    call sites of its own anywhere outside `followAndRefreshProfile`,
+    confirmed via grep, so it's really one deferred unit, not two. Both
+    wait for step 22 (`profileModal.js`, Phase 5) — much further out.
+  Moving any of the 5 would have meant `follows.js` importing back from
+  `legacy-app.js` for `renderPeople`/`openProfileModal`, while
+  `legacy-app.js` already needs the 5 moved functions imported the normal
+  direction — a genuine two-file cycle.
+  Explicitly grepped `index.html` for raw handler references to all 10
+  candidate functions before assuming any `WINDOW EXPORTS` entry was safe
+  to drop — the step 13 lesson (`switchFeedTab`) made this worth checking
+  every time now, not just when a function "looks like" a click handler.
+  None of the 10 had one; all 5 stale entries removed as usual.
+  Verified: `check:dead-refs` clean, `npm run build` succeeds, full
+  `test:e2e` 59 passed/12 skipped/0 failed.
 - **`src/pages/feed.js` — step 13** (2026-08-24, commit `bcb1366`). Moved
   `feedCurrentTab`/`switchFeedTab`/`renderFeed` wholesale — every
   dependency was already extracted (Phase 0/2), and `renderFeed`'s only
