@@ -346,11 +346,13 @@ most recent first:
   `WINDOW EXPORTS` entries entirely. Send button's real click isn't
   exercised in `tests/share-and-saved.spec.js` (writes an uncleaned
   `sharedReviews` doc) — its wiring is asserted directly instead; manually
-  verify a real Send if that path changes. Noticed, not touched: the "Item
-  detail modal" `registerActions` block's own comment (`:8778`) claims 5
-  functions still have other raw call sites keeping them in `WINDOW
-  EXPORTS` — none of them do (verified) — left for whoever picks up ITEM
-  DETAIL.
+  verify a real Send if that path changes. Fixed while verifying the
+  handler delegation migration milestone above: the "Item detail modal"
+  `registerActions` block's own comment (`:8937`) claimed 5 functions still
+  had other raw call sites keeping them in `WINDOW EXPORTS` — re-checked and
+  none of them do, and none of the 6 functions in that block were actually
+  in `WINDOW EXPORTS` to begin with (someone removed them there without
+  updating the comment). Comment corrected to say so.
 - **EDIT REVIEW**: both rating sliders shared one new
   `updateEditDimDisplay(displayId, el)` action. Covered by
   `tests/edit-review.spec.js` via a new `tests/utils/reviews.js` helper

@@ -8934,10 +8934,10 @@ registerActions({
 // same Saved tab "Remove" button noted above (switchProfileTab).
 registerActions({ switchLbMode, switchLbTab, closeLbAndOpenBakery, openDetail, onLbFilterChange });
 
-// Item detail modal. toggleSaveItem/openShareReviewModal/flagReview/
-// openEditModal/prefillItemForReview each have other call sites elsewhere
-// (e.g. openEditModal from the Edit Review flow) that stay un-converted, so
-// they remain in WINDOW EXPORTS too.
+// Item detail modal. None of these six have any call site left outside
+// their own data-onclick attributes above (openEditModal/prefillItemForReview
+// are each reached via a comma-chained data-onclick, e.g.
+// "closeDetailModal,openEditModal") — none need WINDOW EXPORTS.
 registerActions({
   toggleSaveItem, openShareReviewModal, closeDetailAndOpenProfile,
   flagReview, openEditModal, prefillItemForReview,
