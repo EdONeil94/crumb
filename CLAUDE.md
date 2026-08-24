@@ -10,12 +10,12 @@ its own section below), and the **E2E test workflow** — all done on
 
 ## Carving src/legacy-app.js into src/pages/ and src/components/
 
-**Status as of 2026-08-24: Phase 0 in progress, step 3 (`appState.js`)
-complete — all three sub-stages (3a identity/roles, 3b core data caches, 3c
-social state) done.** This closes out the highest-risk step in the whole
-plan. Stopped here deliberately per instruction after 3c's commit + full
-E2E run — waiting on explicit go-ahead before step 4 (extending
-`check:dead-refs`), same as every sub-stage of step 3 required.
+**Status as of 2026-08-24: Phase 0 complete** (all 4 steps: `categories.js`,
+`utils/`, `appState.js` across 3 sub-stages, and `check:dead-refs` now
+covering all of `src/` + `index.html`, not just `legacy-app.js`). **Phase 1
+under way** (nav.js/authModal.js/lifecycle.js) — approved to proceed
+without a stop-and-review gate after step 4, given its low blast radius
+(a dev-tool script, zero runtime/bundle impact).
 This is separate from — and comes after — the handler delegation migration
 above; don't conflate the two milestones. Plan approved 2026-08-24 (was
 drafted as a plan-mode file at `~/.claude/plans/logical-painting-kurzweil.md`,
@@ -116,7 +116,8 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
      (`src/pages/explore.js`) below for when to revisit it.** Re-confirm
      3c's own scope the same way
      before assuming — don't default to either pattern.**
-  4. Extend `check:dead-refs` to cover the new directories.
+  4. Extend `check:dead-refs` to cover the new directories — ✅ **done**
+     (2026-08-24, commit `d72d04e`).
 - **Phase 1 — foundational, high fan-in, implicitly covered by every spec:**
   5. `src/components/nav.js` · 6. `src/components/authModal.js` ·
   7. `src/app/lifecycle.js`
@@ -211,6 +212,28 @@ boundaries — commits happen at the module/stage level throughout.
 
 ### Extraction log (most recent first)
 
+- **`scripts/check-dead-refs.js` extended — step 4** (2026-08-24, commit
+  `d72d04e`). Default targets now walk `index.html` + every `.js` under
+  `src/` recursively (12 targets, up from 1), instead of hardcoding
+  `src/legacy-app.js`. Two real architectural changes beyond a longer file
+  list: `registerActions()` name resolution and top-level-variable
+  collection both became **global** (aggregated across every target)
+  rather than per-file — necessary now that more than one file can
+  register actions or declare shared state; verified both directions work
+  with throwaway two-file fixtures before trusting it on the real
+  codebase. Also fixed two real gaps surfaced only once the checker
+  actually scanned files beyond `legacy-app.js`: (a)
+  `collectTopLevelVariables` never matched `export let/const/var` — only
+  bare `let/const/var` — which made **every single export in
+  `appState.js` invisible to the bare-variable check**, silently
+  defeating the exact protection this extension exists to add; `export`
+  only affects cross-module importability, not window-visibility, so this
+  was a real gap, not a stylistic nit. (b) one false positive in
+  `src/events/delegate.js` (`const fn = getAction(name); ... fn(...args,
+  el);` — a local var initialized from a call expression, not a stale
+  reference) — added a narrow pattern for that idiom. Verified: scans 12
+  targets, passes clean. No E2E gate needed — dev-tool script, zero
+  runtime/bundle impact, unlike every source-code step before it.
 - **`src/state/appState.js` — stage 3c, social state** (2026-08-24, commit
   `2367ba2`). Moved `myFollowing`/`myFollowers`/`loadFollows()`,
   `userBookmarks`/`loadBookmarks()`, `userSavedItems`/`loadSavedItems()`
