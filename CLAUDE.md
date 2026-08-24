@@ -10,10 +10,9 @@ its own section below), and the **E2E test workflow** — all done on
 
 ## Carving src/legacy-app.js into src/pages/ and src/components/
 
-**Status as of 2026-08-24: Phase 0 and Phase 1 both complete.** Phase 2
-under way — steps 8-10 (`reactions.js`, `editReviewModal.js`, `qrCode.js`)
-done, step 11 (`src/pages/shop.js`) not started. 10/32 extraction steps
-done.
+**Status as of 2026-08-24: Phases 0, 1, and 2 all complete** (steps 1-11
+of 32). Phase 3 (`reviewCard.js`, `feed.js`, `follows.js`, `people.js`,
+`reservations.js`) not started.
 This is separate from — and comes after — the handler delegation migration
 above; don't conflate the two milestones. Plan approved 2026-08-24 (was
 drafted as a plan-mode file at `~/.claude/plans/logical-painting-kurzweil.md`,
@@ -134,7 +133,10 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   below for the 3 deferred functions ·
   10. `src/components/qrCode.js` — ✅ **done** (2026-08-24, commit
   `b002aa0`) — split; see step 17 callout below for the 2 deferred
-  functions · 11. `src/pages/shop.js`
+  functions ·
+  11. `src/pages/shop.js` — ✅ **done** (2026-08-24, commit `163abf4`) —
+  **closes out Phase 2** — genuinely clean despite several external
+  callers, a true leaf module (first page extraction)
 - **Phase 3 — medium, cohesive, good coverage:**
   12. `src/components/reviewCard.js` · 13. `src/pages/feed.js` ·
   14. `src/components/follows.js` · 15. `src/pages/people.js` (best-covered
@@ -272,6 +274,34 @@ boundaries — commits happen at the module/stage level throughout.
 
 ### Extraction log (most recent first)
 
+- **`src/pages/shop.js` — step 11** (2026-08-24, commit `163abf4`).
+  **Closes out Phase 2.** First page extraction — genuinely clean and
+  moved wholesale despite `allProducts` and 4 of these 7 functions
+  (`loadProducts`, `renderShopPage`, `productCardHTML`, and implicitly
+  `openProductDetail`/`closeProductDetailModal`/`handleBuy` via markup)
+  having several external callers still in `legacy-app.js`, spread across
+  3 different not-yet-extracted clusters (`initFirebaseApp`'s auth
+  listener, the bakery-profile-modal's shop tab, SHOP MANAGEMENT) — none
+  of those callers are themselves called *from* this module, so it's a
+  true leaf module with no cycle, just several normal one-way imports
+  back into `legacy-app.js`.
+  Caught one accidental content change via a line-by-line diff against
+  the original before wiring anything up: `escJS()` wrapping around the
+  bakery/type filter `<select>` option values had been silently dropped
+  while retyping the function — restored before it could matter.
+  Found the same stale-registerActions-reference bug pattern a 3rd time
+  this phase (`closeProductDetailModal`, in the big bulk "modal-close
+  buttons" call) — caught by a grep sweep this time, not a failing test.
+  Also initially forgot to register `closeProductDetailModal` in
+  `shop.js`'s own `registerActions()` call — the same mistake as step 9's
+  `openEditModal` and step 10's `expandQR` — caught this time by the same
+  grep sweep, before ever running the checker or a test. The catching
+  method has moved earlier each step this phase: test failure (9) →
+  `check:dead-refs` (10, partially) → manual grep sweep, pre-checker (11).
+  Verified: `check:dead-refs` clean (18 targets), build succeeds (40
+  modules), a targeted runtime check (console/pageerror listeners, zero
+  errors) before the full suite, then full `test:e2e` 59 passed/12
+  skipped/0 failed, including `shop.spec.js`.
 - **`src/components/qrCode.js` — step 10** (2026-08-24, commit `b002aa0`).
   Split, per confirmation caught *before* writing any code this time
   (learned from step 9 — spotted the `confirmCollected()`→`markCollected()`
