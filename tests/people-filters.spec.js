@@ -243,7 +243,15 @@ test('Followers/Following list rows jump to that person\'s profile, and their fo
     }
   }
 
-  await row.locator('.follow-user-info').click();
+  // The toggle-back click above (if the if-block ran) also triggers
+  // followAndRefreshProfile — landing back on Reviews again, same as every
+  // other refreshOpenProfile() call — so `row` (captured once, before any
+  // of that) may now be stale/detached, and we may not even be on the
+  // Followers tab any more. Get back there and re-query fresh rather than
+  // reusing it.
+  await page.locator('.profile-tab', { hasText: 'Followers' }).click();
+  const freshRow = page.locator('.follow-user-row').first();
+  await freshRow.locator('.follow-user-info').click();
   await expect(page.locator('#profileModal')).toHaveClass(/open/);
 });
 

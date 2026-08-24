@@ -15,23 +15,44 @@ system in `src/events/` (see `src/events/delegate.js` and
 `src/events/actions.js` for how it works — `registerActions()` +
 `getAction()` instead of `window[name]` lookups).
 
-**Status as of 2026-08-24: ~77% converted** (228 delegated / 295 total
-handler sites, raw + delegated, across both files, comments excluded).
+**Status as of 2026-08-24: ~79% converted** (231 delegated / 294 total
+handler sites, raw + delegated, across both files, comments excluded — the
+total dropped by 1 from the previous count via REACTIONS' redundant-handler
+removal, see below, not a miscount).
 
 | | raw (`onclick=`/`onchange=`/`oninput=`) | delegated (`data-on*=`) |
 |---|---|---|
 | `index.html` | 29 | 94 |
-| `src/legacy-app.js` | 38 | 134 |
-| **total** | **67** | **228** |
+| `src/legacy-app.js` | 34 | 137 |
+| **total** | **63** | **231** |
 
 Converted clusters (fully delegated, 0 raw handlers left): **FOLLOWS**,
 **FILTER HELPERS**, Pre-order discovery page + My Pre-orders burger-menu
 sheet, **Manage Offerings incl. Pre-orders/Reservations**, **DATA**,
 **EDIT REVIEW**, **SHARE REVIEW WITH A FOLLOWED USER**, **IMAGE
-COMPRESSION**, **ADMIN PANEL RENDERERS**, and everything else converted in
-earlier sessions per the git log. Notes on the trickier ones, most recent
-first:
+COMPRESSION**, **ADMIN PANEL RENDERERS**, **REACTIONS**, and everything
+else converted in earlier sessions per the git log. Notes on the trickier
+ones, most recent first:
 
+- **REACTIONS** (`toggleReaction` etc., `:5048`, nested inside DATA's
+  `feedCardHTML`). Clean single-topic section — 4 raw sites, all 4
+  converted or removed. `toggleReactionPicker`'s param order reordered to
+  `(itemId, btn)` for the trailing-clicked-element convention (its only
+  call site, no other updates needed). The picker popup's own buttons did
+  `toggleReaction(...); this.closest('.reaction-picker').remove();` — a
+  parameterized action *followed* by cleanup, the reverse of the usual
+  "cleanup(s), then one parameterized action" shape — so that got a small
+  `toggleReactionFromPicker` wrapper instead, mirroring
+  `followAndRefreshProfile`. One handler didn't get converted at all: the
+  add-button's wrapper `<div>`'s own `onclick="event.stopPropagation()"`
+  turned out to be fully redundant once its sibling buttons are delegated
+  too — it only ever renders inside `feedCardHTML`'s `noop`-registered
+  guard div (DATA cluster, `:708`), which already protects the whole
+  reaction bar's padding the same way — so it was deleted outright rather
+  than converted, dropping the total handler-site count by 1 (not a
+  miscount, see the status line above). Also fixed a stale comment on
+  `noop()` itself, left over from the DATA session, that still described
+  REACTIONS as "raw, out of scope." Covered by `tests/reactions.spec.js`.
 - **ADMIN PANEL RENDERERS** (`renderAdminUsersHTML`/`renderAdminBakeriesHTML`,
   `:3536`, Settings page's Admin Panel). Clean single-topic section this
   time — no file-position surprise. `promoteUser`/`promptAssignBakery`/
@@ -108,7 +129,6 @@ Remaining clusters, by raw-handler count in `src/legacy-app.js` (run
 does; exclude comment lines):
 
 - BAKERY SEARCH — 6
-- REACTIONS — 4
 - SHOP — 4
 - Bakery-profile-modal internals — `toggleBakeryHours`, `saveBakeryBlurb`,
   its Cancel button (raw `onclick="openBakeryProfile(...)"`) — 3 sites.
@@ -167,23 +187,43 @@ parser — cheap and low-false-positive, not a substitute for judgement).
   delegation — don't try to fix it while converting that cluster, just
   don't let it block the conversion or get misread as something the
   migration broke.
-- **Bakeries page data-loading race** (`src/legacy-app.js`): `loadData()`
-  (populates `allItems`, the only thing `renderBakeries()` reads via
-  `buildBakeryIndex()`) runs async and unawaited from `onAuthStateChanged`
-  — `#navAvatar` becoming visible only means auth resolved, not that this
-  fetch finished. `renderBakeries()` itself runs exactly once, synchronously
-  on nav click, and nothing re-renders it once `loadData()` completes
-  later — so navigating to Bakeries fast enough to beat that fetch shows a
-  *permanent* "No bakeries found" empty state, not a slow-then-populated
-  one, until the page is reloaded or re-navigated to. Found via
-  `tests/utils/preorders.js`'s `openFirstBakeryProfile` hitting this
-  reliably enough in automated runs (which click through the UI far faster
-  than any human) to need a workaround there (wait for `#recentGrid .card`
-  — `loadData()`'s first synchronous side effect — before ever clicking
-  into Bakeries). A real robustness gap, worth fixing in the app itself
-  eventually (e.g. `loadData()` re-rendering whichever page is currently
-  active, or `showPage('bakeries')` awaiting a data-ready signal) — but
-  unrelated to handler delegation, so not touched here.
+- **`loadData()`'s unawaited reconcile can clobber recent state**
+  (`src/legacy-app.js`) — a real robustness gap, two manifestations found
+  so far, both unrelated to handler delegation and not touched here:
+  - **Bakeries page.** `loadData()` (populates `allItems`, the only thing
+    `renderBakeries()` reads via `buildBakeryIndex()`) runs async and
+    unawaited from `onAuthStateChanged` — `#navAvatar` becoming visible
+    only means auth resolved, not that this fetch finished.
+    `renderBakeries()` itself runs exactly once, synchronously on nav
+    click, and nothing re-renders it once `loadData()` completes later —
+    so navigating to Bakeries fast enough to beat that fetch shows a
+    *permanent* "No bakeries found" empty state, not a slow-then-populated
+    one, until the page is reloaded or re-navigated to. Found via
+    `tests/utils/preorders.js`'s `openFirstBakeryProfile` hitting this
+    reliably enough in automated runs (which click through the UI far
+    faster than any human) to need a workaround there (wait for
+    `#recentGrid .card` — `loadData()`'s first synchronous side effect —
+    before ever clicking into Bakeries).
+  - **Just-saved reviews disappearing from the home page.** `saveReview()`
+    optimistically `unshift()`s the new review into `allItems` and
+    re-renders immediately, *then* fires its own `loadData()` reconcile in
+    the background (unawaited, same function as above) to pick up
+    server-side aggregates. If that reconcile's fresh `getDocs()` read
+    happens to race ahead of Firestore's own write becoming visible to it
+    (an eventual-consistency edge case, not guaranteed-impossible even for
+    the writer's own client), it overwrites `allItems` with a version
+    *missing* the review just saved — same "nothing re-renders once the
+    correct data eventually would be there" shape as the Bakeries case,
+    just triggered by a write instead of a page-load. Seen once in
+    practice, via `tests/utils/reviews.js`'s `addReview()` (used by EDIT
+    REVIEW/SHARE REVIEW/REACTIONS specs) — that helper now retries once via
+    a page reload if the card doesn't show up, since a reload forces a
+    fresh `loadData()` after enough wall-clock time has passed for
+    consistency to catch up.
+
+  Worth fixing in the app itself eventually (e.g. `loadData()` re-rendering
+  whichever page/state is currently active instead of only what called it,
+  or the reconcile merging rather than overwriting).
 - **Manual Firestore cleanup still needed** in the live project (`crumb-ddeb6`)
   — two separate items, neither touched by `tests/cleanup.teardown.js`:
   - **"Test Croissant"** seeded test data. Not `E2E_`/`E2E `-prefixed, so
@@ -210,14 +250,15 @@ parser — cheap and low-false-positive, not a substitute for judgement).
 
 **Status as of 2026-08-24: verified green**, dedicated E2E account now
 in place (separate from the personal super-admin account used earlier).
-`npm run test:e2e` — 37 passed, 8 skipped (data-dependent — no candidates
+`npm run test:e2e` — 39 passed, 9 skipped (data-dependent — no candidates
 to test Send against, no location with 2+ bakeries, etc.), 0 failed. This
 covers everything converted since the migration started, including DATA,
-EDIT REVIEW, SHARE REVIEW WITH A FOLLOWED USER, IMAGE COMPRESSION, and
-ADMIN PANEL RENDERERS.
+EDIT REVIEW, SHARE REVIEW WITH A FOLLOWED USER, IMAGE COMPRESSION, ADMIN
+PANEL RENDERERS, and REACTIONS.
 
-Getting to green took two separate rounds of fixes, both in `tests/`, not
-`src/` — the app itself checked out fine:
+Getting to green — and staying there as REACTIONS landed and exercised the
+suite under slightly different conditions — took three rounds of fixes, all
+in `tests/`, not `src/`:
 
 - **The suite couldn't sign in at all, until now.** `tests/auth.setup.js`'s
   `page.context().storageState({ path: STORAGE_STATE })` call doesn't
@@ -259,6 +300,19 @@ Getting to green took two separate rounds of fixes, both in `tests/`, not
     matching same-labeled buttons in other modals, and a Reserve-button
     lookup that broke once enough test offerings had accumulated across a
     full sequential run for more than one to share the visible list.
+- **A third round, surfaced by REACTIONS's own run** (a fresh spec file,
+  run deeper into a longer sequential suite than any single prior run had
+  gone) — two more real bugs, still both test-side:
+  - The Followers-list follow-toggle test (fixed above to survive the
+    Reviews-tab reset) reused its very first `row` locator — captured
+    *before* any of that toggling — for one final click at the very end.
+    By then two more `refreshOpenProfile()` re-renders had happened since;
+    the fix re-navigates to Followers and re-queries fresh right before
+    that click instead of trusting the stale reference.
+  - `tests/utils/reviews.js`'s `addReview()` hit the *other* manifestation
+    of the `loadData()` reconcile race described above (a just-saved
+    review's card failing to appear at all, not just slowly) — it now
+    retries once via a page reload if the card doesn't show up initially.
 
 ```bash
 cp .env.example .env   # fill in E2E_EMAIL / E2E_PASSWORD — see comments in

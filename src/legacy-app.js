@@ -724,14 +724,12 @@ function openProfileIfSignedIn(uid) {
 
 // feedCardHTML wraps the reaction bar in this no-op action instead of the
 // old raw onclick="event.stopPropagation()". The reaction bar's own buttons
-// (REACTIONS cluster, still raw onclick=, out of scope here) already call
-// event.stopPropagation() themselves, but a click landing on the bar's own
-// padding/gaps — not on a button — had nothing to stop it, and needs
-// something to stop it now that the card itself is delegated: delegate.js's
-// closest()-based dispatch finds the nearest ancestor carrying a
-// data-onclick, so giving this wrapper a registered no-op gives it an inner
-// match to stop at, the same way a real button's own action would, so a
-// stray click here never falls through to the card's own openDetail action.
+// (REACTIONS cluster, now delegated too) resolve to their own action via
+// delegate.js's closest()-based dispatch, same as this wrapper — but a
+// click landing on the bar's own padding/gaps, not on any button, needs
+// something to stop it too: giving this wrapper a registered no-op gives
+// closest() an inner match to stop at there as well, so a stray click here
+// never falls through to the card's own openDetail action.
 function noop() {}
 
 function feedCardHTML(item, reactionBarHTML, followedBadge) {
@@ -5102,7 +5100,7 @@ function buildReactionBarInner(itemId, reactions) {
   const reactionBtns = existingEmojis.map(emoji => {
     const reacted = !!userReacted[emoji];
     return `<button class="reaction-btn${reacted ? ' reacted' : ''}"
-      onclick="event.stopPropagation(); toggleReaction('${itemId}', '${emoji}')"
+      data-onclick="toggleReaction" data-args='${dataArgs([itemId, emoji])}'
       title="${reacted ? 'Remove reaction' : 'React'}">
       <span class="emoji">${emoji}</span>
       <span class="count">${counts[emoji]}</span>
@@ -5111,22 +5109,30 @@ function buildReactionBarInner(itemId, reactions) {
 
   // Add button — only show if user hasn't used all 4 emojis
   const allReacted = REACTION_EMOJIS.every(e => userReacted[e]);
+  // The wrapper div's own event.stopPropagation() (guarding clicks on its
+  // padding around the button) is redundant now — this reaction bar only
+  // ever renders inside feedCardHTML's noop-registered click guard
+  // (src/legacy-app.js:708), which already guards the whole bar the same
+  // way, so the div keeps its position:relative styling but drops the
+  // handler.
   const addBtn = currentUser && !allReacted ? `
-    <div style="position:relative;" onclick="event.stopPropagation()">
-      <button class="reaction-add" onclick="event.stopPropagation(); toggleReactionPicker(this, '${itemId}')" title="Add reaction">+</button>
+    <div style="position:relative;">
+      <button class="reaction-add" data-onclick="toggleReactionPicker" data-args='${dataArgs([itemId])}' title="Add reaction">+</button>
     </div>` : '';
 
   return reactionBtns + addBtn;
 }
 
-function toggleReactionPicker(btn, itemId) {
+// Parameter order follows delegate.js's trailing-clicked-element convention
+// (itemId, then btn) — its one call site is its own data-onclick attribute.
+function toggleReactionPicker(itemId, btn) {
   // Remove any existing picker
   document.querySelectorAll('.reaction-picker').forEach(p => p.remove());
 
   const picker = document.createElement('div');
   picker.className = 'reaction-picker';
   picker.innerHTML = REACTION_EMOJIS.map(emoji =>
-    `<button class="reaction-picker-btn" onclick="event.stopPropagation(); toggleReaction('${itemId}','${emoji}'); this.closest('.reaction-picker').remove();">${emoji}</button>`
+    `<button class="reaction-picker-btn" data-onclick="toggleReactionFromPicker" data-args='${dataArgs([itemId, emoji])}'>${emoji}</button>`
   ).join('');
 
   // Append to body and position using fixed coords above the button
@@ -5150,6 +5156,22 @@ function toggleReactionPicker(btn, itemId) {
   }, 0);
 }
 
+// toggleReaction(...) then closing the picker doesn't fit the plain
+// "cleanup(s), then one parameterized action" data-onclick shape — the
+// order's reversed here (the parameterized action runs first, cleanup
+// after) — so this gets a small wrapper instead, mirroring
+// followAndRefreshProfile/followAndRefreshPeople (FOLLOWS cluster). The
+// picker is appended straight to document.body (not nested under the
+// card/reaction-bar hierarchy at all), so — unlike the buttons above —
+// there's no ancestor data-onclick a stray click here could ever have
+// reached anyway; the old event.stopPropagation() was copied from the
+// reaction-bar buttons' pattern but was never actually load-bearing for
+// this one.
+function toggleReactionFromPicker(itemId, emoji, el) {
+  toggleReaction(itemId, emoji);
+  el.closest('.reaction-picker')?.remove();
+}
+
 async function loadReactionsForItems(itemIds) {
   if (!itemIds.length || !fb) return {};
   const { db, collection, query, where, getDocs } = fb;
@@ -5169,6 +5191,11 @@ async function loadReactionsForItems(itemIds) {
   }
   return results;
 }
+
+// Reaction bar (nested inside DATA's feedCardHTML). toggleReaction/
+// toggleReactionPicker had no call sites outside this cluster, so both
+// come out of WINDOW EXPORTS entirely; toggleReactionFromPicker is new.
+registerActions({ toggleReaction, toggleReactionPicker, toggleReactionFromPicker });
 
 // ─── FOLLOWS ──────────────────────────────────────────────────────────────────
 let myFollowing = new Set(); // UIDs I follow
@@ -9319,8 +9346,6 @@ Object.assign(window, {
   switchLbTab,
   timeAgo,
   toggleBakeryHours,
-  toggleReaction,
-  toggleReactionPicker,
   unlockScroll,
   updateBellBadge,
   updateNav,
