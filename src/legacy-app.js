@@ -41,6 +41,7 @@ import {
   allProducts, loadProducts, renderShopPage, productCardHTML,
 } from './pages/shop.js';
 import { cardHTML, feedCardHTML } from './components/reviewCard.js';
+import { switchFeedTab, renderFeed } from './pages/feed.js';
 // Side-effect only — PWA install/update-check/status-bar-fix/pull-to-refresh/
 // keyboard-scroll all self-execute on import, no exports needed here.
 import './app/lifecycle.js';
@@ -285,71 +286,11 @@ function renderRecentGrid() {
   grid.innerHTML = allItems.slice(0, 9).map(item => cardHTML(item)).join('');
 }
 
-let feedCurrentTab = 'all';
-
-function switchFeedTab(tab) {
-  feedCurrentTab = tab;
-  document.getElementById('feedTabAll').classList.toggle('active', tab === 'all');
-  document.getElementById('feedTabFollowing').classList.toggle('active', tab === 'following');
-  document.getElementById('feedEyebrow').textContent = tab === 'following' ? 'People you follow' : 'Community';
-  document.getElementById('feedTitle').textContent = tab === 'following' ? 'Following' : 'Latest reviews';
-  renderFeed();
-}
-
-async function renderFeed() {
-  const grid = document.getElementById('feedGrid');
-
-  // Show/hide following tab based on login state
-  const followingTab = document.getElementById('feedTabFollowing');
-  if (followingTab) followingTab.style.display = currentUser ? 'block' : 'none';
-
-  let items = [...allItems];
-
-  if (feedCurrentTab === 'following') {
-    if (!currentUser || myFollowing.size === 0) {
-      grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
-        <div class="empty-state-icon">👥</div>
-        <div class="empty-state-title">${!currentUser ? 'Sign in to see your following feed' : "You're not following anyone yet"}</div>
-        <div class="empty-state-text">${currentUser ? 'Head to the People page to find and follow other reviewers.' : ''}</div>
-      </div>`;
-      return;
-    }
-    items = items.filter(i => myFollowing.has(i.userId));
-    if (!items.length) {
-      grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon">🥐</div><div class="empty-state-title">No reviews from people you follow yet</div></div>`;
-      return;
-    }
-  } else {
-    // All feed — sort followed users' reviews first
-    if (currentUser && myFollowing.size > 0) {
-      items.sort((a, b) => {
-        const aFollowed = myFollowing.has(a.userId) ? 1 : 0;
-        const bFollowed = myFollowing.has(b.userId) ? 1 : 0;
-        if (bFollowed !== aFollowed) return bFollowed - aFollowed;
-        // Then by date
-        const aTime = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
-        const bTime = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
-        return bTime - aTime;
-      });
-    }
-    if (!items.length) {
-      grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon">🍞</div><div class="empty-state-title">The bakery is quiet</div><div class="empty-state-text">No reviews yet — be the first!</div></div>`;
-      return;
-    }
-  }
-
-  // Build feed cards with reaction bars
-  const itemIds = items.map(i => i.id);
-  const reactionsMap = await loadReactionsForItems(itemIds);
-
-  grid.innerHTML = items.map(item => {
-    const reactions = reactionsMap[item.id] || [];
-    const isFollowed = currentUser && myFollowing.has(item.userId);
-    const followedBadge = isFollowed ? `<span style="font-size:0.68rem;color:var(--sage);font-weight:600;letter-spacing:0.5px;">● Following</span>` : '';
-    const reactionBarHTML = `<div class="reaction-bar" data-item-id="${item.id}">${buildReactionBarInner(item.id, reactions)}</div>`;
-    return feedCardHTML(item, reactionBarHTML, followedBadge);
-  }).join('');
-}
+// feedCurrentTab/switchFeedTab/renderFeed moved to src/pages/feed.js
+// (2026-08-24, Phase 3 step 13) — imported above. switchFeedTab is
+// re-exported below (WINDOW EXPORTS) since index.html's FEED TABS buttons
+// still use a raw, undelegated onclick="switchFeedTab(...)" — see feed.js's
+// own header comment.
 
 // Used by feedCardHTML/cardHTML's username link (both now in
 // src/components/reviewCard.js, Phase 3 step 12). It used to inline
@@ -7852,7 +7793,6 @@ Object.assign(window, {
   renderExploreCityGrid,
   renderExploreMap,
   renderExploreResults,
-  renderFeed,
   renderLeaderboard,
   renderManageShop,
   renderMpForecast,
@@ -7878,6 +7818,11 @@ Object.assign(window, {
   showKnownBakeries,
   showPage,
   signOutFromSettings,
+  // Now in src/pages/feed.js (Phase 3 step 13) — kept here (unlike every
+  // other moved function) since index.html's FEED TABS buttons still use a
+  // raw, undelegated onclick="switchFeedTab(...)"; that cluster was out of
+  // scope for the handler-delegation migration, so this is genuinely
+  // unavoidable rather than staleness.
   switchFeedTab,
   switchLbTab,
   updateBellBadge,
