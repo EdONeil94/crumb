@@ -710,19 +710,29 @@ async function renderFeed() {
   }).join('');
 }
 
-// The username link's onclick stays a raw attribute (it's nested inside the
-// card's own raw onclick="openDetail(...)" and still needs its own
-// event.stopPropagation() to avoid double-firing — that only becomes
-// unnecessary once BOTH the card and its nested elements are delegated, per
-// the explore-map markers). It used to inline `if(currentUser) ...` directly,
-// which broke post-modularization: bare top-level `let`/`const` bindings in
-// an ES module aren't visible to inline onclick="..." attributes (which
-// always run in plain global scope), unlike this module's functions, which
-// the WINDOW EXPORTS Object.assign(window, {...}) block below deliberately
-// re-exposes. This wrapper does the same for the currentUser check.
+// Used by feedCardHTML/cardHTML's username link. It used to inline
+// `if(currentUser) ...` directly in the raw onclick, which broke
+// post-modularization: bare top-level `let`/`const` bindings in an ES
+// module aren't visible to inline onclick="..." attributes (which always
+// run in plain global scope), unlike this module's functions, which the
+// WINDOW EXPORTS Object.assign(window, {...}) block re-exposes. This
+// wrapper does the same for the currentUser check, and is now registered as
+// a delegated action instead.
 function openProfileIfSignedIn(uid) {
   if (currentUser) openProfileModal(uid);
 }
+
+// feedCardHTML wraps the reaction bar in this no-op action instead of the
+// old raw onclick="event.stopPropagation()". The reaction bar's own buttons
+// (REACTIONS cluster, still raw onclick=, out of scope here) already call
+// event.stopPropagation() themselves, but a click landing on the bar's own
+// padding/gaps — not on a button — had nothing to stop it, and needs
+// something to stop it now that the card itself is delegated: delegate.js's
+// closest()-based dispatch finds the nearest ancestor carrying a
+// data-onclick, so giving this wrapper a registered no-op gives it an inner
+// match to stop at, the same way a real button's own action would, so a
+// stray click here never falls through to the card's own openDetail action.
+function noop() {}
 
 function feedCardHTML(item, reactionBarHTML, followedBadge) {
   const catDisp = getCategoryDisplay(item);
@@ -750,19 +760,19 @@ function feedCardHTML(item, reactionBarHTML, followedBadge) {
     : `<div class="card-image-placeholder">${catDisp.emoji}</div>`;
   const catLabel = catDisp.sub ? `${catDisp.main} · ${catDisp.sub}` : catDisp.main;
   return `
-    <div class="card" onclick="openDetail('${item.id}')">
+    <div class="card" data-onclick="openDetail" data-args='${dataArgs([item.id])}'>
       <div class="card-image">
         ${imageTag}
         <div class="card-badge">${catLabel}</div>
       </div>
       <div class="card-body">
         <div class="card-meta">
-          <span style="cursor:pointer;color:var(--caramel);" onclick="event.stopPropagation(); openProfileIfSignedIn('${item.userId}')">${item.userName || 'Anonymous'}</span>
+          <span style="cursor:pointer;color:var(--caramel);" data-onclick="openProfileIfSignedIn" data-args='${dataArgs([item.userId])}'>${item.userName || 'Anonymous'}</span>
           ${item.createdAt ? `<span>·</span><span>${timeAgo(item.createdAt.toDate ? item.createdAt.toDate() : new Date(item.createdAt))}</span>` : ''}
           ${followedBadge || ''}
         </div>
         <div class="card-name">${item.name || 'Unknown bake'}</div>
-        <div class="card-bakery" onclick="event.stopPropagation(); openBakeryProfile('${escJS(item.bakeryName || 'Unknown bakery')}')">📍 ${item.bakeryName || 'Unknown bakery'}</div>
+        <div class="card-bakery" data-onclick="openBakeryProfile" data-args='${dataArgs([item.bakeryName || 'Unknown bakery', ''])}'>📍 ${item.bakeryName || 'Unknown bakery'}</div>
         <div class="card-footer">
           <div class="rating-display">
             <div class="rating-circle">${score}</div>
@@ -771,7 +781,7 @@ function feedCardHTML(item, reactionBarHTML, followedBadge) {
           ${priceLabel ? `<div class="card-price">${priceLabel}</div>` : ''}
         </div>
       </div>
-      <div onclick="event.stopPropagation()">${reactionBarHTML}</div>
+      <div data-onclick="noop">${reactionBarHTML}</div>
     </div>`;
 }
 
@@ -799,18 +809,18 @@ function cardHTML(item) {
     : `<div class="card-image-placeholder">${emoji}</div>`;
   const catLabel = catDisp.sub ? `${catDisp.main} · ${catDisp.sub}` : catDisp.main;
   return `
-    <div class="card" onclick="openDetail('${item.id}')">
+    <div class="card" data-onclick="openDetail" data-args='${dataArgs([item.id])}'>
       <div class="card-image">
         ${imageTag}
         <div class="card-badge">${catLabel}</div>
       </div>
       <div class="card-body">
         <div class="card-meta">
-          <span style="cursor:pointer;color:var(--caramel);" onclick="event.stopPropagation(); openProfileIfSignedIn('${item.userId}')">${item.userName || 'Anonymous'}</span>
+          <span style="cursor:pointer;color:var(--caramel);" data-onclick="openProfileIfSignedIn" data-args='${dataArgs([item.userId])}'>${item.userName || 'Anonymous'}</span>
           ${item.createdAt ? `<span>·</span><span>${timeAgo(item.createdAt.toDate ? item.createdAt.toDate() : new Date(item.createdAt))}</span>` : ''}
         </div>
         <div class="card-name">${item.name || 'Unknown bake'}</div>
-        <div class="card-bakery" onclick="event.stopPropagation(); openBakeryProfile('${escJS(item.bakeryName || 'Unknown bakery')}')">📍 ${item.bakeryName || 'Unknown bakery'}</div>
+        <div class="card-bakery" data-onclick="openBakeryProfile" data-args='${dataArgs([item.bakeryName || 'Unknown bakery', ''])}'>📍 ${item.bakeryName || 'Unknown bakery'}</div>
         <div class="card-footer">
           <div class="rating-display">
             <div class="rating-circle">${score}</div>
@@ -822,6 +832,10 @@ function cardHTML(item) {
     </div>`;
 }
 
+// DATA cluster's card rendering (feedCardHTML/cardHTML). openDetail and
+// openBakeryProfile are already registered elsewhere (Bakeries page,
+// Leaderboard, ...) — no change needed for those here.
+registerActions({ openProfileIfSignedIn, noop });
 
 // ─── BAKERIES ─────────────────────────────────────────────────────────────────
 let allBakeries = {}; // keyed by bakeryName
@@ -9166,7 +9180,6 @@ Object.assign(window, {
   openManageBakeryModal,
   openProductDetail,
   openProductModal,
-  openProfileIfSignedIn,
   openProfileModal,
   openSettingsPage,
   ownsBakery,

@@ -15,22 +15,45 @@ system in `src/events/` (see `src/events/delegate.js` and
 `src/events/actions.js` for how it works — `registerActions()` +
 `getAction()` instead of `window[name]` lookups).
 
-**Status as of 2026-08-24: ~67% converted** (197 delegated / 295 total
+**Status as of 2026-08-24: ~69% converted** (204 delegated / 295 total
 handler sites, raw + delegated, across both files, comments excluded).
 
 | | raw (`onclick=`/`onchange=`/`oninput=`) | delegated (`data-on*=`) |
 |---|---|---|
 | `index.html` | 31 | 92 |
-| `src/legacy-app.js` | 67 | 105 |
-| **total** | **98** | **197** |
+| `src/legacy-app.js` | 60 | 112 |
+| **total** | **91** | **204** |
 
 Converted clusters (fully delegated, 0 raw handlers left): **FOLLOWS**,
 **FILTER HELPERS** (the actual filter logic — `buildItemRowHTML` and
 `buildLocationFilterBar` were dead code and got deleted rather than
 converted), Pre-order
 discovery page + My Pre-orders burger-menu sheet, **Manage Offerings incl.
-Pre-orders/Reservations**, and everything else converted in earlier sessions
-per the git log.
+Pre-orders/Reservations**, **DATA** (`feedCardHTML`/`cardHTML` — see below),
+and everything else converted in earlier sessions per the git log.
+
+**DATA** (`feedCardHTML`/`cardHTML`, `src/legacy-app.js:609`) was the first
+cluster where a card and its own nested clickable elements (username,
+bakery name) both needed converting together — per `delegate.js`'s header
+comment, once BOTH are delegated, `closest()`-based dispatch resolves to the
+innermost match on its own and no `event.stopPropagation()` is needed for
+those. One wrinkle that pattern doesn't cover: `feedCardHTML` also wraps the
+reaction bar (REACTIONS cluster, still raw, out of scope here) in a plain
+`onclick="event.stopPropagation()"` guard div, protecting clicks that land
+on the bar's own padding rather than one of its (self-stopping) buttons. A
+pure `event.stopPropagation()` doesn't fit the data-onclick model (no
+action to name), so it's now a tiny registered no-op action
+(`noop()`, `data-onclick="noop"`) instead — `closest()` stops at that
+wrapper the same way it would at a real action, so the guard still works
+under the delegated system. Also: converting `openBakeryProfile`'s two new
+call sites explicitly passed `''` for its `catFilter` parameter
+(`dataArgs([bakeryName, ''])`) rather than the single-arg
+`dataArgs([bakeryName])` shorthand used elsewhere — with only one arg, the
+delegated system's trailing-clicked-element argument lands in `catFilter`'s
+position instead, which is a latent bug at the one existing call site that
+does this (`src/legacy-app.js:1040`, from an earlier session, not touched
+here) worth fixing if it's ever revisited. Covered by a new
+`tests/feed.spec.js`.
 
 "Manage Offerings incl. Pre-orders/Reservations" needed a follow-up pass
 after being assumed done: it had 2 stragglers, both easy to miss because the
@@ -61,7 +84,6 @@ Remaining clusters, by raw-handler count in `src/legacy-app.js` (run
 `grep -noE '\son(click|change|input)=' src/legacy-app.js | grep -v data-on`
 does; exclude comment lines):
 
-- DATA — 7
 - BAKERY SEARCH — 6
 - EDIT REVIEW — 6
 - SHARE REVIEW WITH A FOLLOWED USER — 6
