@@ -23,7 +23,13 @@ async function openDetailAndShare(page, card) {
 }
 
 async function deleteViaEdit(page, card) {
-  await card.locator('.card-image').click();
+  // openShareReviewModal (and the Save-to-try/bookmark flows below) open on
+  // top of #detailModal without closing it — if it's still open from an
+  // earlier step in the same test, clicking the card again would just hit
+  // the modal overlay covering it instead.
+  if (!(await page.locator('#detailModal.open').count())) {
+    await card.locator('.card-image').click();
+  }
   await page.locator('[data-onclick="closeDetailModal,openEditModal"]').click();
   page.once('dialog', dialog => dialog.accept());
   await page.locator('[data-onclick="deleteReview"]').click();

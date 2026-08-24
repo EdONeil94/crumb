@@ -14,6 +14,21 @@ import { expect } from '@playwright/test';
 // — i.e. be the super-admin account, or that bakery's registered owner.
 
 export async function openFirstBakeryProfile(page) {
+  // loadData() (populates allItems, the only thing renderBakeries() reads
+  // via buildBakeryIndex()) runs async and unawaited from onAuthStateChanged
+  // — #navAvatar becoming visible only means auth resolved, not that this
+  // fetch has finished. renderBakeries() itself runs exactly once, on nav
+  // click, and nothing re-renders it once loadData() completes later — so
+  // navigating to Bakeries before that fetch resolves shows a permanent
+  // "No bakeries found" empty state, not a slow-then-eventually-populated
+  // one. #recentGrid .card (loadData()'s first synchronous side effect,
+  // renderRecentGrid()) is a reliable proxy that the fetch is done, so wait
+  // for that before ever clicking into Bakeries.
+  await expect(
+    page.locator('#recentGrid .card').first(),
+    'Initial data (allItems) never finished loading — #recentGrid stayed empty.'
+  ).toBeVisible({ timeout: 15_000 });
+
   await page.getByRole('button', { name: 'Bakeries', exact: true }).click();
   const card = page.locator('#bakeriesGrid .bakery-card').first();
   await expect(
@@ -146,6 +161,12 @@ export async function reserveFromBakeryProfile(page, offeringName) {
   await expect(page.locator('#bakeryModal')).toHaveClass(/open/);
   await page.locator('.profile-tab', { hasText: 'Pre-order' }).click();
   const content = page.locator('#bakeryTabContent');
-  await expect(content.getByText(offeringName)).toBeVisible({ timeout: 10_000 });
-  await content.getByRole('button', { name: 'Reserve' }).click();
+  // Scoped to this offering's own card — this suite never cleans up
+  // between tests (only once, in cleanup.teardown.js), so by the time
+  // later specs run, several other E2E-prefixed offerings from earlier
+  // tests are still listed too, each with their own "Reserve" button. An
+  // unscoped getByRole('button', { name: 'Reserve' }) matches all of them.
+  const card = content.locator('.preorder-card').filter({ hasText: offeringName });
+  await expect(card).toBeVisible({ timeout: 10_000 });
+  await card.getByRole('button', { name: 'Reserve' }).click();
 }

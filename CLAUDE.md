@@ -174,23 +174,57 @@ parser — cheap and low-false-positive, not a substitute for judgement).
 
 ## E2E tests (Playwright)
 
-**Pending: dedicated E2E test account.** `.env` doesn't exist yet in this
-environment, and the suite hasn't been run since the Manage Offerings
-catalogue-overlay fix (`closeCatalogueManager`/`removeCatalogueItem`
-delegation), the bakery-profile Pre-order tab Reserve-button conversion,
-DATA (`tests/feed.spec.js`), EDIT REVIEW (`tests/edit-review.spec.js`),
-SHARE REVIEW WITH A FOLLOWED USER (`tests/share-and-saved.spec.js`), IMAGE
-COMPRESSION (`tests/image-compression.spec.js`), and ADMIN PANEL RENDERERS
-(`tests/admin-panel.spec.js`) landed — all are covered by specs (new and
-existing) but **unverified by an actual run**. A dedicated E2E test
-account, separate from the personal super-admin account
-`E2E_EMAIL`/`E2E_PASSWORD` pointed at until now, is being set up — once it
-exists and can open "Manage pre-orders" on a bakery (see
-`tests/utils/preorders.js`'s module comment for why that's required; note
-`tests/admin-panel.spec.js`'s own tests additionally skip unless that
-account is also an admin — see that spec's module comment),
-run the full suite before trusting anything converted since this note was
-added, then delete this paragraph.
+**Status as of 2026-08-24: verified green**, dedicated E2E account now
+in place (separate from the personal super-admin account used earlier).
+`npm run test:e2e` — 37 passed, 8 skipped (data-dependent — no candidates
+to test Send against, no location with 2+ bakeries, etc.), 0 failed. This
+covers everything converted since the migration started, including DATA,
+EDIT REVIEW, SHARE REVIEW WITH A FOLLOWED USER, IMAGE COMPRESSION, and
+ADMIN PANEL RENDERERS.
+
+Getting to green took two separate rounds of fixes, both in `tests/`, not
+`src/` — the app itself checked out fine:
+
+- **The suite couldn't sign in at all, until now.** `tests/auth.setup.js`'s
+  `page.context().storageState({ path: STORAGE_STATE })` call doesn't
+  capture IndexedDB by default — and Firebase Auth (the modular v9+ SDK
+  this app uses) stores its session there, not in cookies/localStorage.
+  Every spec after setup loaded a context with an empty session and failed
+  "not signed in", even though setup's own sign-in succeeded every time.
+  Fixed by adding `indexedDB: true` to that call — **don't remove it**, or
+  this regresses silently (setup itself still passes; only every dependent
+  spec breaks). Playwright's own docs for this option literally cite
+  Firebase Authentication as the motivating case.
+- **Six further real, reproducible bugs**, found only once sign-in
+  actually worked and specs could run against live data — all in test
+  code, not caused by any conversion:
+  - `openFirstBakeryProfile` (`tests/utils/preorders.js`) could hit the
+    Bakeries page before `loadData()` (unawaited, fired from
+    `onAuthStateChanged`) resolved — `renderBakeries()` runs once on nav
+    click with nothing to re-trigger it once data arrives late, so this
+    showed a *permanent* false-empty state, not a slow one. Now waits for
+    `#recentGrid .card` (proof `loadData()` finished) first.
+  - `people-filters.spec.js`'s "signed out" test tried to reach the People
+    page via its nav button — which is `display:none` until signed in, so
+    that path never exists for a signed-out session. Now calls
+    `showPage('people')` directly.
+  - The same file's "My Map" tab check used `toHaveCount(0)` against a
+    spinner that `renderDiningMapTab` hides via `style.display`, not
+    removes — that count is never 0. Fixed to check visibility instead.
+  - `refreshOpenProfile()` always resets the profile modal to the Reviews
+    tab (`openProfileModal` has no "reopen on this tab" parameter) — a
+    Followers-list follow-toggle test assumed it stayed put.
+  - The rankings location filter can legitimately list a city with zero
+    ranking results: `populateRankingLocationFilter` includes a location
+    from any item's address with no `userId` check, while `renderRankings`
+    only counts items that have one (e.g. a city whose only reviews are
+    seed data with no real account attached) — the test now tries each
+    listed option instead of assuming the first one has results.
+  - A handful of locator-scoping bugs: substring text matches colliding
+    with similar labels ("Cake" matching "Cheesecake"), unscoped buttons
+    matching same-labeled buttons in other modals, and a Reserve-button
+    lookup that broke once enough test offerings had accumulated across a
+    full sequential run for more than one to share the visible list.
 
 ```bash
 cp .env.example .env   # fill in E2E_EMAIL / E2E_PASSWORD — see comments in

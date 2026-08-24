@@ -62,14 +62,21 @@ test('selecting a category collapses the chip list and shows subcategories', asy
 test('selecting a subcategory marks it selected', async ({ page }) => {
   await page.locator('#categoryParentChips').locator('.category-chip', { hasText: 'Pastry' }).click();
   const subChips = page.locator('#categorySubChips');
-  const croissant = subChips.locator('.category-chip', { hasText: 'Croissant' });
+  // Exact match — "Croissant" is a substring of "Almond Croissant" too, and
+  // sub-chips render with no emoji prefix (unlike parent chips), so an
+  // anchored regex against the full text works cleanly here.
+  const croissant = subChips.locator('.category-chip', { hasText: /^Croissant$/ });
   await croissant.click();
   await expect(croissant).toHaveClass(/selected/);
 });
 
 test('the ✕ on a selected category clears it back to the full chip list', async ({ page }) => {
   const parentChips = page.locator('#categoryParentChips');
-  await parentChips.locator('.category-chip', { hasText: 'Cake' }).click();
+  // Word-boundary match, case-sensitive — a plain substring match for
+  // "Cake" also hits "Cheesecake" and "Scones & Tea Cakes". Parent chips
+  // render with an emoji prefix, so (unlike the sub-chip case above) an
+  // anchored full-text match isn't an option here.
+  await parentChips.locator('.category-chip', { hasText: /\bCake\b/ }).click();
   await expect(parentChips.locator('.category-chip')).toHaveCount(1);
 
   await parentChips.locator('[data-onclick="clearParentCategory"]').click();

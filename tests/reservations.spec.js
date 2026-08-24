@@ -17,6 +17,12 @@ import { openFirstBakeryProfile, openManagePreorders, addOffering, reserveFromBa
 const FIXED_NOW = new Date('2026-01-10T22:00:00');
 
 async function openOrdersTab(page) {
+  // reserveFromBakeryProfile leaves #bakeryModal open (it only assumes it's
+  // already open, never closes it) — its full-screen overlay covers the
+  // nav bar, so #navAvatar isn't clickable until it's closed.
+  if (await page.locator('#bakeryModal.open').count()) {
+    await page.locator('[data-onclick="closeBakeryModal"]').first().click();
+  }
   await page.locator('#navAvatar').click();
   await page.locator('[data-onclick="closeAvatarDropdown,openProfileModal"]').click();
   await expect(page.locator('#profileModal')).toHaveClass(/open/);
@@ -40,8 +46,14 @@ test('reservation more than 12 hours before collection can be cancelled', async 
   const name = `E2E Cancel-OK ${Date.now()}`;
   const bakeryName = await openFirstBakeryProfile(page);
   await openManagePreorders(page, bakeryName);
-  // 3 days out — unambiguously more than 12h away regardless of slot format.
-  await addOffering(page, { name, dateOptionIndex: 2 });
+  // "Tomorrow" (dateOptionIndex 0), not 3 days out — an offering only goes
+  // live on the customer-facing Pre-order tab at 8am the day before
+  // collection (saveOffering's goLiveAt, src/legacy-app.js:7774), and
+  // FIXED_NOW never advances, so anything further out never becomes
+  // reservable in this test. A late "Collect by" slot on the live day
+  // pushes collection safely past the 12h cutoff instead (17:00 next day
+  // vs. 22:00 tonight = 19h).
+  await addOffering(page, { name, dateOptionIndex: 0, slotMode: 'by', slotBy: '5:00pm' });
   await reserveFromBakeryProfile(page, name);
 
   await openOrdersTab(page);
@@ -81,7 +93,10 @@ test('QR code enlarges on click and closes on the close button and outside click
   const name = `E2E QR ${Date.now()}`;
   const bakeryName = await openFirstBakeryProfile(page);
   await openManagePreorders(page, bakeryName);
-  await addOffering(page, { name, dateOptionIndex: 2 });
+  // "Tomorrow" — see the comment on the first test above for why anything
+  // further out never goes live under this suite's frozen clock. The 12h
+  // cutoff doesn't matter for this test, so the default range slot is fine.
+  await addOffering(page, { name, dateOptionIndex: 0 });
   await reserveFromBakeryProfile(page, name);
 
   await openOrdersTab(page);

@@ -44,5 +44,11 @@ setup('sign in', async ({ page }) => {
   // fires with a real user — the most reliable "signed in" signal available.
   await expect(page.locator('#navAvatar')).toBeVisible({ timeout: 15_000 });
 
-  await page.context().storageState({ path: STORAGE_STATE });
+  // indexedDB: true is required here — Firebase Auth (the modular v9+ SDK,
+  // what this app uses) persists its session in IndexedDB, not
+  // cookies/localStorage, which is all storageState() captures by default.
+  // Without this, every dependent spec loads a context with an empty
+  // session and fails "not signed in", even though this sign-in itself
+  // succeeded.
+  await page.context().storageState({ path: STORAGE_STATE, indexedDB: true });
 });

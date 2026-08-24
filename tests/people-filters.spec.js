@@ -7,20 +7,26 @@ import { test, expect } from '@playwright/test';
 // over — those tests discover what's actually there and skip with a clear
 // message rather than assuming a specific fixture exists.
 
-async function gotoPeoplePage(page) {
-  await page.getByRole('button', { name: 'People', exact: true }).click();
-  await expect(page.locator('#page-people')).toHaveClass(/active/);
-}
-
-test.beforeEach(async ({ page }) => {
+// A plain helper instead of a top-level test.beforeEach — the "signed out"
+// describe block below deliberately runs with an empty storageState, and
+// Playwright chains beforeEach hooks rather than letting an inner one
+// replace an outer one, so a blanket beforeEach here would still assert
+// "signed in" for those tests too and fail before they ever ran.
+async function gotoSignedIn(page) {
   await page.goto('/');
   await expect(
     page.locator('#navAvatar'),
     'Not signed in — check E2E_EMAIL/E2E_PASSWORD and tests/auth.setup.js'
   ).toBeVisible({ timeout: 15_000 });
-});
+}
+
+async function gotoPeoplePage(page) {
+  await page.getByRole('button', { name: 'People', exact: true }).click();
+  await expect(page.locator('#page-people')).toHaveClass(/active/);
+}
 
 test('rankings filters repopulate the location dropdown and re-filter the list', async ({ page }) => {
+  await gotoSignedIn(page);
   await gotoPeoplePage(page);
   await expect(page.locator('#peopleViewRankings')).toHaveClass(/active/);
 
@@ -35,13 +41,26 @@ test('rankings filters repopulate the location dropdown and re-filter the list',
   await page.locator('#rankingLevelFilter').selectOption('city');
   await expect(page.locator('#rankingLocationFilter option').first()).toContainText('cities');
 
-  // Location filter: picking a specific one should only ever narrow the list.
-  const locationOptions = await page.locator('#rankingLocationFilter option').all();
-  test.skip(locationOptions.length < 2, 'Only the "All" option is available — no specific location to filter by.');
-  const specificValue = await locationOptions[1].getAttribute('value');
-  await page.locator('#rankingLocationFilter').selectOption(specificValue);
-  const filteredCount = await page.locator('.ranking-card').count();
-  expect(filteredCount).toBeGreaterThan(0);
+  // Location filter: picking a specific one should only ever narrow the
+  // list. populateRankingLocationFilter (src/legacy-app.js) lists a
+  // location if ANY item's address resolves there — with no userId check —
+  // while renderRankings only counts items that DO have a userId, so a
+  // listed location can legitimately have zero ranked users (e.g. a city
+  // whose only reviews are seed/demo data with no real account attached).
+  // Not something to fix from this cluster's own conversion work, so try
+  // each option rather than assuming the first one has results.
+  const locationValues = (await page.locator('#rankingLocationFilter option').all())
+    .slice(1); // skip "All ..."
+  test.skip(locationValues.length === 0, 'Only the "All" option is available — no specific location to filter by.');
+
+  let filteredCount = 0;
+  for (const option of locationValues) {
+    const value = await option.getAttribute('value');
+    await page.locator('#rankingLocationFilter').selectOption(value);
+    filteredCount = await page.locator('.ranking-card').count();
+    if (filteredCount > 0) break;
+  }
+  test.skip(filteredCount === 0, 'None of the listed locations have any ranked users (with a userId) to filter to.');
   expect(filteredCount).toBeLessThanOrEqual(initialCount);
 
   await page.locator('#rankingLocationFilter').selectOption('');
@@ -49,6 +68,7 @@ test('rankings filters repopulate the location dropdown and re-filter the list',
 });
 
 test('opening a profile from a ranking card carries no filter over (full unfiltered review list)', async ({ page }) => {
+  await gotoSignedIn(page);
   await gotoPeoplePage(page);
   const card = page.locator('.ranking-card').first();
   test.skip((await card.count()) === 0, 'No rankings to open — no users with reviews yet.');
@@ -64,6 +84,7 @@ test('opening a profile from a ranking card carries no filter over (full unfilte
 });
 
 test('Members view: clicking a member card opens a profile when signed in, and the auth modal when signed out', async ({ page }) => {
+  await gotoSignedIn(page);
   await gotoPeoplePage(page);
   await page.locator('#peopleViewMembers').click();
   await expect(page.locator('#peopleViewMembers')).toHaveClass(/active/);
@@ -80,7 +101,13 @@ test.describe('signed out', () => {
 
   test('Members view: clicking a member card opens the auth modal when signed out', async ({ page }) => {
     await page.goto('/');
-    await page.getByRole('button', { name: 'People', exact: true }).click();
+    // The People nav button (desktop and mobile both) is display:none until
+    // signed in (updateNav()) — there's no way to reach this page via real
+    // navigation while signed out. showPage() itself has no such gate, and
+    // is exactly what that nav button's own data-onclick calls, so this
+    // still exercises the real page-render and click-handling code, just
+    // without depending on nav visibility that doesn't apply here.
+    await page.evaluate(() => window.showPage('people'));
     await page.locator('#peopleViewMembers').click();
     const card = page.locator('.member-card').first();
     test.skip((await card.count()) === 0, 'No members to click — no users yet.');
@@ -91,6 +118,7 @@ test.describe('signed out', () => {
 });
 
 test('follow button toggles and refreshes the People grid, and separately refreshes an open profile', async ({ page }) => {
+  await gotoSignedIn(page);
   await gotoPeoplePage(page);
   await page.locator('#peopleViewMembers').click();
 
@@ -123,6 +151,7 @@ test('follow button toggles and refreshes the People grid, and separately refres
 });
 
 test('profile modal tabs each load correctly, including the own-profile-only tabs', async ({ page }) => {
+  await gotoSignedIn(page);
   await page.locator('#navAvatar').click();
   await page.locator('[data-onclick="closeAvatarDropdown,openProfileModal"]').click();
   await expect(page.locator('#profileModal')).toHaveClass(/open/);
@@ -134,11 +163,19 @@ test('profile modal tabs each load correctly, including the own-profile-only tab
     await expect(tab).toBeVisible();
     await tab.click();
     await expect(tab).toHaveClass(/active/);
-    await expect(page.locator('#profileTabContent .spinner')).toHaveCount(0);
+    // Every other tab replaces its container's innerHTML once loaded,
+    // removing any spinner outright — "My Map" (renderDiningMapTab) is the
+    // one exception: it hides its own loader via style.display='none'
+    // (src/legacy-app.js's setupMap) rather than removing it, so the
+    // element itself still exists afterward. toHaveCount(0) never passes
+    // for that tab; check visibility instead, which is correct for both
+    // patterns (an absent element and a hidden one both fail toBeVisible).
+    await expect(page.locator('#profileTabContent .spinner').first()).not.toBeVisible({ timeout: 10_000 });
   }
 });
 
 test('profile stat shortcuts jump to the Followers/Following tabs same as the tab bar', async ({ page }) => {
+  await gotoSignedIn(page);
   await page.locator('#navAvatar').click();
   await page.locator('[data-onclick="closeAvatarDropdown,openProfileModal"]').click();
   await expect(page.locator('#profileModal')).toHaveClass(/open/);
@@ -151,6 +188,7 @@ test('profile stat shortcuts jump to the Followers/Following tabs same as the ta
 });
 
 test('Followers/Following list rows jump to that person\'s profile, and their follow button works', async ({ page }) => {
+  await gotoSignedIn(page);
   await gotoPeoplePage(page);
   const card = page.locator('.ranking-card, .member-card').first();
   test.skip((await card.count()) === 0, 'No users to open a profile for.');
@@ -164,10 +202,45 @@ test('Followers/Following list rows jump to that person\'s profile, and their fo
   const rowFollowBtn = row.locator('.people-follow-btn');
   if (await rowFollowBtn.count()) {
     const label = await rowFollowBtn.innerText();
-    await rowFollowBtn.click();
-    await expect(page.locator('.follow-user-row').first().locator('.people-follow-btn')).not.toHaveText(label);
-    // Toggle back.
-    await page.locator('.follow-user-row').first().locator('.people-follow-btn').click();
+    // Pin to this specific person's uid rather than re-querying
+    // `.follow-user-row.first()` after the click — followAndRefreshProfile
+    // triggers a full openProfileModal() re-render of the whole Followers
+    // list, and nothing guarantees row order survives that, so `.first()`
+    // can end up resolving to a different person's row (or, if this
+    // person's row moved and the click target is something else entirely,
+    // hang waiting for an element that's never going to appear).
+    const followUid = JSON.parse(await rowFollowBtn.getAttribute('data-args'))[0];
+    const btnForUid = page.locator(`[data-onclick="followAndRefreshProfile"][data-args*="${followUid}"]`);
+    // Wrapped in try/finally: this toggles a real follow relationship with
+    // a real account in the target Firebase project (not E2E_-prefixed
+    // throwaway data) — if the assertion below ever times out, the button
+    // must still get clicked back, or the relationship is left changed for
+    // every future run (which is exactly how this flaked before: a prior
+    // interrupted run's leftover "Following" state made the *next* run's
+    // captured `label` wrong from the start).
+    try {
+      await rowFollowBtn.click();
+      // followAndRefreshProfile's refresh (openProfileModal has no way to
+      // reopen on a specific tab) always lands back on Reviews — so
+      // btnForUid stops existing at all once this fires, regardless of
+      // whether the toggle actually succeeded. A `.not.toHaveText` check
+      // against a locator that resolves to nothing passes trivially
+      // (there's no text to match), so it wouldn't prove anything on its
+      // own — wait for the Reviews-tab reset itself first (proof the
+      // heavier re-render — item records, follower/following counts,
+      // blurb, ... — actually completed), then navigate back to Followers
+      // before checking the real result.
+      await expect(page.locator('.profile-tab', { hasText: 'Reviews' })).toHaveClass(/active/, { timeout: 30_000 });
+      await page.locator('.profile-tab', { hasText: 'Followers' }).click();
+      await expect(btnForUid).not.toHaveText(label);
+    } finally {
+      // Toggle back. The try block may have failed before navigating back
+      // to Followers, so get there first if btnForUid isn't on screen.
+      if (!(await btnForUid.count())) {
+        await page.locator('.profile-tab', { hasText: 'Followers' }).click();
+      }
+      await btnForUid.click();
+    }
   }
 
   await row.locator('.follow-user-info').click();
@@ -175,6 +248,7 @@ test('Followers/Following list rows jump to that person\'s profile, and their fo
 });
 
 test('location filter inside a profile with 2+ bakeries: chips filter, and the active chip\'s "↗" opens that bakery', async ({ page }) => {
+  await gotoSignedIn(page);
   await gotoPeoplePage(page);
   const cards = page.locator('.ranking-card, .member-card');
   const count = await cards.count();
@@ -208,6 +282,7 @@ test('location filter inside a profile with 2+ bakeries: chips filter, and the a
 });
 
 test('single-location profile shows an "X ↗" line instead of chips, and it opens that bakery', async ({ page }) => {
+  await gotoSignedIn(page);
   await gotoPeoplePage(page);
   const cards = page.locator('.ranking-card, .member-card');
   const count = await cards.count();

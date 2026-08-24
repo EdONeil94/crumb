@@ -60,7 +60,10 @@ test('rating sliders update their own live display value', async ({ page }) => {
   });
   await expect(page.locator('#editOverallDisplay')).toHaveText('4.5');
 
-  const dimSlider = page.locator('.tasting-dims input[type="range"]').first();
+  // Scoped to #editModalBody — the Add Item modal's own #tastingDims wrapper
+  // also carries the "tasting-dims" class, so an unscoped locator can match
+  // its (present-but-hidden) sliders instead of the Edit modal's.
+  const dimSlider = page.locator('#editModalBody .tasting-dims input[type="range"]').first();
   const dimId = await dimSlider.getAttribute('id');
   const displayId = dimId.replace('edit_', 'edit_display_');
   await dimSlider.evaluate(el => {

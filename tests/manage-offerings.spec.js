@@ -178,7 +178,9 @@ test('editing an offering updates it in place; the X and Cancel both close witho
   await page.locator('#editOfferingName').fill(updatedName);
   await page.locator('#editSlotModeBy').click();
   await page.locator('#editOfferingSlotBy').selectOption('4:00pm');
-  await page.locator('button:has-text("Save changes")').click();
+  // Scoped to the overlay — an unscoped "Save changes" also matches the
+  // Edit Review modal's and Edit Bakery Page's own same-labeled buttons.
+  await page.locator('#editOfferingOverlay button:has-text("Save changes")').click();
   await expect(page.locator('#editOfferingOverlay')).toHaveCount(0);
 
   const updatedRow = page.locator('[id^="offeringrow_"]').filter({ hasText: updatedName });
