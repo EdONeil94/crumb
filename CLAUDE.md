@@ -13,7 +13,7 @@ its own section below), and the **E2E test workflow** — all done on
 **Status as of 2026-08-24: Phase 0 complete** (all 4 steps: `categories.js`,
 `utils/`, `appState.js` across 3 sub-stages, and `check:dead-refs` now
 covering all of `src/` + `index.html`, not just `legacy-app.js`). **Phase 1
-under way** — step 5 (`nav.js`) done, step 6 (`authModal.js`) and step 7
+under way** — steps 5 (`nav.js`) and 6 (`authModal.js`) done, step 7
 (`lifecycle.js`) not started.
 This is separate from — and comes after — the handler delegation migration
 above; don't conflate the two milestones. Plan approved 2026-08-24 (was
@@ -121,7 +121,9 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   5. `src/components/nav.js` — ✅ **done** (2026-08-24, commit `a2e5c61`) —
   split, not moved wholesale: `showPage`/`navigateFromMobileMenu`/
   `openMyProfileFromMobileMenu` deferred, see step 32's callout below ·
-  6. `src/components/authModal.js` · 7. `src/app/lifecycle.js`
+  6. `src/components/authModal.js` — ✅ **done** (2026-08-24, commit
+  `1e56987`) — fully self-contained, no deferred pieces, unlike step 5 ·
+  7. `src/app/lifecycle.js`
 - **Phase 2 — small, self-contained, strongly direct-tested:**
   8. `src/components/reactions.js` · 9. `src/components/editReviewModal.js` ·
   10. `src/components/qrCode.js` · 11. `src/pages/shop.js`
@@ -227,6 +229,23 @@ boundaries — commits happen at the module/stage level throughout.
 
 ### Extraction log (most recent first)
 
+- **`src/components/authModal.js` — step 6** (2026-08-24, commit
+  `1e56987`). Fully self-contained move, unlike step 5 — the whole
+  8-function AUTH section only ever touched `fb`/`showToast`/
+  `lockScroll`/`unlockScroll` (all already extracted) plus internal
+  cross-calls, no deferred pieces. `openAuthModal()`/`closeAuthModal()`
+  are called as plain JS from many places in `legacy-app.js` (including a
+  `keydown` Escape-key listener) — imported back the ordinary one-way
+  direction, not circular. `closeAuthModal` was pulled out of a big bulk
+  `registerActions()` call mixing 15 unrelated future clusters' close-modal
+  functions — only that one entry moved, the other 15 stayed untouched.
+  Removed 3 more stale `WINDOW EXPORTS` entries (`openAuthModal`,
+  `showAuthError`, `friendlyAuthError`) — one of their justifying comments
+  was itself stale (described a "mobile menu sign-in item (compound)" that
+  was actually already `data-onclick`-delegated). Full `test:e2e`: 59
+  passed/12 skipped/0 failed, including `auth.setup.js`'s real sign-in
+  through the newly-extracted module — the most direct possible test of
+  this specific change.
 - **`src/components/nav.js` — step 5** (2026-08-24, commit `a2e5c61`). First
   real page/component extraction (Phase 0 was infrastructure only). Split
   rather than moved wholesale, per confirmation: moved the 8 self-contained
