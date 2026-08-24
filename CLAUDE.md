@@ -15,18 +15,20 @@ system in `src/events/` (see `src/events/delegate.js` and
 `src/events/actions.js` for how it works — `registerActions()` +
 `getAction()` instead of `window[name]` lookups).
 
-**Status as of 2026-08-24: ~86% converted** (252 delegated / 292 total
-handler sites, raw + delegated, across both files, comments excluded — the
-total dropped from 294 to 292 this session: REACTIONS' earlier deliberate
-redundant-handler removal (-1) plus this session's deletion of the dead
-`editBakeryBlurb`/`saveBakeryBlurb` pair, whose Cancel button's raw
-`onclick="openBakeryProfile(...)"` went with it (-1), not a miscount).
+**Status as of 2026-08-24: ~93% converted** (273 delegated / 292 total
+handler sites, raw + delegated, across both files, comments excluded). Only
+**BAKERY SEARCH** (6 raw sites, all in `src/legacy-app.js`) remains, plus a
+handful of raw sites in `index.html` belonging to clusters this migration
+hasn't reached yet (top-level nav's "+ Add"/"Rate a Bake!" triggers, FEED
+TABS, RATING's own overall-rating slider, SETTINGS, and the admin-only
+Manage Bakery assignment modal) — none of which were in scope for the
+clusters converted so far.
 
 | | raw (`onclick=`/`onchange=`/`oninput=`) | delegated (`data-on*=`) |
 |---|---|---|
-| `index.html` | 25 | 98 |
-| `src/legacy-app.js` | 15 | 154 |
-| **total** | **40** | **252** |
+| `index.html` | 13 | 110 |
+| `src/legacy-app.js` | 6 | 163 |
+| **total** | **19** | **273** |
 
 Converted clusters (fully delegated, 0 raw handlers left): **FOLLOWS**,
 **FILTER HELPERS**, Pre-order discovery page + My Pre-orders burger-menu
@@ -34,9 +36,84 @@ sheet, **Manage Offerings incl. Pre-orders/Reservations**, **DATA**,
 **EDIT REVIEW**, **SHARE REVIEW WITH A FOLLOWED USER**, **IMAGE
 COMPRESSION**, **ADMIN PANEL RENDERERS**, **REACTIONS**, **SHOP**,
 **Bakery-profile-modal internals**, **BUSINESS — BAKERY PAGE MANAGEMENT**,
-**ACTIVITY CALENDAR**, **DINING MAP**, **QR SCANNER (baker side)**, and
-everything else converted in earlier sessions per the git log. Notes on the
-trickier ones, most recent first:
+**ACTIVITY CALENDAR**, **DINING MAP**, **QR SCANNER (baker side)**, **ADD
+ITEM MODAL**, **MODAL STEPS**, **ITEM MATCHING**, **ADMIN PANEL**, **SHOP
+MANAGEMENT (business users)**, and everything else converted in earlier
+sessions per the git log. Notes on the trickier ones, most recent first:
+
+- **ADD ITEM MODAL / MODAL STEPS / ITEM MATCHING / ADMIN PANEL / SHOP
+  MANAGEMENT (business users)** — the last five small clusters, converted
+  together in one pass:
+  - **MODAL STEPS** (`goToStep`/`modalNext`/`modalBack`, `:2726`).
+    `goToStep` has no attribute call site anywhere (only called internally
+    by the other two plus `resetAddModal`) so it needed no registration;
+    `modalNext`/`modalBack` do, from the modal's static Back/Next footer
+    buttons in `index.html`. **Caught a real mistake of this session's own
+    making, not a pre-existing bug**: after converting those two buttons,
+    `check:dead-refs` passed clean and `npm run build` succeeded, but
+    `modalNext`/`modalBack` had only been removed from `WINDOW EXPORTS` —
+    never actually passed to `registerActions()` — so clicking "Next" did
+    nothing at all beyond a silent `console.warn`. `check:dead-refs`
+    defaults to scanning `src/legacy-app.js` only (per this doc's own note
+    below); since the dead `data-onclick` references were in `index.html`,
+    the checker had no visibility into them. Only caught once
+    `tests/add-review-flow.spec.js` actually clicked the button against
+    the real running app — a concrete reminder that a clean
+    `check:dead-refs` + build is necessary but not sufficient, and the
+    full E2E run (workflow step 4) is what actually proves a conversion
+    works, not just that it's statically well-formed. Fixed by adding the
+    missing `registerActions({ modalNext, modalBack })` call. Worth
+    double-checking any future cluster whose *only* new call sites are in
+    `index.html` rather than `src/legacy-app.js`.
+  - **ITEM MATCHING** (`selectItemMatch`/`createNewItem`/`clearItemMatch`/
+    `searchExistingItems`, `:2835`, plus one call site — `showBakeryItemHints`
+    — co-located in the MODAL STEPS section by file position rather than
+    topic, same split seen in earlier clusters). `searchExistingItems`
+    changed from taking the search query as a string to taking the
+    `#itemName` input element itself (delegate.js's trailing-live-value
+    convention, same as `filterShareCandidates`) — its two *internal*
+    (non-attribute) call sites, in `goToStep` and `selectBakery`
+    (BAKERY SEARCH, still deferred), were updated to pass the element
+    instead of a string read out of `.value` beforehand. `showBakeryItemHints`
+    turned out to be stale in `WINDOW EXPORTS` too (zero attribute call
+    sites, purely an internal helper) — cleaned up while already here,
+    same as `openProfileModal`/`openAddModalForBakery` in earlier sessions.
+  - **ADD ITEM MODAL** (`:2243`). Only 2 sites of its own:
+    `resetAddModal`'s dynamically-rebuilt photo-upload `<input>`
+    (`handlePhotoChange`, already partly delegated from an earlier
+    IMAGE COMPRESSION session via `removePhoto`'s identical rebuild — this
+    resolved its other two raw call sites, `resetAddModal` here and the
+    initial static markup in `index.html`, so it comes out of `WINDOW
+    EXPORTS` entirely now) and `buildTastingDims`'s per-dimension rating
+    sliders. The latter's inline `oninput=` handler
+    (`document.getElementById(...).textContent = ...`) was functionally
+    identical to EDIT REVIEW's existing `updateEditDimDisplay` action, so
+    rather than adding a near-duplicate, that function was renamed to the
+    more general `updateDimDisplay` and reused here too (3 call sites
+    total now: the edit form's per-dimension and overall sliders, plus the
+    add form's per-dimension ones).
+  - **ADMIN PANEL** (`dismissFlag`/`removeReviewAndFlag`/`showAdminTab`,
+    `:3373`+`:3420`). `dismissFlag`/`removeReviewAndFlag` are the Flags
+    tab's two per-row buttons; `showAdminTab` itself (the
+    Users/Bakeries/Flags/Features tab switcher) had 4 raw call sites, all
+    in `index.html`, not counted in this cluster's original tally (scoped
+    to `src/legacy-app.js` only) but clearly the same feature surface —
+    same "file-position vs. topic" reasoning used for SHOP's filter
+    `<select>`s and BUSINESS's Edit-page button in earlier sessions.
+    **Not automatically clicked**: `dismissFlag`/`removeReviewAndFlag`
+    delete real flag/review docs from the target Firebase project — same
+    treatment as `promoteUser` etc. in `tests/admin-panel.spec.js`.
+  - **SHOP MANAGEMENT (business users)** (`renderManageShop`, `:5471`,
+    plus the ADD/EDIT PRODUCT modal it opens into —
+    `openProductModal`/`handleProductPhoto`/`saveProduct`/`deleteProduct`,
+    converted together since the modal is only ever reached from the shop
+    manager). `openProductModal`'s two calls dropped the old `escJS(...)`
+    wrapping — no longer building a JS string literal, so unnecessary now
+    that `dataArgs()` does its own escaping, same as `openBakeryProfile`
+    call sites elsewhere. **Not automatically clicked**: `saveProduct`/
+    `deleteProduct` write to/delete from a real bakery's public shop —
+    same treatment as `saveBakeryPage`. Covered by
+    `tests/shop-management.spec.js`.
 
 - **QR SCANNER (baker side)** (`openQRScanner`/`closeQRScanner`/
   `confirmCollected`, `:8291`). Found and fixed a real, pre-existing bug
@@ -216,10 +293,8 @@ Remaining clusters, by raw-handler count in `src/legacy-app.js` (run
 `grep -noE '\son(click|change|input)=' src/legacy-app.js | grep -v data-on`
 does; exclude comment lines):
 
-- BAKERY SEARCH — 6
-- ADD ITEM MODAL / ITEM MATCHING / ADMIN PANEL / SHOP MANAGEMENT (business
-  users) — 2 each
-- MODAL STEPS — 1
+- BAKERY SEARCH — 6 (deferred — see "Known pre-existing issues" below;
+  this is the only cluster left)
 
 ### Conversion workflow (every cluster — this is the definition of done)
 
@@ -258,6 +333,17 @@ invisible until someone clicks the exact broken element — this is why step
 
 Both are checked statically (regex/line-based heuristics, not a real
 parser — cheap and low-false-positive, not a substitute for judgement).
+
+**Blind spot confirmed in practice (MODAL STEPS, this session):** the
+default invocation only scans `src/legacy-app.js` — a `data-onclick` in
+`index.html` with no matching `registerActions()` entry passes clean, since
+the checker never sees it. `modalNext`/`modalBack` shipped broken (removed
+from `WINDOW EXPORTS` but never actually registered) past both
+`check:dead-refs` and `npm run build` for exactly this reason, and was only
+caught once a real E2E spec clicked the button. Reinforces the same lesson
+this doc's conversion workflow already encodes in step 4 (run the full
+suite, not just build/lint) — worth being extra deliberate about it for any
+cluster whose new call sites live only in `index.html`.
 
 ## Known pre-existing issues (out of scope for this migration)
 
@@ -363,14 +449,15 @@ parser — cheap and low-false-positive, not a substitute for judgement).
 
 **Status as of 2026-08-24: verified green**, dedicated E2E account now
 in place (separate from the personal super-admin account used earlier).
-`npm run test:e2e` — 53 passed, 7 skipped (data-dependent — no candidates
+`npm run test:e2e` — 55 passed, 12 skipped (data-dependent — no candidates
 to test Send against, no location with 2+ bakeries, no bakery showing
-opening hours in the target project, etc.), 0 failed. This covers
-everything converted since the migration started, including DATA, EDIT
-REVIEW, SHARE REVIEW WITH A FOLLOWED USER, IMAGE COMPRESSION, ADMIN PANEL
-RENDERERS, REACTIONS, SHOP, Bakery-profile-modal internals, BUSINESS —
-BAKERY PAGE MANAGEMENT, ACTIVITY CALENDAR, DINING MAP, and QR SCANNER
-(baker side).
+opening hours in the target project, no flagged reviews/admin users/shop
+products to list, etc.), 0 failed. This covers everything converted since
+the migration started, including DATA, EDIT REVIEW, SHARE REVIEW WITH A
+FOLLOWED USER, IMAGE COMPRESSION, ADMIN PANEL RENDERERS, REACTIONS, SHOP,
+Bakery-profile-modal internals, BUSINESS — BAKERY PAGE MANAGEMENT, ACTIVITY
+CALENDAR, DINING MAP, QR SCANNER (baker side), ADD ITEM MODAL, MODAL STEPS,
+ITEM MATCHING, ADMIN PANEL, and SHOP MANAGEMENT (business users).
 
 Getting to green — and staying there as REACTIONS landed and exercised the
 suite under slightly different conditions — took three rounds of fixes, all

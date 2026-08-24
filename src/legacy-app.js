@@ -2292,7 +2292,7 @@ function resetAddModal() {
   if (catGroup) catGroup.style.display = 'block';
   document.getElementById('photoUploadWrap').innerHTML = `
     <div class="photo-upload" id="photoUploadArea">
-      <input type="file" accept="image/*" id="photoInput" onchange="handlePhotoChange(this)">
+      <input type="file" accept="image/*" id="photoInput" data-onchange="handlePhotoChange">
       <div class="photo-upload-icon">📷</div>
       <div class="photo-upload-text">Tap to take a photo or <strong>upload from your camera roll</strong></div>
     </div>`;
@@ -2330,7 +2330,7 @@ function buildTastingDims(category) {
           <span class="tasting-dim-val" id="display_${d.key}">–</span>
         </div>
         <input type="range" class="rating-slider" id="${d.key}" min="0" max="5" step="0.1" value="0"
-          oninput="document.getElementById('display_${d.key}').textContent=parseFloat(this.value).toFixed(1)" style="margin:0;">
+          data-oninput="updateDimDisplay" data-args='${dataArgs([`display_${d.key}`])}' style="margin:0;">
       </div>
     </div>`;
   }).join('');
@@ -2475,12 +2475,11 @@ function selectSubCategory(subKey, el) {
 
 // IMAGE COMPRESSION + the category-chip picker, which shares this file
 // section by position rather than topic (no header of its own).
-// handlePhotoChange is registered here for the first time (this cluster's
-// removePhoto rebuild is its first delegated call site) but stays in
-// WINDOW EXPORTS too — ADD ITEM MODAL (resetAddModal, index.html) still
-// calls it through two other raw, unconverted onchange= sites. The other 4
-// had no call site anywhere else, so they come out of WINDOW EXPORTS
-// entirely. selectCategory (an unused "legacy shim for AI auto-select",
+// handlePhotoChange was registered here first (this cluster's removePhoto
+// rebuild was its first delegated call site); ADD ITEM MODAL later
+// converted its other two raw call sites (resetAddModal, index.html), so
+// it now comes out of WINDOW EXPORTS entirely too, same as the rest of
+// this block. selectCategory (an unused "legacy shim for AI auto-select",
 // per its own comment, with zero call sites anywhere) was deleted rather
 // than converted — same treatment as buildItemRowHTML/buildLocationFilterBar
 // in FILTER HELPERS.
@@ -2690,8 +2689,8 @@ function selectBakery(placeId, name, address, lat, lng) {
   document.getElementById('selectedBakeryAddress').textContent = address;
   document.getElementById('locationSelected').classList.add('visible');
   // Re-run item search now we know the bakery
-  const itemNameVal = document.getElementById('itemName')?.value;
-  if (itemNameVal && itemNameVal.length >= 2) searchExistingItems(itemNameVal);
+  const itemNameEl = document.getElementById('itemName');
+  if (itemNameEl?.value && itemNameEl.value.length >= 2) searchExistingItems(itemNameEl);
   if (GOOGLE_MAPS_KEY) {
     document.getElementById('mapContainer').innerHTML = `
       <iframe width="100%" height="180" style="border:0;border-radius:var(--radius);"
@@ -2749,8 +2748,8 @@ function goToStep(step) {
   document.getElementById('addModalTitle').textContent = ['Where did you find it?', 'What did you have?', 'Rate it', 'Final notes'][step - 1];
   // When entering step 2, re-run item search if name already filled (bakery now known)
   if (step === 2) {
-    const nameVal = document.getElementById('itemName')?.value;
-    if (nameVal && nameVal.length >= 2) searchExistingItems(nameVal);
+    const nameEl = document.getElementById('itemName');
+    if (nameEl?.value && nameEl.value.length >= 2) searchExistingItems(nameEl);
     // Also show items already at this bakery as hints
     else if (selectedBakery) showBakeryItemHints();
   }
@@ -2771,7 +2770,7 @@ function showBakeryItemHints() {
         ? `<div class="item-match-thumb"><img src="${r.photoURL}" alt="${r.name}"></div>`
         : `<div class="item-match-thumb">${catDisp.emoji}</div>`;
       return `
-        <div class="item-match-result" onclick="selectItemMatch('${r.id}')">
+        <div class="item-match-result" data-onclick="selectItemMatch" data-args='${dataArgs([r.id])}'>
           ${thumb}
           <div class="item-match-info">
             <div class="item-match-name">${r.name}</div>
@@ -2821,6 +2820,12 @@ function modalBack() {
   if (currentStep > 1) goToStep(currentStep - 1);
 }
 
+// modalNext/modalBack's only call sites are index.html's Next/Back buttons
+// (the modal's static footer) — both come out of WINDOW EXPORTS entirely.
+// goToStep itself has no attribute call site anywhere (only called
+// internally by these two plus resetAddModal), so it needs no registration.
+registerActions({ modalNext, modalBack });
+
 function buildSummary() {
   const name = document.getElementById('itemName').value || 'Unknown bake';
   const bakery = selectedBakery?.name || 'Unknown bakery';
@@ -2845,7 +2850,12 @@ async function loadItemRecords() {
   } catch(e) { console.log('itemRecords load:', e.message); }
 }
 
-function searchExistingItems(query) {
+// Takes the input element itself (delegate.js's trailing-clicked-element
+// convention for handlers that need the live value) rather than a string —
+// same as filterShareCandidates. goToStep's own internal call (re-running
+// the search on step re-entry) passes the #itemName element directly too.
+function searchExistingItems(el) {
+  const query = el.value;
   matchedItemRecord = null;
   document.getElementById('itemMatchSelected').style.display = 'none';
   document.getElementById('categoryGroup').style.display = 'block';
@@ -2874,7 +2884,7 @@ function searchExistingItems(query) {
       ? `<div class="item-match-thumb"><img src="${r.photoURL}" alt="${r.name}"></div>`
       : `<div class="item-match-thumb">${catDisp.emoji}</div>`;
     return `
-      <div class="item-match-result" onclick="selectItemMatch('${r.id}')">
+      <div class="item-match-result" data-onclick="selectItemMatch" data-args='${dataArgs([r.id])}'>
         ${thumb}
         <div class="item-match-info">
           <div class="item-match-name">${r.name}</div>
@@ -2885,7 +2895,7 @@ function searchExistingItems(query) {
   }).join('');
 
   // Always show "create new" option
-  html += `<button class="item-match-new" onclick="createNewItem()">✦ Add "${query}" as a new item</button>`;
+  html += `<button class="item-match-new" data-onclick="createNewItem">✦ Add "${query}" as a new item</button>`;
   resultsEl.innerHTML = html;
 }
 
@@ -2953,6 +2963,11 @@ function prefillItemForReview(recordId) {
     }
   }, 100);
 }
+
+// selectItemMatch/createNewItem/clearItemMatch/searchExistingItems had no
+// call sites outside this cluster, so all four come out of WINDOW EXPORTS
+// entirely.
+registerActions({ selectItemMatch, createNewItem, clearItemMatch, searchExistingItems });
 
 // ─── SAVE ─────────────────────────────────────────────────────────────────────
 async function saveReview() {
@@ -3387,6 +3402,10 @@ async function showAdminTab(tab) {
   }
 }
 
+// showAdminTab's 4 tab-button call sites are in index.html; had no call
+// sites outside this cluster, so it comes out of WINDOW EXPORTS entirely.
+registerActions({ showAdminTab });
+
 
 async function renderAdminFlags() {
   const panel = document.getElementById('adminFlagsPanel');
@@ -3406,8 +3425,8 @@ async function renderAdminFlags() {
           <div class="flag-item-name">${item?.name || 'Unknown item'} — ${f.bakeryName || ''}</div>
           <div class="flag-item-meta">Flagged by ${f.flaggedByName || 'someone'} · ${f.reason || 'No reason given'}</div>
           <div class="flag-item-actions">
-            <button class="admin-btn" onclick="dismissFlag('${f.id}')">Dismiss flag</button>
-            <button class="admin-btn danger" onclick="removeReviewAndFlag('${f.itemId}','${f.id}')">Remove review</button>
+            <button class="admin-btn" data-onclick="dismissFlag" data-args='${dataArgs([f.id])}'>Dismiss flag</button>
+            <button class="admin-btn danger" data-onclick="removeReviewAndFlag" data-args='${dataArgs([f.itemId, f.id])}'>Remove review</button>
           </div>
         </div>`;
     }).join('');
@@ -3432,6 +3451,10 @@ async function removeReviewAndFlag(itemId, flagId) {
   await loadData();
   renderAdminFlags();
 }
+
+// dismissFlag/removeReviewAndFlag had no call sites outside this cluster, so
+// both come out of WINDOW EXPORTS entirely.
+registerActions({ dismissFlag, removeReviewAndFlag });
 
 // ─── MANAGE BAKERY ────────────────────────────────────────────────────────────
 let managingBakeryName = null;
@@ -4699,7 +4722,7 @@ function openEditModal(id) {
         </div>
         <input type="range" class="rating-slider" id="edit_${d.key}"
           min="0" max="5" step="0.1" value="${val}"
-          data-oninput="updateEditDimDisplay" data-args='${dataArgs([`edit_display_${d.key}`])}'>
+          data-oninput="updateDimDisplay" data-args='${dataArgs([`edit_display_${d.key}`])}'>
       </div>`;
   }).join('');
 
@@ -4762,7 +4785,7 @@ function openEditModal(id) {
         <label class="form-label">Overall rating</label>
         <div class="rating-value-display" id="editOverallDisplay">${parseFloat(item.overallRating || 0).toFixed(1)}</div>
         <input type="range" class="rating-slider" id="editOverallRating" min="0" max="5" step="0.1" value="${item.overallRating || 0}"
-          data-oninput="updateEditDimDisplay" data-args='${dataArgs(['editOverallDisplay'])}'>
+          data-oninput="updateDimDisplay" data-args='${dataArgs(['editOverallDisplay'])}'>
         <div class="rating-scale-labels"><span>0 — Stale</span><span>2.5 — Decent</span><span>5 — Legendary</span></div>
       </div>
       <div class="form-group" style="margin:0;">
@@ -4779,12 +4802,16 @@ function openEditModal(id) {
   lockScroll();
 }
 
-// Shared by every rating slider in the edit form (per-dimension and
-// overall) — each one's own live-value display span id is passed via
-// data-args, and the slider itself arrives as the trailing element
-// (delegate.js's convention for handlers that need the live value, since
-// that's more robust than threading `this.value` through as a string).
-function updateEditDimDisplay(displayId, el) {
+// Shared by every per-dimension rating slider — the edit form's, and (via
+// buildTastingDims, ADD ITEM MODAL) the add form's — plus each form's own
+// overall-rating slider. Each one's own live-value display span id is
+// passed via data-args, and the slider itself arrives as the trailing
+// element (delegate.js's convention for handlers that need the live value,
+// since that's more robust than threading `this.value` through as a
+// string). Originally named updateEditDimDisplay, before the add form's
+// identical inline oninput= was converted to reuse it instead of adding a
+// near-duplicate.
+function updateDimDisplay(displayId, el) {
   document.getElementById(displayId).textContent = parseFloat(el.value).toFixed(1);
 }
 
@@ -4925,7 +4952,7 @@ async function deleteReview() {
 // index.html (the modal's static footer buttons), not here — none of these
 // 6 had any other call site, so all come out of WINDOW EXPORTS entirely.
 registerActions({
-  updateEditDimDisplay, updateEditSubCategory, clearEditPhoto,
+  updateDimDisplay, updateEditSubCategory, clearEditPhoto,
   handleEditPhoto, saveEdit, deleteReview,
 });
 
@@ -5475,10 +5502,10 @@ async function renderManageShop(bakeryName) {
   body.innerHTML = `
     <div style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;">
       <div style="font-size:0.82rem;color:var(--text-muted);">${myProducts.length} product${myProducts.length !== 1 ? 's' : ''} listed</div>
-      <button class="btn-espresso" style="font-size:0.82rem;padding:8px 16px;" onclick="openProductModal(null,'${escJS(bakeryName)}')">+ Add product</button>
+      <button class="btn-espresso" style="font-size:0.82rem;padding:8px 16px;" data-onclick="openProductModal" data-args='${dataArgs([null, bakeryName])}'>+ Add product</button>
     </div>
     ${myProducts.length ? myProducts.map(p => `
-      <div class="shop-manage-row" onclick="openProductModal('${p.id}','${escJS(bakeryName)}')">
+      <div class="shop-manage-row" data-onclick="openProductModal" data-args='${dataArgs([p.id, bakeryName])}'>
         <div class="shop-manage-thumb">${p.photoURL ? `<img src="${p.photoURL}" alt="${p.name}">` : '🛍️'}</div>
         <div style="flex:1;min-width:0;">
           <div style="font-size:0.9rem;font-weight:600;color:var(--espresso);">${p.name}</div>
@@ -5589,6 +5616,13 @@ async function deleteProduct() {
     showToast('Could not delete product');
   }
 }
+
+// SHOP MANAGEMENT (business users) + ADD/EDIT PRODUCT modal, converted
+// together since the latter is only ever reached from the former.
+// openProductModal/handleProductPhoto/saveProduct/deleteProduct had no call
+// sites outside this cluster, so all four come out of WINDOW EXPORTS
+// entirely.
+registerActions({ openProductModal, handleProductPhoto, saveProduct, deleteProduct });
 
 // ─── FEATURE REQUESTS ─────────────────────────────────────────────────────────
 function openFeatureRequestModal() {
@@ -9223,7 +9257,6 @@ Object.assign(window, {
   buildTastingDims,
   cardHTML,
   clearBakery,
-  clearItemMatch,
   closeMobileMenu,
   closeOnClickOutside,
   closeProfileModal,
@@ -9231,11 +9264,8 @@ Object.assign(window, {
   compressToDataURL,
   computeCountryRank,
   computeUserScore,
-  createNewItem,
   deactivateExploreNearby,
-  deleteProduct,
   detectExploreLocation,
-  dismissFlag,
   distKm,
   distKmUser,
   ensureProfileExists,
@@ -9264,10 +9294,7 @@ Object.assign(window, {
   getSlotValue,
   getTastingDims,
   getTrendingBakeriesNearCity,
-  goToStep,
   handleBakeryPhoto,
-  handlePhotoChange,
-  handleProductPhoto,
   handleSettingsPhoto,
   initExplorePage,
   initPreorderPage,
@@ -9291,14 +9318,11 @@ Object.assign(window, {
   loadSavedItems,
   loadUserRole,
   lockScroll,
-  modalBack,
-  modalNext,
   mpItemBreakdownHTML,
   openAddModal,
   openAuthModal,
   openBakeryProfile,
   openFeatureRequestModal,
-  openProductModal,
   openSettingsPage,
   ownsBakery,
   populateBakeryLocationFilter,
@@ -9311,7 +9335,6 @@ Object.assign(window, {
   refreshAdminUsersPanel,
   refreshFollowButtons,
   refreshReactionBar,
-  removeReviewAndFlag,
   renderActivityTab,
   renderAdminBakeriesHTML,
   renderAdminFeatures,
@@ -9347,20 +9370,15 @@ Object.assign(window, {
   resetAddModal,
   runExploreNearbySearch,
   saveBakeryProfile,
-  saveProduct,
   saveReview,
   saveSettingsProfile,
   saveToCatalogue,
   scanFrame,
   searchBakery,
-  searchExistingItems,
   selectBakery,
   selectExploreCity,
-  selectItemMatch,
   selectManualBakery,
-  showAdminTab,
   showAuthError,
-  showBakeryItemHints,
   showKnownBakeries,
   showMobileInstallBtn,
   showPage,

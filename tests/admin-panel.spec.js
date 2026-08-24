@@ -1,21 +1,25 @@
 import { test, expect } from '@playwright/test';
 
-// Backfills the manually-verified ADMIN PANEL RENDERERS checklist
-// (renderAdminUsersHTML/renderAdminBakeriesHTML, the Settings page's Admin
-// Panel section). Only runs anything if the signed-in test account is an
-// admin (isAdmin() — see src/legacy-app.js) — skips with a clear message
-// otherwise, same convention as tests/people-filters.spec.js for data this
-// suite doesn't control.
+// Backfills the manually-verified checklists for two clusters that live on
+// the Settings page's Admin Panel section:
+// - ADMIN PANEL RENDERERS (renderAdminUsersHTML/renderAdminBakeriesHTML)
+// - ADMIN PANEL (showAdminTab — the Users/Bakeries/Flags/Features tab
+//   switcher, and dismissFlag/removeReviewAndFlag on the Flags tab)
+// Only runs anything if the signed-in test account is an admin (isAdmin() —
+// see src/legacy-app.js) — skips with a clear message otherwise, same
+// convention as tests/people-filters.spec.js for data this suite doesn't
+// control.
 //
-// promoteUser/promptAssignBakery/removeUserRole are NOT clicked here, even
-// when a candidate user row exists: unlike the E2E_-prefixed throwaway data
-// elsewhere in this suite, the Users tab lists real accounts from the
-// target Firebase project, and these three actions grant/revoke real
-// admin/business access — not something to exercise against arbitrary real
-// users in an automated run. Their data-onclick/data-args wiring is
-// asserted directly instead (same approach as the Send button in
-// tests/share-and-saved.spec.js). Manually verify an actual promote/assign/
-// remove if these need real coverage.
+// promoteUser/promptAssignBakery/removeUserRole/dismissFlag/
+// removeReviewAndFlag are NOT clicked here, even when a candidate row
+// exists: unlike the E2E_-prefixed throwaway data elsewhere in this suite,
+// the Users and Flags tabs list real accounts/reviews from the target
+// Firebase project, and these actions grant/revoke real admin/business
+// access or permanently delete real data — not something to exercise
+// against arbitrary real data in an automated run. Their data-onclick/
+// data-args wiring is asserted directly instead (same approach as the Send
+// button in tests/share-and-saved.spec.js). Manually verify an actual
+// promote/assign/remove/dismiss/delete if these need real coverage.
 
 async function gotoSettings(page) {
   await page.locator('#navAvatar').click();
@@ -91,4 +95,53 @@ test('Bakeries tab: View page opens the bakery profile, Edit page opens Manage B
     await page.locator('[data-onclick="closeManageBakeryModal"]').first().click();
     await expect(page.locator('#manageBakeryModal')).not.toHaveClass(/open/);
   }
+});
+
+test('tab bar switches content and highlights the active tab', async ({ page }) => {
+  const usersTab = page.locator('#adminTabUsers');
+  const bakeriesTab = page.locator('#adminTabBakeries');
+  const content = page.locator('#adminTabContent');
+
+  // openSettingsPage's own admin-account check already lands on Users.
+  await expect(usersTab).toHaveClass(/btn-espresso/);
+  await expect(bakeriesTab).toHaveClass(/btn-ghost/);
+
+  await bakeriesTab.click();
+  await expect(content.locator('.spinner')).toHaveCount(0);
+  await expect(bakeriesTab).toHaveClass(/btn-espresso/);
+  await expect(usersTab).toHaveClass(/btn-ghost/);
+
+  await page.locator('#adminTabFlags').click();
+  await expect(content.locator('.spinner')).toHaveCount(0);
+  await expect(page.locator('#adminTabFlags')).toHaveClass(/btn-espresso/);
+  await expect(content.locator('#adminFlagsPanel')).toBeVisible();
+
+  await page.locator('#adminTabFeatures').click();
+  await expect(content.locator('.spinner')).toHaveCount(0);
+  await expect(page.locator('#adminTabFeatures')).toHaveClass(/btn-espresso/);
+
+  await usersTab.click();
+  await expect(content.locator('.spinner')).toHaveCount(0);
+  await expect(usersTab).toHaveClass(/btn-espresso/);
+});
+
+test('Flags tab renders correctly-wired dismiss/remove buttons (not clicked — see module comment)', async ({ page }) => {
+  await page.locator('#adminTabFlags').click();
+  const panel = page.locator('#adminFlagsPanel');
+  await expect(page.locator('#adminTabContent .spinner')).toHaveCount(0);
+
+  const flag = panel.locator('.flag-item').first();
+  test.skip((await flag.count()) === 0, 'No flagged reviews in the target Firebase project to list.');
+
+  const dismissBtn = flag.locator('[data-onclick="dismissFlag"]');
+  await expect(dismissBtn).toBeVisible();
+  const dismissArgs = JSON.parse(await dismissBtn.getAttribute('data-args'));
+  expect(typeof dismissArgs[0]).toBe('string');
+  expect(dismissArgs[0].length).toBeGreaterThan(0);
+
+  const removeBtn = flag.locator('[data-onclick="removeReviewAndFlag"]');
+  await expect(removeBtn).toBeVisible();
+  const removeArgs = JSON.parse(await removeBtn.getAttribute('data-args'));
+  expect(removeArgs.length).toBe(2);
+  expect(removeArgs[1]).toBe(dismissArgs[0]); // same flag id in both
 });
