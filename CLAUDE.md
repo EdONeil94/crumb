@@ -10,9 +10,9 @@ its own section below), and the **E2E test workflow** — all done on
 
 ## Carving src/legacy-app.js into src/pages/ and src/components/
 
-**Status as of 2026-08-24: Phases 0, 1, and 2 all complete, Phase 3 under
-way** (steps 12-14 of 32 done — `reviewCard.js`, `feed.js`, `follows.js`).
-Phase 3's remaining 2 steps (`people.js`, `reservations.js`) not started.
+**Status as of 2026-08-25: Phases 0, 1, and 2 all complete, Phase 3 under
+way** (steps 12-15 of 32 done — `reviewCard.js`, `feed.js`, `follows.js`,
+`people.js`). Phase 3's remaining step (`reservations.js`) not started.
 This is separate from — and comes after — the handler delegation migration
 above; don't conflate the two milestones. Plan approved 2026-08-24 (was
 drafted as a plan-mode file at `~/.claude/plans/logical-painting-kurzweil.md`,
@@ -147,7 +147,9 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   14. `src/components/follows.js` — ✅ **done** (2026-08-24, commit
   `df961f0`) — split 5-and-5, see its own extraction-log entry below for
   the two different deferral targets ·
-  15. `src/pages/people.js` (best-covered page in the app) ·
+  15. `src/pages/people.js` — ✅ **done** (2026-08-25, commit `4d5633e`) —
+  moved wholesale (best-covered page in the app); resolved step 14's
+  deferred-follow-up decision — see its own extraction-log entry below ·
   16. `src/components/reservations.js`
 - **Phase 4 — large but well-tested (the "does this scale" milestone):**
   17. `src/components/manageOfferingsModal.js` (biggest single cluster,
@@ -282,6 +284,59 @@ boundaries — commits happen at the module/stage level throughout.
 
 ### Extraction log (most recent first)
 
+- **`src/pages/people.js` — step 15** (2026-08-25, commit `4d5633e`). Moved
+  `peopleViewMode`/`setPeopleView`/`computeUserScore`/`computeCountryRank`/
+  `populateRankingLocationFilter`/`renderRankings`/`renderPeople` wholesale
+  — every dependency (`currentUser`/`fb`/`allItems`/`allProfiles`,
+  `extractCity`/`extractCountry`, `followBtnHTML`, `dataArgs`) was already
+  extracted in Phase 0/3, confirmed via a fresh re-grep before moving
+  anything (line numbers had shifted since the plan was drafted, as
+  expected — see the workflow's own step 1). `computeUserScore` kept
+  module-private (not exported) — its only callers, `computeCountryRank`
+  and `renderRankings`, both moved into this same file; nothing outside
+  ever called it, unlike `computeCountryRank`, which `openProfileModal()`
+  (still in `legacy-app.js`, future `profileModal.js`, Phase 5 step 22)
+  calls — that's the one normal one-way import back, no cycle, since
+  nothing in `people.js` calls back into `legacy-app.js`. `peopleViewMode`
+  exported as a plain live `let` binding (same convention as
+  `appState.js`'s state vars) since `showPage()` (`legacy-app.js`, Phase 7
+  step 32) reads it directly and nothing outside this file ever writes it
+  — confirmed via grep, so no setter function was needed.
+  Explicitly grepped `index.html` for raw handler references to all 7
+  candidate functions before assuming any `WINDOW EXPORTS` entry was
+  stale, per the step 13 (`switchFeedTab`) lesson: `setPeopleView`/
+  `renderRankings`/`populateRankingLocationFilter` are all reached via
+  delegated `data-onclick`/`data-onchange`, not raw handlers — confirmed
+  no surprise here, their `registerActions()` registration simply moved
+  into `people.js` itself instead of staying in `legacy-app.js`.
+  `computeCountryRank`/`computeUserScore` had stale `WINDOW EXPORTS`
+  entries (zero raw call sites, confirmed via grep) — removed; the other
+  5 functions were already correctly absent from that block (registered
+  actions and plain-JS-only calls never went through `window[name]` to
+  begin with).
+  **Resolves step 14's (`follows.js`) deferred-follow-up decision, made
+  deliberately rather than automatically**: `toggleFollow`/
+  `refreshFollowButtons`/`followAndRefreshPeople` were flagged there as
+  "revisit once `people.js` lands." Now that it has, moving those three
+  into `follows.js` would create a genuine two-file cycle between
+  `follows.js` and `people.js` — `refreshFollowButtons`/
+  `followAndRefreshPeople` call `renderPeople()` directly, while
+  `people.js` itself already imports `followBtnHTML` from `follows.js`
+  (used in both `renderPeople`'s member cards and
+  `buildFollowUserRowHTML`). Decided to leave all three in
+  `legacy-app.js`, which keeps importing one-way from both leaf modules —
+  the same shape as every other resolved-by-staying-put deferral in this
+  plan, just discovered via a direct dependency check this time rather
+  than needing a fresh grep sweep to surface it (the cycle was visible
+  immediately from `people.js`'s own new `follows.js` import). Documented
+  in `people.js`'s own header comment, not just here.
+  Verified: `check:dead-refs` clean, `npm run build` succeeds (44
+  modules), full `test:e2e` 58 passed/13 skipped/0 failed (the People-page
+  cluster's own spec, `people-filters.spec.js`, re-run in isolation
+  afterward came back a clean 12/12 passed/0 skipped — the full-suite
+  skip count is normal data-dependent run-to-run variance, per this doc's
+  own historical range of 10-12 skips across prior runs, not a regression
+  introduced here).
 - **`src/components/follows.js` — step 14** (2026-08-24, commit `df961f0`).
   Split, not clean — flagged before writing any code: moved the 5
   self-contained functions (`getFollowState`, `followBtnHTML`,
