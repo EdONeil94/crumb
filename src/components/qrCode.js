@@ -3,28 +3,36 @@
 // bundled together as one file since both are small and closely related
 // (pages/components carving, Phase 2 step 10 — see CLAUDE.md).
 //
-// Split, not moved wholesale, per explicit confirmation: confirmCollected()
-// (+ its own closeQrConfirmOverlay() helper) calls markCollected(), part of
-// the not-yet-extracted manageOfferingsModal.js cluster (step 17) — moving
-// them would mean this module importing back from legacy-app.js, while
-// legacy-app.js already needs to import generateOrderQRCodes()/
-// processScannedReservation() back from here, forming a genuine two-file
-// cycle. Both stay in legacy-app.js, deferred — see CLAUDE.md's own
-// callout for the exact trigger condition.
+// Step-10 deferral resolved (Phase 4 step 17, 2026-08-25): confirmCollected()
+// (+ its own closeQrConfirmOverlay() helper) call markCollected(), which now
+// has a real importable home in src/components/manageOfferingsModal.js.
+// Moving them here no longer risks a cycle — verified explicitly, not
+// assumed, before moving: manageOfferingsModal.js's only reference to
+// anything in this file is a markup data-onclick="openQRScanner" string
+// (resolved via the delegated-actions registry at click time), never a real
+// import, so the dependency is one-way (this file → manageOfferingsModal.js)
+// same as generateOrderQRCodes()'s own dependents.
 //
-// generateOrderQRCodes() is called from inside manageOfferingsModal.js's
-// own not-yet-extracted code — legacy-app.js imports it back from here.
+// generateOrderQRCodes() is called from src/components/reservations.js (the
+// Profile modal's Orders tab, Phase 3 step 16) — not from legacy-app.js or
+// manageOfferingsModal.js as an earlier version of this comment claimed;
+// corrected while already here. Neither this file nor reservations.js
+// imports anything back from the other beyond that one export, so this
+// stays a normal one-way dependency, not circular.
 //
 // processScannedReservation() keeps its WINDOW EXPORTS entry (via
 // legacy-app.js, since that's where WINDOW EXPORTS lives) even though it
 // has zero raw markup call sites — tests/qr-scanner-baker.spec.js calls
 // `window.processScannedReservation(id, bakeryName)` directly to bypass
 // real camera/jsQR decoding, so removing it would break that spec.
+// generateOrderQRCodes() no longer needs a WINDOW EXPORTS entry at all —
+// legacy-app.js doesn't import it anymore (see reservations.js above).
 
 import { registerActions } from '../events/actions.js';
 import { dataArgs } from '../events/delegate.js';
 import { fb } from '../state/appState.js';
 import { showToast } from '../utils/dom.js';
+import { markCollected } from './manageOfferingsModal.js';
 
 let scannerStream = null;
 let scannerAnimFrame = null;
@@ -190,4 +198,17 @@ export async function processScannedReservation(reservationId, bakeryName) {
   } catch(e) { showToast('Could not look up reservation'); console.error(e); }
 }
 
-registerActions({ closeQRScanner, closeExpandedQR, openQRScanner, expandQR });
+function closeQrConfirmOverlay(el) {
+  el.closest('.qr-confirm-overlay')?.remove();
+}
+
+async function confirmCollected(reservationId, bakeryName, btn) {
+  btn.disabled = true; btn.textContent = 'Saving…';
+  await markCollected(reservationId, bakeryName);
+  btn.closest('.qr-confirm-overlay')?.remove();
+}
+
+registerActions({
+  closeQRScanner, closeExpandedQR, openQRScanner, expandQR,
+  closeQrConfirmOverlay, confirmCollected,
+});
