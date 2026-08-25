@@ -1,5 +1,6 @@
 import { registerActions } from './events/actions.js';
 import { initDelegatedEvents, dataArgs } from './events/delegate.js';
+import { GOOGLE_MAPS_KEY } from './config.js';
 import {
   CATEGORY_TREE, CATEGORIES, SUB_TO_PARENT, SUB_LABEL, getCategoryDisplay,
   TASTING_DIMS_UNIVERSAL, TASTING_DIM_5TH, DEFAULT_DIM_5TH, getTastingDims,
@@ -51,6 +52,12 @@ import {
 import {
   parseSlotStartTime, renderOrdersTab,
 } from './components/reservations.js';
+import {
+  openAddModal, closeAddModal, buildTastingDims, buildCategoryChips,
+  compressImage, compressToDataURL, showKnownBakeries, selectManualBakery,
+  updateOverallRating, selectedBakery, selectedCategory, selectedSubCategory,
+  photoFile, matchedItemRecord,
+} from './components/addReviewModal.js';
 // Side-effect only — PWA install/update-check/status-bar-fix/pull-to-refresh/
 // keyboard-scroll all self-execute on import, no exports needed here.
 import './app/lifecycle.js';
@@ -140,12 +147,11 @@ async function removeUserRole(uid) {
    attributes throughout index.html.
    ──────────────────────────────────────────────────────────────────────── */
 
-let currentStep = 1;
-let totalSteps = 4;
-let selectedCategory = '';
-let selectedBakery = null;
-let photoFile = null;
-let photoDataURL = null;
+// currentStep/totalSteps/selectedCategory/selectedBakery/photoFile/
+// photoDataURL moved to src/components/addReviewModal.js (2026-08-25,
+// Phase 4 step 18) — selectedCategory/selectedBakery/photoFile imported
+// above (read-only, needed by saveReview below); currentStep/totalSteps/
+// photoDataURL stayed fully private to that file, no import needed.
 let lbCurrentTab = 'all';
 
 // CATEGORY_TREE, CATEGORIES, SUB_TO_PARENT, SUB_LABEL, getCategoryDisplay,
@@ -155,8 +161,8 @@ let lbCurrentTab = 'all';
 // allProfiles/allItems/allItemRecords/ensureProfileExists moved to
 // src/state/appState.js (2026-08-24, Phase 0 step 3b) — imported above.
 
-// Google Maps API key - replace with yours
-const GOOGLE_MAPS_KEY = 'AIzaSyCQa9SwvrPmdnk5S2-q8Mem2ZP22GVB1Yo';
+// GOOGLE_MAPS_KEY moved to src/config.js (2026-08-25, pages/components
+// carving Phase 4 step 18) — imported above.
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 // window._crumb is guaranteed to already exist by the time this module runs,
@@ -1477,738 +1483,14 @@ function closeDetailAndOpenProfile(userId) {
   if (currentUser) openProfileModal(userId);
 }
 
-// ─── ADD ITEM MODAL ───────────────────────────────────────────────────────────
-let userLatLng = null; // cached geolocation
-
-function openAddModal() {
-  if (!currentUser) { openAuthModal(); return; }
-  resetAddModal();
-  // Always refresh item records so we see other users' recent additions
-  loadItemRecords();
-  // Request location silently in background
-  if (navigator.geolocation && !userLatLng) {
-    navigator.geolocation.getCurrentPosition(
-      pos => { userLatLng = { lat: pos.coords.latitude, lng: pos.coords.longitude }; },
-      () => {}, // silent fail
-      { timeout: 5000, maximumAge: 300000 }
-    );
-  }
-  document.getElementById('addModal').classList.add('open');
-  lockScroll();
-}
-
-function closeAddModal() {
-  document.getElementById('addModal').classList.remove('open');
-  unlockScroll();
-}
-
-function resetAddModal() {
-  currentStep = 1;
-  selectedCategory = '';
-  selectedBakery = null;
-  photoFile = null;
-  photoDataURL = null;
-  matchedItemRecord = null;
-  const nextBtn = document.getElementById('nextBtn');
-  if (nextBtn) { nextBtn.disabled = false; }
-  document.getElementById('itemName').value = '';
-  document.getElementById('bakerySearch').value = '';
-  document.getElementById('itemPrice').value = '';
-  document.getElementById('itemNotes').value = '';
-  document.getElementById('overallRating').value = 0;
-  document.getElementById('overallRatingDisplay').textContent = '–';
-  document.getElementById('locationSelected').classList.remove('visible');
-  document.getElementById('bakeryResultsKnown').innerHTML = ''; document.getElementById('bakeryResultsGoogle').innerHTML = '';
-  const photoInputEl = document.getElementById('photoInput');
-  if (photoInputEl) photoInputEl.value = '';
-  const matchResults = document.getElementById('itemMatchResults');
-  const matchSelected = document.getElementById('itemMatchSelected');
-  const catGroup = document.getElementById('categoryGroup');
-  if (matchResults) matchResults.innerHTML = '';
-  if (matchSelected) matchSelected.style.display = 'none';
-  if (catGroup) catGroup.style.display = 'block';
-  document.getElementById('photoUploadWrap').innerHTML = `
-    <div class="photo-upload" id="photoUploadArea">
-      <input type="file" accept="image/*" id="photoInput" data-onchange="handlePhotoChange">
-      <div class="photo-upload-icon">📷</div>
-      <div class="photo-upload-text">Tap to take a photo or <strong>upload from your camera roll</strong></div>
-    </div>`;
-  document.querySelectorAll('.category-chip').forEach(c => c.classList.remove('selected'));
-  buildTastingDims();
-  buildCategoryChips();
-  selectedSubCategory = '';
-  goToStep(1);
-}
-
-function buildTastingDims(category) {
-  const cat = category || selectedCategory || 'other';
-  const dims = getTastingDims(cat);
-  const wrap = document.getElementById('tastingDims');
-  if (!wrap) return;
-
-  // Update category emoji in header
-  const catEmoji = document.getElementById('tastingDimsCatEmoji');
-  if (catEmoji) catEmoji.textContent = CATEGORY_TREE[cat]?.emoji || '✦';
-
-  // Universal dims use standard emojis; 5th dim uses category emoji
-  const dimEmojis = ['👁️', '🤌', '👅', '💰'];
-
-  wrap.innerHTML = dims.map((d, i) => {
-    const emoji = i < 4 ? dimEmojis[i] : (CATEGORY_TREE[cat]?.emoji || '✦');
-    return `
-    <div class="tasting-dim-row">
-      <div class="tasting-dim-emoji">${emoji}</div>
-      <div class="tasting-dim-right">
-        <div class="tasting-dim-top">
-          <div>
-            <span class="tasting-dim-name">${d.label}</span>
-            ${d.tip ? `<span class="tasting-dim-tip"> — ${d.tip}</span>` : ''}
-          </div>
-          <span class="tasting-dim-val" id="display_${d.key}">–</span>
-        </div>
-        <input type="range" class="rating-slider" id="${d.key}" min="0" max="5" step="0.1" value="0"
-          data-oninput="updateDimDisplay" data-args='${dataArgs([`display_${d.key}`])}' style="margin:0;">
-      </div>
-    </div>`;
-  }).join('');
-}
-
-// ─── IMAGE COMPRESSION ────────────────────────────────────────────────────────
-function compressImage(file, maxPx, quality) {
-  // maxPx: max dimension in pixels, quality: 0-1 JPEG quality
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        const MAX = maxPx || 1200;
-        const Q = quality || 0.82;
-        let w = img.width, h = img.height;
-        if (w > MAX || h > MAX) {
-          if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
-          else { w = Math.round(w * MAX / h); h = MAX; }
-        }
-        const canvas = document.createElement('canvas');
-        canvas.width = w; canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, w, h);
-        canvas.toBlob(blob => resolve(blob), 'image/jpeg', Q);
-      };
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-async function compressToDataURL(file, maxPx, quality) {
-  const blob = await compressImage(file, maxPx, quality);
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = e => resolve(e.target.result);
-    reader.readAsDataURL(blob);
-  });
-}
-
-async function handlePhotoChange(input) {
-  if (!input.files[0]) return;
-  const original = input.files[0];
-  // Compress to max 1200px, 82% quality before storing
-  const compressed = await compressImage(original, 1200, 0.82);
-  photoFile = compressed;
-  photoDataURL = await compressToDataURL(original, 1200, 0.82);
-  document.getElementById('photoUploadWrap').innerHTML = `
-    <div class="photo-preview">
-      <img src="${photoDataURL}" alt="Preview">
-      <button class="photo-preview-remove" data-onclick="removePhoto">✕</button>
-    </div>`;
-
-}
-
-function removePhoto() {
-  photoFile = null; photoDataURL = null;
-  document.getElementById('photoUploadWrap').innerHTML = `
-    <div class="photo-upload" id="photoUploadArea">
-      <input type="file" accept="image/*" id="photoInput" data-onchange="handlePhotoChange">
-      <div class="photo-upload-icon">📷</div>
-      <div class="photo-upload-text">Tap to take a photo or <strong>upload from your camera roll</strong></div>
-    </div>`;
-}
-
-
-
-let selectedSubCategory = '';
-
-function buildCategoryChips() {
-  const parentWrap = document.getElementById('categoryParentChips');
-  const subWrap = document.getElementById('categorySubChips');
-  if (!parentWrap) return;
-  renderParentChips(parentWrap);
-  subWrap.innerHTML = '';
-  subWrap.style.display = 'none';
-}
-
-function renderParentChips(parentWrap) {
-  parentWrap.innerHTML = Object.entries(CATEGORY_TREE).map(([key, cat]) =>
-    `<div class="category-chip" data-onclick="selectParentCategory" data-args='${dataArgs([key])}'>${cat.emoji} ${cat.label}</div>`
-  ).join('');
-}
-
-function selectParentCategory(parentKey) {
-  selectedCategory = parentKey;
-  selectedSubCategory = '';
-  const cat = CATEGORY_TREE[parentKey];
-  const parentWrap = document.getElementById('categoryParentChips');
-  const subWrap = document.getElementById('categorySubChips');
-  if (!parentWrap || !cat) return;
-
-  // Collapse parent chips to just the selected one with a ✕
-  parentWrap.innerHTML = `
-    <div class="category-chip selected" style="display:flex; align-items:center; gap:6px;">
-      ${cat.emoji} ${cat.label}
-      <span data-onclick="clearParentCategory" style="
-        display:inline-flex; align-items:center; justify-content:center;
-        width:16px; height:16px; border-radius:50%;
-        background:rgba(255,255,255,0.25); font-size:0.7rem;
-        cursor:pointer; margin-left:2px; line-height:1;
-        transition:background 0.15s;" title="Change category">✕</span>
-    </div>`;
-
-  // Show sub-categories
-  const subs = cat.subs || {};
-  subWrap.innerHTML = `<div style="font-size:0.72rem; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--text-muted); width:100%; margin-bottom:4px;">Choose type</div>` +
-    Object.entries(subs).map(([key, label]) =>
-      `<div class="category-chip" data-subcat="${key}" data-onclick="selectSubCategory" data-args='${dataArgs([key])}'>${label}</div>`
-    ).join('');
-  subWrap.style.display = 'flex';
-  subWrap.style.flexWrap = 'wrap';
-  subWrap.style.gap = '8px';
-
-  // Rebuild tasting dims for this category
-  buildTastingDims(parentKey);
-  // Update emoji in tasting header immediately
-  const catEmoji = document.getElementById('tastingDimsCatEmoji');
-  if (catEmoji) catEmoji.textContent = CATEGORY_TREE[parentKey]?.emoji || '✦';
-}
-
-function clearParentCategory() {
-  selectedCategory = '';
-  selectedSubCategory = '';
-  const parentWrap = document.getElementById('categoryParentChips');
-  const subWrap = document.getElementById('categorySubChips');
-  if (parentWrap) renderParentChips(parentWrap);
-  if (subWrap) { subWrap.innerHTML = ''; subWrap.style.display = 'none'; }
-  buildTastingDims('other'); // reset to default
-}
-
-// Parameter order follows delegate.js's trailing-clicked-element convention
-// (subKey, then el) — its only two call sites are its own data-onclick
-// attribute and one plain call from prefillItemForReview, both updated here.
-function selectSubCategory(subKey, el) {
-  document.querySelectorAll('#categorySubChips .category-chip').forEach(c => c.classList.remove('selected'));
-  el.classList.add('selected');
-  selectedSubCategory = subKey;
-  selectedCategory = SUB_TO_PARENT[subKey] || selectedCategory;
-}
-
-// IMAGE COMPRESSION + the category-chip picker, which shares this file
-// section by position rather than topic (no header of its own).
-// handlePhotoChange was registered here first (this cluster's removePhoto
-// rebuild was its first delegated call site); ADD ITEM MODAL later
-// converted its other two raw call sites (resetAddModal, index.html), so
-// it now comes out of WINDOW EXPORTS entirely too, same as the rest of
-// this block. selectCategory (an unused "legacy shim for AI auto-select",
-// per its own comment, with zero call sites anywhere) was deleted rather
-// than converted — same treatment as buildItemRowHTML/buildLocationFilterBar
-// in FILTER HELPERS.
-registerActions({
-  removePhoto, handlePhotoChange, selectParentCategory, clearParentCategory,
-  selectSubCategory,
-});
-
-// ─── BAKERY SEARCH ────────────────────────────────────────────────────────────
-let searchTimeout;
-
-function showKnownBakeries() {
-  if (selectedBakery) return; // already selected
-  document.getElementById('bakeryResultsGoogle').innerHTML = '';
-  const resultsEl = document.getElementById('bakeryResultsKnown');
-
-  // Build sorted list of previously reviewed bakeries
-  const bakeryMap = {};
-  allItems.forEach(item => {
-    if (!item.bakeryName) return;
-    const key = item.bakeryName;
-    if (!bakeryMap[key]) bakeryMap[key] = { name: item.bakeryName, address: item.bakeryAddress || '', placeId: item.bakeryPlaceId || null, lat: item.bakeryLat || null, lng: item.bakeryLng || null, count: 0 };
-    bakeryMap[key].count++;
-  });
-
-  let known = Object.values(bakeryMap).sort((a, b) => b.count - a.count);
-  if (!known.length) { resultsEl.innerHTML = ''; return; }
-
-  // If we have location, sort by distance within equal review counts
-  if (userLatLng && known.some(b => b.lat)) {
-    known = known.sort((a, b) => {
-      if (b.count !== a.count) return b.count - a.count;
-      const da = a.lat ? distKm(userLatLng.lat, userLatLng.lng, a.lat, a.lng) : 999;
-      const db = b.lat ? distKm(userLatLng.lat, userLatLng.lng, b.lat, b.lng) : 999;
-      return da - db;
-    });
-  }
-
-  resultsEl.innerHTML = `<div style="font-size:0.72rem; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Previously reviewed</div>` +
-    known.slice(0, 5).map(b => `
-      <div data-onclick="selectBakery" data-args='${dataArgs([b.placeId || '', b.name, b.address])}'
-        style="padding:10px 12px; background:var(--parchment); border-radius:var(--radius-sm); cursor:pointer; border:1.5px solid var(--sage); transition:border-color 0.2s; margin-bottom:6px;"
-        onmouseover="this.style.borderColor='var(--honey)'" onmouseout="this.style.borderColor='var(--sage)'">
-        <div style="font-size:0.88rem; font-weight:600; color:var(--espresso); display:flex; align-items:center; gap:6px;">
-          <span style="font-size:0.8rem;">📍</span> ${b.name}
-          <span style="font-size:0.7rem; color:var(--sage); font-weight:500; margin-left:auto;">${b.count} review${b.count !== 1 ? 's' : ''}</span>
-        </div>
-        ${b.address ? `<div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">${b.address}</div>` : ''}
-      </div>`).join('');
-}
-
-// Track which known bakery names are currently shown, so Google results can skip duplicates
-let knownMatchNamesLower = [];
-
-function renderKnownMatches(query) {
-  const bakeryMap = {};
-  allItems.forEach(item => {
-    if (!item.bakeryName) return;
-    const key = item.bakeryName;
-    if (!bakeryMap[key]) bakeryMap[key] = { name: item.bakeryName, address: item.bakeryAddress || '', placeId: item.bakeryPlaceId || null, lat: item.bakeryLat || null, lng: item.bakeryLng || null, count: 0 };
-    bakeryMap[key].count++;
-  });
-
-  const q = query.toLowerCase();
-  let matches = Object.values(bakeryMap).filter(b =>
-    b.name.toLowerCase().includes(q) || (b.address || '').toLowerCase().includes(q)
-  );
-
-  matches.sort((a, b) => {
-    if (b.count !== a.count) return b.count - a.count;
-    if (userLatLng && a.lat && b.lat) {
-      const da = distKm(userLatLng.lat, userLatLng.lng, a.lat, a.lng);
-      const db = distKm(userLatLng.lat, userLatLng.lng, b.lat, b.lng);
-      return da - db;
-    }
-    return 0;
-  });
-
-  const el = document.getElementById('bakeryResultsKnown');
-  if (!matches.length) { el.innerHTML = ''; knownMatchNamesLower = []; return; }
-
-  knownMatchNamesLower = matches.map(m => m.name.toLowerCase());
-
-  el.innerHTML = `<div style="font-size:0.72rem; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--sage); margin-bottom:4px;">⭐ Already on Crumbz</div>` +
-    matches.slice(0, 5).map(b => `
-      <div data-onclick="selectBakery" data-args='${dataArgs([b.placeId || '', b.name, b.address])}'
-        style="padding:10px 12px; background:var(--parchment); border-radius:var(--radius-sm); cursor:pointer; border:1.5px solid var(--sage); transition:border-color 0.2s; margin-bottom:6px;"
-        onmouseover="this.style.borderColor='var(--honey)'" onmouseout="this.style.borderColor='var(--sage)'">
-        <div style="font-size:0.88rem; font-weight:600; color:var(--espresso); display:flex; align-items:center; gap:6px;">
-          <span style="font-size:0.8rem;">📍</span> ${b.name}
-          <span style="font-size:0.7rem; color:var(--sage); font-weight:500; margin-left:auto;">${b.count} review${b.count !== 1 ? 's' : ''}</span>
-        </div>
-        ${b.address ? `<div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">${b.address}</div>` : ''}
-      </div>`).join('');
-}
-
-
-// Takes the input element itself (delegate.js's trailing-clicked-element
-// convention for handlers that need the live value) rather than a string —
-// same as filterShareCandidates/searchExistingItems.
-function searchBakery(el) {
-  const val = el.value;
-  clearTimeout(searchTimeout);
-  if (!val) { showKnownBakeries(); return; }
-  if (val.length < 2) {
-    document.getElementById('bakeryResultsKnown').innerHTML = '';
-    document.getElementById('bakeryResultsGoogle').innerHTML = '';
-    return;
-  }
-  // Show already-rated bakeries instantly — no network wait
-  renderKnownMatches(val);
-  searchTimeout = setTimeout(() => fetchBakeryPlaces(val), 400);
-}
-
-async function fetchBakeryPlaces(query) {
-  const googleEl = document.getElementById('bakeryResultsGoogle');
-  if (!GOOGLE_MAPS_KEY) {
-    googleEl.innerHTML = `
-      <div style="font-size:0.8rem; color:var(--text-muted); padding:8px; background:var(--parchment); border-radius:var(--radius-sm);">
-        Google Maps API key required. <strong><span style="cursor:pointer; color:var(--caramel);" data-onclick="selectManualBakery" data-args='${dataArgs([query])}'>Use "${query}" as entered →</span></strong>
-      </div>`;
-    return;
-  }
-  try {
-    // Determine best location bias
-    const profileCountry = allProfiles[currentUser?.uid]?.country || '';
-    // Country bounding boxes for common cases
-    const countryBoxes = {
-      'United Kingdom':    { low: { latitude: 49.9, longitude: -8.2  }, high: { latitude: 60.9, longitude: 1.8  } },
-      'France':            { low: { latitude: 41.3, longitude: -5.1  }, high: { latitude: 51.1, longitude: 9.6  } },
-      'Germany':           { low: { latitude: 47.3, longitude:  5.9  }, high: { latitude: 55.1, longitude: 15.0 } },
-      'Spain':             { low: { latitude: 36.0, longitude: -9.3  }, high: { latitude: 43.8, longitude: 4.3  } },
-      'Italy':             { low: { latitude: 36.6, longitude:  6.6  }, high: { latitude: 47.1, longitude: 18.5 } },
-      'Netherlands':       { low: { latitude: 50.8, longitude:  3.4  }, high: { latitude: 53.5, longitude: 7.2  } },
-      'Australia':         { low: { latitude:-43.6, longitude: 113.3 }, high: { latitude:-10.7, longitude:153.6 } },
-      'United States':     { low: { latitude: 24.5, longitude:-124.8 }, high: { latitude: 49.4, longitude:-66.9 } },
-    };
-
-    let locationBias;
-    if (userLatLng) {
-      locationBias = { circle: { center: { latitude: userLatLng.lat, longitude: userLatLng.lng }, radius: 25000 } };
-    } else if (countryBoxes[profileCountry]) {
-      locationBias = { rectangle: countryBoxes[profileCountry] };
-    } else {
-      // Default to UK
-      locationBias = { rectangle: { low: { latitude: 49.9, longitude: -8.2 }, high: { latitude: 60.9, longitude: 1.8 } } };
-    }
-
-    const reqBody = { textQuery: query, locationBias };
-    const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': GOOGLE_MAPS_KEY,
-        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location'
-      },
-      body: JSON.stringify(reqBody)
-    });
-    const data = await res.json();
-
-    // Skip any Google result that's already shown as a known (already-rated) match
-    const filtered = (data.places || []).filter(p => {
-      const name = (p.displayName?.text || '').toLowerCase();
-      return !knownMatchNamesLower.some(k => k === name || name.includes(k) || k.includes(name));
-    });
-
-    if (!filtered.length) {
-      // Only show "no results" messaging if there were no known matches either
-      if (!knownMatchNamesLower.length) {
-        googleEl.innerHTML = `<div style="font-size:0.82rem; color:var(--text-muted); padding:8px;">No bakeries found — <span style="color:var(--caramel); cursor:pointer;" data-onclick="selectManualBakery" data-args='${dataArgs([query])}'>use this name anyway</span></div>`;
-      } else {
-        googleEl.innerHTML = '';
-      }
-      return;
-    }
-
-    const heading = knownMatchNamesLower.length
-      ? `<div style="font-size:0.72rem; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--text-muted); margin:8px 0 4px;">More options</div>`
-      : '';
-
-    googleEl.innerHTML = heading + filtered.slice(0, 5).map(p => {
-      const lat = p.location?.latitude || '';
-      const lng = p.location?.longitude || '';
-      return `
-      <div data-onclick="selectBakery" data-args='${dataArgs([p.id, p.displayName?.text || '', p.formattedAddress || '', lat, lng])}'
-        style="padding:10px 12px; background:var(--parchment); border-radius:var(--radius-sm); cursor:pointer; border:1.5px solid var(--border); transition:border-color 0.2s; margin-bottom:6px;"
-        onmouseover="this.style.borderColor='var(--honey)'" onmouseout="this.style.borderColor='var(--border)'">
-        <div style="font-size:0.88rem; font-weight:600; color:var(--espresso);">${p.displayName?.text || ''}</div>
-        <div style="font-size:0.75rem; color:var(--text-muted);">${p.formattedAddress || ''}</div>
-      </div>`;
-    }).join('');
-  } catch(e) {
-    googleEl.innerHTML = `<div style="font-size:0.82rem; color:var(--text-muted); padding:8px;">Search unavailable — <span style="color:var(--caramel); cursor:pointer;" data-onclick="selectManualBakery" data-args='${dataArgs([query])}'>use this name anyway</span></div>`;
-  }
-}
-
-function selectBakery(placeId, name, address, lat, lng) {
-  selectedBakery = { placeId, name, address, lat: lat ? parseFloat(lat) : null, lng: lng ? parseFloat(lng) : null };
-  document.getElementById('bakerySearch').value = name;
-  document.getElementById('bakeryResultsKnown').innerHTML = ''; document.getElementById('bakeryResultsGoogle').innerHTML = '';
-  document.getElementById('selectedBakeryName').textContent = name;
-  document.getElementById('selectedBakeryAddress').textContent = address;
-  document.getElementById('locationSelected').classList.add('visible');
-  // Re-run item search now we know the bakery
-  const itemNameEl = document.getElementById('itemName');
-  if (itemNameEl?.value && itemNameEl.value.length >= 2) searchExistingItems(itemNameEl);
-  if (GOOGLE_MAPS_KEY) {
-    document.getElementById('mapContainer').innerHTML = `
-      <iframe width="100%" height="180" style="border:0;border-radius:var(--radius);"
-        src="https://www.google.com/maps/embed/v1/place?key=${GOOGLE_MAPS_KEY}&q=place_id:${placeId}" allowfullscreen></iframe>`;
-  }
-}
-
-function selectManualBakery(name) {
-  selectedBakery = { placeId: null, name, address: '' };
-  document.getElementById('bakerySearch').value = name;
-  document.getElementById('bakeryResultsKnown').innerHTML = ''; document.getElementById('bakeryResultsGoogle').innerHTML = '';
-  document.getElementById('selectedBakeryName').textContent = name;
-  document.getElementById('selectedBakeryAddress').textContent = 'Entered manually';
-  document.getElementById('locationSelected').classList.add('visible');
-}
-
-function clearBakery() {
-  selectedBakery = null;
-  document.getElementById('bakerySearch').value = '';
-  document.getElementById('locationSelected').classList.remove('visible');
-  document.getElementById('mapContainer').innerHTML = `<div class="map-placeholder"><div class="map-placeholder-icon">🗺️</div><div>Map will appear here once you select a bakery</div></div>`;
-  // Clear item hints
-  const matchResults = document.getElementById('itemMatchResults');
-  if (matchResults) matchResults.innerHTML = '';
-}
-
-// searchBakery/selectBakery/clearBakery had no call sites outside this
-// cluster, so all three come out of WINDOW EXPORTS entirely.
-// renderKnownMatches/fetchBakeryPlaces never had any attribute call site of
-// their own (only called internally by searchBakery) — also removed from
-// WINDOW EXPORTS, they were never genuinely needed there. showKnownBakeries
-// stays: index.html's #bakerySearch onfocus="if(!this.value)
-// showKnownBakeries()" is delegate.js's one deliberately-unconverted
-// onfocus site (see its own header comment — not worth wiring up for a
-// single call site), so this is a real remaining raw call site, not
-// staleness. selectManualBakery also stays, for a different reason: it has
-// no raw call site left either, but tests/utils/reviews.js and several
-// specs call window.selectManualBakery() directly to bypass the Google
-// Places results UI (see that file's module comment) — removing it would
-// break every spec that creates a review.
-registerActions({ searchBakery, selectBakery, selectManualBakery, clearBakery });
-
-// ─── RATING ───────────────────────────────────────────────────────────────────
-function updateOverallRating(val) {
-  document.getElementById('overallRatingDisplay').textContent = parseFloat(val).toFixed(1);
-}
-
-// ─── MODAL STEPS ──────────────────────────────────────────────────────────────
-function goToStep(step) {
-  currentStep = step;
-  document.querySelectorAll('.modal-step').forEach(s => s.classList.remove('active'));
-  document.getElementById('step' + step).classList.add('active');
-  // Dots
-  for (let i = 1; i <= totalSteps; i++) {
-    const dot = document.getElementById('dot' + i);
-    dot.classList.remove('active', 'done');
-    if (i < step) dot.classList.add('done');
-    else if (i === step) dot.classList.add('active');
-  }
-  document.getElementById('backBtn').style.display = step > 1 ? 'block' : 'none';
-  const nextBtn = document.getElementById('nextBtn');
-  nextBtn.disabled = false; // guard against it being stuck disabled from a prior save attempt
-  if (step === totalSteps) {
-    nextBtn.textContent = 'Save review ✓';
-    nextBtn.className = 'btn-caramel';
-    buildSummary();
-  } else {
-    nextBtn.textContent = 'Next →';
-    nextBtn.className = 'btn-espresso';
-  }
-  document.getElementById('addModalTitle').textContent = ['Where did you find it?', 'What did you have?', 'Rate it', 'Final notes'][step - 1];
-  // When entering step 2, re-run item search if name already filled (bakery now known)
-  if (step === 2) {
-    const nameEl = document.getElementById('itemName');
-    if (nameEl?.value && nameEl.value.length >= 2) searchExistingItems(nameEl);
-    // Also show items already at this bakery as hints
-    else if (selectedBakery) showBakeryItemHints();
-  }
-}
-
-function showBakeryItemHints() {
-  if (!selectedBakery) return;
-  const bakeryName = selectedBakery.name.toLowerCase();
-  const bakeryItems = allItemRecords.filter(r => r.bakeryName?.toLowerCase() === bakeryName).slice(0, 5);
-  if (!bakeryItems.length) return;
-  const el = document.getElementById('itemMatchResults');
-  if (!el) return;
-  el.innerHTML = `<div style="font-size:0.72rem; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Already reviewed here</div>` +
-    bakeryItems.map(r => {
-      const catDisp = getCategoryDisplay(r);
-      const score = r.communityAvg ? r.communityAvg.toFixed(1) : '–';
-      const thumb = r.photoURL
-        ? `<div class="item-match-thumb"><img src="${r.photoURL}" alt="${r.name}"></div>`
-        : `<div class="item-match-thumb">${catDisp.emoji}</div>`;
-      return `
-        <div class="item-match-result" data-onclick="selectItemMatch" data-args='${dataArgs([r.id])}'>
-          ${thumb}
-          <div class="item-match-info">
-            <div class="item-match-name">${r.name}</div>
-            <div class="item-match-meta">${r.reviewCount || 0} review${(r.reviewCount||0) !== 1 ? 's' : ''}</div>
-          </div>
-          <div class="item-match-score">${score}</div>
-        </div>`;
-    }).join('');
-}
-
-function modalNext() {
-  // Per-step validation
-  if (currentStep === 1) {
-    if (!selectedBakery?.name && !document.getElementById('bakerySearch')?.value?.trim()) {
-      showToast('Please select a bakery first');
-      return;
-    }
-  }
-  if (currentStep === 2) {
-    const itemName = document.getElementById('itemName').value.trim();
-    if (!itemName) {
-      showToast('Please enter a name for your bake');
-      document.getElementById('itemName').focus();
-      return;
-    }
-    if (!selectedCategory) {
-      showToast('Please select a category');
-      return;
-    }
-  }
-  if (currentStep === 3) {
-    const rating = parseFloat(document.getElementById('overallRating').value);
-    if (!rating || rating === 0) {
-      showToast('Please give an overall rating');
-      return;
-    }
-  }
-
-  if (currentStep < totalSteps) {
-    goToStep(currentStep + 1);
-  } else {
-    saveReview();
-  }
-}
-
-function modalBack() {
-  if (currentStep > 1) goToStep(currentStep - 1);
-}
-
-// modalNext/modalBack's only call sites are index.html's Next/Back buttons
-// (the modal's static footer) — both come out of WINDOW EXPORTS entirely.
-// goToStep itself has no attribute call site anywhere (only called
-// internally by these two plus resetAddModal), so it needs no registration.
-registerActions({ modalNext, modalBack });
-
-function buildSummary() {
-  const name = document.getElementById('itemName').value || 'Unknown bake';
-  const bakery = selectedBakery?.name || 'Unknown bakery';
-  const price = document.getElementById('itemPrice').value;
-  const overall = parseFloat(document.getElementById('overallRating').value).toFixed(1);
-  const catLabel = selectedSubCategory ? SUB_LABEL[selectedSubCategory] : (selectedCategory ? CATEGORY_TREE[selectedCategory]?.label : '');
-  document.getElementById('reviewSummary').innerHTML = `
-    <strong>${name}</strong> from <strong>${bakery}</strong>${price ? ` · <strong>£${parseFloat(price).toFixed(2)}</strong>` : ''}<br>
-    Overall: <strong>${overall}/5</strong>${catLabel ? ` · ${catLabel}` : ''}`;
-}
-
-// ─── ITEM MATCHING ────────────────────────────────────────────────────────────
-// allItemRecords/loadItemRecords moved to src/state/appState.js (2026-08-24,
-// Phase 0 step 3b) — imported above.
-let matchedItemRecord = null; // existing itemRecord if user picks one
-
-// Takes the input element itself (delegate.js's trailing-clicked-element
-// convention for handlers that need the live value) rather than a string —
-// same as filterShareCandidates. goToStep's own internal call (re-running
-// the search on step re-entry) passes the #itemName element directly too.
-function searchExistingItems(el) {
-  const query = el.value;
-  matchedItemRecord = null;
-  document.getElementById('itemMatchSelected').style.display = 'none';
-  document.getElementById('categoryGroup').style.display = 'block';
-
-  const resultsEl = document.getElementById('itemMatchResults');
-  if (!query || query.length < 2) { resultsEl.innerHTML = ''; return; }
-
-  // Filter by bakery if already selected, otherwise search all
-  const bakeryName = selectedBakery?.name || null;
-  const q = query.toLowerCase();
-
-  let matches = allItemRecords.filter(r => {
-    const nameMatch = r.name?.toLowerCase().includes(q);
-    // If bakery selected, filter to that bakery first; otherwise show all matches
-    const bakeryMatch = !bakeryName || r.bakeryName?.toLowerCase() === bakeryName.toLowerCase();
-    return nameMatch && bakeryMatch;
-  }).slice(0, 5);
-
-
-
-  let html = matches.map(r => {
-    const catDisp = getCategoryDisplay(r);
-    const score = r.communityAvg ? r.communityAvg.toFixed(1) : '–';
-    const count = r.reviewCount || 0;
-    const thumb = r.photoURL
-      ? `<div class="item-match-thumb"><img src="${r.photoURL}" alt="${r.name}"></div>`
-      : `<div class="item-match-thumb">${catDisp.emoji}</div>`;
-    return `
-      <div class="item-match-result" data-onclick="selectItemMatch" data-args='${dataArgs([r.id])}'>
-        ${thumb}
-        <div class="item-match-info">
-          <div class="item-match-name">${r.name}</div>
-          <div class="item-match-meta">📍 ${r.bakeryName} · <strong>${count} community review${count !== 1 ? 's' : ''}</strong></div>
-        </div>
-        <div class="item-match-score">${score}</div>
-      </div>`;
-  }).join('');
-
-  // Always show "create new" option
-  html += `<button class="item-match-new" data-onclick="createNewItem">✦ Add "${query}" as a new item</button>`;
-  resultsEl.innerHTML = html;
-}
-
-function selectItemMatch(recordId) {
-  const record = allItemRecords.find(r => r.id === recordId);
-  if (!record) return;
-  matchedItemRecord = record;
-
-  // Pre-fill fields from existing record
-  document.getElementById('itemName').value = record.name;
-  document.getElementById('itemMatchResults').innerHTML = '';
-  document.getElementById('itemMatchSelected').style.display = 'block';
-  document.getElementById('matchedItemName').textContent = record.name;
-  document.getElementById('matchedItemMeta').textContent =
-    `📍 ${record.bakeryName} · ${record.reviewCount || 0} review${(record.reviewCount||0) !== 1 ? 's' : ''} · avg ${record.communityAvg ? record.communityAvg.toFixed(1) : '–'}`;
-
-  // Auto-select bakery if not already selected
-  if (!selectedBakery && record.bakeryName) {
-    selectedBakery = { name: record.bakeryName, address: record.bakeryAddress || '', placeId: record.bakeryPlaceId || null };
-    document.getElementById('bakerySearch').value = record.bakeryName;
-    document.getElementById('selectedBakeryName').textContent = record.bakeryName;
-    document.getElementById('selectedBakeryAddress').textContent = record.bakeryAddress || '';
-    document.getElementById('locationSelected').classList.add('visible');
-  }
-
-  // Auto-select category
-  if (record.category) {
-    selectParentCategory(record.category);
-    if (record.subCategory) {
-      setTimeout(() => {
-        const subChip = document.querySelector(`#categorySubChips .category-chip[data-subcat="${record.subCategory}"]`);
-        if (subChip) selectSubCategory(record.subCategory, subChip);
-      }, 50);
-    }
-  }
-
-  // Hide category group — already set from record
-  document.getElementById('categoryGroup').style.display = 'none';
-}
-
-function createNewItem() {
-  matchedItemRecord = null;
-  document.getElementById('itemMatchResults').innerHTML = '';
-  document.getElementById('itemMatchSelected').style.display = 'none';
-  document.getElementById('categoryGroup').style.display = 'block';
-}
-
-function clearItemMatch() {
-  matchedItemRecord = null;
-  document.getElementById('itemMatchSelected').style.display = 'none';
-  document.getElementById('itemMatchResults').innerHTML = '';
-  document.getElementById('categoryGroup').style.display = 'block';
-  document.getElementById('itemName').value = '';
-  document.getElementById('itemName').focus();
-}
-
-function prefillItemForReview(recordId) {
-  openAddModal();
-  if (!recordId) return;
-  setTimeout(() => {
-    const record = allItemRecords.find(r => r.id === recordId);
-    if (record) {
-      document.getElementById('itemName').value = record.name;
-      selectItemMatch(recordId);
-    }
-  }, 100);
-}
-
-// selectItemMatch/createNewItem/clearItemMatch/searchExistingItems had no
-// call sites outside this cluster, so all four come out of WINDOW EXPORTS
-// entirely.
-registerActions({ selectItemMatch, createNewItem, clearItemMatch, searchExistingItems });
-
+// ADD ITEM MODAL/IMAGE COMPRESSION/BAKERY SEARCH/RATING/MODAL STEPS/ITEM
+// MATCHING moved to src/components/addReviewModal.js (2026-08-25, Phase 4
+// step 18) — imported above. saveReview stays here — it depends on
+// updateStats/renderRecentGrid/renderLeaderboard/lbCurrentTab/loadData,
+// none extracted yet (Phase 7). modalNext (addReviewModal.js) reaches it
+// via getAction('saveReview') instead of a direct import — see that
+// file's own header comment for why. Registered below so that lookup
+// resolves.
 // ─── SAVE ─────────────────────────────────────────────────────────────────────
 async function saveReview() {
   if (!currentUser) { openAuthModal(); return; }
@@ -2364,8 +1646,11 @@ async function saveReview() {
   }
 }
 
-
-
+// saveReview has no data-onclick/raw markup call site of its own —
+// registered purely so addReviewModal.js's modalNext can reach it via
+// getAction('saveReview') (see that file's own header comment for why a
+// direct import isn't used instead).
+registerActions({ saveReview });
 
 
 
@@ -3926,18 +3211,9 @@ function renderExploreResults(city, crumbBakeries, googleResults, isNearby) {
   }).join('');
 }
 
-function openAddModalForBakery(name, address, placeId, lat, lng) {
-  openAddModal();
-  setTimeout(() => {
-    // Pre-fill bakery on step 1
-    selectedBakery = { name, address, placeId: placeId || null, lat: lat ? parseFloat(lat) : null, lng: lng ? parseFloat(lng) : null };
-    document.getElementById('bakerySearch').value = name;
-    document.getElementById('selectedBakeryName').textContent = name;
-    document.getElementById('selectedBakeryAddress').textContent = address;
-    document.getElementById('locationSelected').classList.add('visible');
-    showKnownBakeries();
-  }, 100);
-}
+// openAddModalForBakery moved to src/components/addReviewModal.js
+// (2026-08-25, Phase 4 step 18) — registers from there now; no import
+// needed here, since its only callers are markup data-onclick references.
 
 // ─── EDIT REVIEW ──────────────────────────────────────────────────────────────
 // openEditModal/updateDimDisplay/updateEditSubCategory/closeEditModal/
@@ -3945,6 +3221,9 @@ function openAddModalForBakery(name, address, placeId, lat, lng) {
 // src/components/editReviewModal.js (2026-08-24, Phase 2 step 9) —
 // imported above. handleEditPhoto/saveEdit/deleteReview stay here,
 // deferred — see CLAUDE.md's own callout for why and when to revisit.
+// handleEditPhoto's compressImage/compressToDataURL now come from
+// src/components/addReviewModal.js (Phase 4 step 18) instead of being
+// same-file calls.
 
 async function handleEditPhoto(input) {
   if (!input.files[0]) return;
@@ -6053,7 +5332,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeAddMo
 // haven't been converted yet. closeProductDetailModal registers from
 // src/pages/shop.js now (Phase 2 step 11).
 registerActions({
-  closeAddModal, closeDetailModal, closeBakeryModal,
+  closeDetailModal, closeBakeryModal,
   closeManageShopModal, closeProductModal,
   closeProfileModal, closeBakeryEditModal,
   closeManageBakeryModal, closeShareReviewModal,
@@ -6140,13 +5419,13 @@ registerActions({
 // openBakeryEditModal's was BUSINESS — BAKERY PAGE MANAGEMENT's own
 // settings-page "Edit page" button (renderBusinessSection) — both now
 // delegated too, so both come out of WINDOW EXPORTS entirely as well.
-// openProfileModal/openAddModalForBakery also verified at zero raw call
-// sites (flagged as pre-existing staleness in two earlier sessions, neither
-// of which touched them either — cleaned up now while already here).
+// openProfileModal also verified at zero raw call sites (flagged as
+// pre-existing staleness in two earlier sessions, neither of which touched
+// it either — cleaned up now while already here). openAddModalForBakery
+// registers from src/components/addReviewModal.js now (Phase 4 step 18).
 registerActions({
   openProfileModal, openBakeryEditModal, openManageBakeryModal,
   openManageShopModal, switchBakeryTab,
-  openAddModalForBakery,
 });
 
 // Pre-order discovery page. onPoCountryChange/onPoCityChange/poDetectNearest/
@@ -6206,14 +5485,16 @@ registerActions({
 // same Saved tab "Remove" button noted above (switchProfileTab).
 registerActions({ switchLbMode, switchLbTab, closeLbAndOpenBakery, openDetail, onLbFilterChange });
 
-// Item detail modal. None of these five have any call site left outside
+// Item detail modal. None of these four have any call site left outside
 // their own data-onclick attributes above — none need WINDOW EXPORTS.
 // openEditModal (also reached via a comma-chained data-onclick, e.g.
 // "closeDetailModal,openEditModal") registers from
 // src/components/editReviewModal.js now (Phase 2 step 9) instead of here.
+// prefillItemForReview registers from src/components/addReviewModal.js now
+// (Phase 4 step 18).
 registerActions({
   toggleSaveItem, openShareReviewModal, closeDetailAndOpenProfile,
-  flagReview, prefillItemForReview,
+  flagReview,
 });
 
 // Category migration (admin settings panel) — single button, single
@@ -6254,14 +5535,9 @@ function renderAdminUsers() {
 Object.assign(window, {
   buildBakeryCoords,
   buildBakeryMapHTML,
-  buildCategoryChips,
   buildCategoryFilterBar,
   buildOpeningHoursHTML,
-  buildSummary,
-  buildTastingDims,
   closeProfileModal,
-  compressImage,
-  compressToDataURL,
   deactivateExploreNearby,
   detectExploreLocation,
   distKmUser,
@@ -6314,15 +5590,12 @@ Object.assign(window, {
   renderLeaderboard,
   renderManageShop,
   renderNotifPanel,
-  renderParentChips,
   renderPreorderTab,
   renderRecentGrid,
   renderSavedTab,
   renderShareCandidateRows,
-  resetAddModal,
   runExploreNearbySearch,
   saveBakeryProfile,
-  saveReview,
   saveSettingsProfile,
   selectExploreCity,
   selectManualBakery,
