@@ -10,11 +10,12 @@ its own section below), and the **E2E test workflow** — all done on
 
 ## Carving src/legacy-app.js into src/pages/ and src/components/
 
-**Status as of 2026-08-25: Phases 0-3 complete, Phase 4 under way** (steps
-1-17 of 32 done — Phase 4 step 17, `manageOfferingsModal.js`, the biggest
-single cluster in the plan, landed as one commit — the "does this scale"
-milestone passed). Phase 4's remaining step (`addReviewModal.js`) not
-started.
+**Status as of 2026-08-25: Phases 0-4 complete** (steps 1-18 of 32 done —
+Phase 4's `manageOfferingsModal.js` (the "does this scale" milestone) and
+`addReviewModal.js` (the modalNext/modalBack cluster — held to an
+explicitly elevated verification bar, see its own extraction-log entry).
+Phase 5 (composite modals: `itemDetailModal.js`, `shareReviewModal.js`,
+`bakeryModal.js`, `profileModal.js`) not started.
 This is separate from — and comes after — the handler delegation migration
 above; don't conflate the two milestones. Plan approved 2026-08-24 (was
 drafted as a plan-mode file at `~/.claude/plans/logical-painting-kurzweil.md`,
@@ -172,20 +173,19 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   before moving. See `qrCode.js`'s own updated header comment and the
   extraction-log entry below for the full reasoning.
 
-  18. `src/components/addReviewModal.js` (kept as **one** module — internal
-  state is deeply cross-referential; this is the exact cluster where
-  `modalNext`/`modalBack` broke during delegation, splitting further risks
-  the same bug class via cross-module import mistakes instead)
+  18. `src/components/addReviewModal.js` — ✅ **done** (2026-08-25, commit
+  `2c827ae`) — kept as **one** module per the plan (internal state is
+  deeply cross-referential; this is the exact cluster where
+  `modalNext`/`modalBack` broke during delegation), held to an explicitly
+  elevated verification bar — see its own extraction-log entry below.
 
-  **⚠️ Deferred follow-up tied to this step — set up in Phase 2 step 9,
-  don't lose track of it.** `handleEditPhoto()` (`editReviewModal.js`)
-  stayed in `legacy-app.js` because it calls `compressImage()`/
-  `compressToDataURL()`, part of IMAGE COMPRESSION — moving into
-  `addReviewModal.js` here. **Once step 18 lands, revisit whether
-  `handleEditPhoto()` can move into `editReviewModal.js`.** Separate from
-  `saveEdit()`/`deleteReview()`'s own deferral (tied to step 29 instead —
-  see that callout) — `handleEditPhoto()` doesn't need `loadData()` or
-  `renderLeaderboard()`, so it may unblock earlier than they do.
+  **✅ Resolved (2026-08-25, commit `d4cfec1`, separate follow-up commit).**
+  The Phase 2 step 9 deferral on `handleEditPhoto()` (`editReviewModal.js`)
+  is closed: `compressImage()`/`compressToDataURL()` now have a real
+  importable home in `addReviewModal.js`, so `handleEditPhoto()` moved into
+  `editReviewModal.js` — one-way dependency, no cycle, verified before
+  moving. `saveEdit()`/`deleteReview()`'s own deferral is unaffected —
+  still tied to step 29 (`loadData()`/`renderLeaderboard()`).
 - **Phase 5 — composite modals aggregating several historical clusters:**
   19. `src/components/itemDetailModal.js` ·
   20. `src/components/shareReviewModal.js` ·
@@ -289,6 +289,123 @@ boundaries — commits happen at the module/stage level throughout.
 
 ### Extraction log (most recent first)
 
+- **`src/components/addReviewModal.js` — step 18** (2026-08-25, commit
+  `2c827ae`; follow-up commit `d4cfec1` for the handleEditPhoto move).
+  **Closes out Phase 4.** The "Rate a Bake!" wizard — modal shell, bakery
+  search (BAKERY SEARCH), category picker + tasting-dim sliders + photo
+  upload (ADD ITEM MODAL + IMAGE COMPRESSION), item matching (ITEM
+  MATCHING), and step navigation (MODAL STEPS, RATING's own slider) — kept
+  as **one** module, per the plan. Held to an explicitly elevated
+  verification bar throughout, per the user's own instruction: this is the
+  exact cluster where `modalNext`/`modalBack` broke and shipped silently
+  unregistered during the original handler-delegation migration, caught
+  only by a real E2E click timing out, past both `check:dead-refs` and
+  `npm run build` at the time. That history doesn't make the extraction
+  itself riskier — it means familiarity with "just move one module" isn't
+  allowed to shortcut the checks here.
+  Moved 32 functions (of the original 33 candidates) + 5 of 11
+  module-level state variables (`selectedCategory`/`selectedBakery`/
+  `photoFile`/`selectedSubCategory`/`matchedItemRecord`, exported as
+  read-only live bindings — `currentStep`/`totalSteps`/`photoDataURL`/
+  `userLatLng`/`searchTimeout`/`knownMatchNamesLower` stayed fully private,
+  confirmed via a full-file grep that nothing outside ever touches them).
+  `openAddModalForBakery` moved in too, despite being called only from
+  other not-yet-extracted clusters' own markup — every one of its own
+  dependencies belongs to this cluster by nature, not by caller, confirmed
+  by reading its body before deciding, not assumed from its name.
+  **`saveReview` stays in `legacy-app.js`, deferred** — it depends on
+  `updateStats`/`renderRecentGrid`/`renderLeaderboard`/`lbCurrentTab`/
+  `loadData`, none extracted before Phase 7 (steps 27-29), same shape as
+  `editReviewModal.js`'s already-deferred `saveEdit`/`deleteReview`.
+  **The genuinely new situation, confirmed with the user before writing
+  any code, not decided unilaterally**: `modalNext` (which must move —
+  core to this cluster's own reason for existing) calls `saveReview()`
+  directly. Every prior deferral in this plan resolved this shape by
+  leaving the dependent function behind in `legacy-app.js`; that doesn't
+  work here, because `modalNext` itself is the one moving — deferring
+  `saveReview` alone would just flip which file needed the forbidden
+  import (confirmed via a fresh grep that zero leaf modules import from
+  `legacy-app.js` anywhere in the codebase before concluding this was a
+  real problem, not assumed). Resolved by having `modalNext` call
+  `getAction('saveReview')()` — the same action-registry lookup
+  `delegate.js` already uses to resolve every `data-onclick` by name —
+  instead of a direct import. `saveReview` self-registers via
+  `registerActions({ saveReview })` in `legacy-app.js`; `addReviewModal.js`
+  only imports the neutral `getAction()` helper, never `saveReview` itself
+  or anything else from `legacy-app.js`. No ordering risk: `legacy-app.js`
+  finishes its own module evaluation (including that `registerActions`
+  call) before any user click could reach `modalNext()` — the same
+  guarantee `delegate.js`'s own dispatch already relies on everywhere else.
+  First use of this pattern outside `delegate.js`'s own internal dispatch
+  in the whole plan — sets a precedent later deferred steps (e.g. step 29's
+  `saveEdit`/`deleteReview`) could reuse, worth remembering when that step
+  comes up.
+  `GOOGLE_MAPS_KEY` extracted to a new `src/config.js` — not part of this
+  extraction's own scope, but a necessary side-effect: this file needs it
+  (`fetchBakeryPlaces`/`selectBakery`), and it's also used by 6+ other
+  still-unextracted clusters, so it could no longer stay a
+  `legacy-app.js`-local constant without breaking the same sink invariant
+  the `getAction()` resolution above was built to preserve. Same treatment
+  `src/data/categories.js` got in Phase 0 step 1 — a shared, static,
+  zero-risk value gets its own tiny file.
+  `compressImage`/`compressToDataURL` turned out to have a much wider
+  fan-out than the original step-9 deferral note described: a fresh grep
+  found 5 external callers, not just `editReviewModal.js`'s
+  `handleEditPhoto` — Settings' own photo upload, Business bakery-edit
+  photo, the admin Manage Bakery photo, and Shop Management's product
+  photo, all still in `legacy-app.js`, all now importing these two back
+  one-way (no cycle — pure, stateless functions, confirmed by reading
+  their bodies).
+  Explicitly grepped `index.html` for raw handler references to all ~32
+  candidate names before assuming any `WINDOW EXPORTS` entry was stale,
+  per the step 13 (`switchFeedTab`) lesson — found real, not stale, raw
+  call sites for 3 functions, all belonging to clusters CLAUDE.md's own
+  migration-status table already named as permanently out of scope for the
+  handler-delegation migration: `openAddModal` (nav's "+ Add" button, Home
+  page's "Rate a Bake!" trigger — both raw `onclick=`), `showKnownBakeries`
+  (`#bakerySearch`'s raw `onfocus=`), `updateOverallRating` (the
+  overall-rating slider's raw `oninput=`). All three keep their `WINDOW
+  EXPORTS` entry. `selectManualBakery` keeps its entry too, for the
+  already-documented test-dependency reason (5 direct `window.
+  selectManualBakery()` call sites across 4 spec files, reconfirmed via
+  grep). 8 other stale entries removed (`buildCategoryChips`/`buildSummary`/
+  `buildTastingDims`/`compressImage`/`compressToDataURL`/`renderParentChips`/
+  `resetAddModal`/`saveReview` — the last one only ever needed by
+  `modalNext`'s own internal call, now routed through `getAction()`
+  instead).
+  Three bulk `registerActions()` calls in `legacy-app.js` trimmed —
+  `closeAddModal`/`prefillItemForReview`/`openAddModalForBakery` pulled out
+  of blocks mixing several other not-yet-extracted clusters' own functions
+  (same pattern as `authModal.js`'s `closeAuthModal`, Phase 1 step 6) —
+  all three now register from `addReviewModal.js` itself.
+  Used `sed` to extract exact source ranges into scratch files rather than
+  retyping ~1,090 lines by hand, reusing the `manageOfferingsModal.js`
+  step-17 approach (itself reused from the `shop.js` step-11 lesson) —
+  verified line/export counts matched expectations before ever writing to
+  `src/`.
+  **Follow-up commit (`d4cfec1`)**: resolved the tied Phase 2 step 9
+  deferral on `handleEditPhoto()` — see the Phase 4 checklist entry above
+  and its own commit message for the full reasoning. Also deleted
+  `setEditPhotoFile`/`setEditPhotoDataURL`, genuinely dead once
+  `handleEditPhoto` landed in the same file as the state they set.
+  Verified: `check:dead-refs` clean across all targets, including
+  `[dead registerActions() reference] none found` specifically for
+  `addReviewModal.js` — the exact `checkDeadRegisterActionsRefs` check
+  built after the step-9 `editReviewModal.js` incident, run here
+  deliberately rather than trusting `check:dead-refs` in general. `npm run
+  build` succeeds (48 modules). Given the elevated risk, ran a fast
+  targeted check first — `add-review-flow.spec.js` + `bakery-search.spec.js`
+  + `image-compression.spec.js` + `edit-review.spec.js` (18/18 passed) —
+  before the full `test:e2e` gate (59 passed/12 skipped/0 failed).
+  Specifically confirmed (not assumed) that `tests/utils/reviews.js`'s
+  `addReview()` helper — the shared setup helper used by ~6 different spec
+  files — clicks the raw `#addBtn`, dispatches a real `input` event on the
+  raw overall-rating slider, and drives all 4 wizard steps through to
+  Save, exercising every one of this step's raw-handler paths and the new
+  `getAction('saveReview')` mechanism repeatedly across the full suite, not
+  just once. A second full `test:e2e` run after the `handleEditPhoto`
+  follow-up: 58 passed/13 skipped/0 failed — clean, skip-count variance
+  within this doc's own documented normal range.
 - **`src/components/manageOfferingsModal.js` — step 17** (2026-08-25,
   commit `ebeec4e`). **Opens Phase 4 — the "does this scale" milestone.**
   Re-grepped the whole "PRE-ORDER / RESERVATIONS" section fresh (line
