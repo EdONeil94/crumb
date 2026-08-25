@@ -10,12 +10,13 @@ its own section below), and the **E2E test workflow** — all done on
 
 ## Carving src/legacy-app.js into src/pages/ and src/components/
 
-**Status as of 2026-08-25: Phases 0-4 complete** (steps 1-18 of 32 done —
-Phase 4's `manageOfferingsModal.js` (the "does this scale" milestone) and
-`addReviewModal.js` (the modalNext/modalBack cluster — held to an
-explicitly elevated verification bar, see its own extraction-log entry).
-Phase 5 (composite modals: `itemDetailModal.js`, `shareReviewModal.js`,
-`bakeryModal.js`, `profileModal.js`) not started.
+**Status as of 2026-08-25: Phases 0-4 complete, Phase 5 in progress**
+(steps 1-19 of 32 done — Phase 4's `manageOfferingsModal.js` (the "does
+this scale" milestone) and `addReviewModal.js` (the modalNext/modalBack
+cluster — held to an explicitly elevated verification bar, see its own
+extraction-log entry). Phase 5 (composite modals: `itemDetailModal.js` —
+✅ done, step 19; `shareReviewModal.js`, `bakeryModal.js`,
+`profileModal.js` not started).
 This is separate from — and comes after — the handler delegation migration
 above; don't conflate the two milestones. Plan approved 2026-08-24 (was
 drafted as a plan-mode file at `~/.claude/plans/logical-painting-kurzweil.md`,
@@ -187,7 +188,10 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   moving. `saveEdit()`/`deleteReview()`'s own deferral is unaffected —
   still tied to step 29 (`loadData()`/`renderLeaderboard()`).
 - **Phase 5 — composite modals aggregating several historical clusters:**
-  19. `src/components/itemDetailModal.js` ·
+  19. `src/components/itemDetailModal.js` — ✅ **done** (2026-08-25, commit
+  `2d90c6a`) — **opens Phase 5** — split, not clean:
+  `closeDetailAndOpenProfile` deferred to step 22, see its own
+  extraction-log entry below ·
   20. `src/components/shareReviewModal.js` ·
   21. `src/components/bakeryModal.js` · 22. `src/components/profileModal.js`
 - **Phase 6 — admin/business surfaces (spec exists, but destructive actions
@@ -289,6 +293,55 @@ boundaries — commits happen at the module/stage level throughout.
 
 ### Extraction log (most recent first)
 
+- **`src/components/itemDetailModal.js` — step 19** (2026-08-25, commit
+  `2d90c6a`). **Opens Phase 5.** Re-grepped the ITEM DETAIL section fresh
+  (line numbers had shifted since step 18) and found it's just 3 functions:
+  `openDetail`, `closeDetailModal`, `closeDetailAndOpenProfile`. Moved the
+  first two wholesale, plus `isSavedItem` — which turned out not to belong
+  to this section at all, despite being needed by `openDetail`'s own
+  markup (`${isSavedItem(item.id) ? ...}`): it was actually defined under
+  legacy-app.js's separate "SAVED ITEMS (want to try)" header, alongside
+  `toggleSaveItem`/`removeSavedItem`. Confirmed via grep that neither of
+  those two ever calls `isSavedItem` — its only external caller anywhere
+  was `openDetail` — so it moved with its sole caller rather than staying
+  behind with same-section siblings that don't use it, the same
+  "small self-contained function moves with its only caller" reasoning
+  used for `computeUserScore` (step 15) and `openProfileIfSignedIn`'s
+  would-be counterpart. Its own dependency, `userSavedItems`, was already
+  in `appState.js` since Phase 0 step 3c, so this was a clean move with no
+  setter needed.
+  **Split, not clean, flagged before writing any code**:
+  `closeDetailAndOpenProfile` stayed in `legacy-app.js` — it calls
+  `openProfileModal()`, still local to that file (future
+  `src/components/profileModal.js`, Phase 5 step 22). Moving it would have
+  created a genuine two-file cycle: `legacy-app.js` already needs
+  `openDetail`/`closeDetailModal` imported back for real plain-JS call
+  sites (not just delegated markup) — a notifications row's
+  `onClick: () => openDetail(...)`, the detail-modal outside-click
+  listener, and the Escape-key handler — while `itemDetailModal.js` would
+  have needed `openProfileModal` imported the other way. Same shape as
+  `reviewCard.js`'s `openProfileIfSignedIn` deferral (Phase 3 step 12).
+  `closeDetailAndOpenProfile` keeps resolving correctly via its existing
+  `data-onclick="closeDetailAndOpenProfile"` markup (now living in
+  `itemDetailModal.js`) since the global `registerActions()` registry
+  doesn't care which module registers a given action name.
+  Two `registerActions()` calls in `legacy-app.js` trimmed: `openDetail`
+  pulled out of the leaderboard's bulk call (`switchLbMode`/`switchLbTab`/
+  `closeLbAndOpenBakery`/`onLbFilterChange` stay), `closeDetailModal`
+  pulled out of the bulk close-modal-buttons call (10 other functions
+  stay) — same pattern as every prior step's bulk-call trims.
+  `isSavedItem` had a stale `WINDOW EXPORTS` entry (zero raw call sites in
+  `index.html`, confirmed via grep per the step 13 lesson) — removed;
+  `openDetail`/`closeDetailModal` were never in that block to begin with.
+  Verified: `check:dead-refs` clean (26 targets, including a check
+  specifically confirming `itemDetailModal.js` itself passes all five
+  checks), `npm run build` succeeds (49 modules). Ran a fast targeted
+  check first — `feed.spec.js` (clicks a feed card to open item detail) +
+  `reactions.spec.js` (confirms reacting does *not* open item detail) +
+  `share-and-saved.spec.js` (exercises `isSavedItem`/`toggleSaveItem`
+  directly via the Saved tab) — 8/8 passed — before the full `test:e2e`
+  gate: 58 passed/13 skipped/0 failed, within this doc's own documented
+  normal skip-count range.
 - **`src/components/addReviewModal.js` — step 18** (2026-08-25, commit
   `2c827ae`; follow-up commit `d4cfec1` for the handleEditPhoto move).
   **Closes out Phase 4.** The "Rate a Bake!" wizard — modal shell, bakery
