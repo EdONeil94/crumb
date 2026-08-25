@@ -17,7 +17,7 @@ import {
   allItems, allBakeries, allProfiles, allItemRecords, setAllItems,
   setAllBakeries, loadItemRecords, ensureProfileExists,
   myFollowing, myFollowers, loadFollows, userBookmarks, loadBookmarks,
-  userSavedItems, loadSavedItems,
+  isBookmarked, userSavedItems, loadSavedItems,
 } from './state/appState.js';
 import {
   updateNav, toggleMobileMenu, closeMobileMenu, toggleUserMenu,
@@ -59,6 +59,7 @@ import {
 } from './components/addReviewModal.js';
 import { openDetail, closeDetailModal } from './components/itemDetailModal.js';
 import { closeShareReviewModal } from './components/shareReviewModal.js';
+import { openBakeryProfile, closeBakeryModal, buildCategoryFilterBar } from './components/bakeryModal.js';
 // Side-effect only — PWA install/update-check/status-bar-fix/pull-to-refresh/
 // keyboard-scroll all self-execute on import, no exports needed here.
 import './app/lifecycle.js';
@@ -336,6 +337,12 @@ registerActions({ openProfileIfSignedIn });
 // 3b), imported above; kept here since buildBakeryIndex() itself stays
 // (it reads exploreCache, owned by the not-yet-extracted Explore page —
 // see appState.js's own 3b note for why this function didn't move too).
+// Registered below (not a click action — src/components/bakeryModal.js's
+// openBakeryProfile calls it via getAction('buildBakeryIndex')() instead of
+// a forbidden direct import, since openBakeryProfile itself had to move
+// this step and this function couldn't move with it; Phase 4 step 18's
+// modalNext/saveReview precedent, reused here — see bakeryModal.js's own
+// header comment).
 
 function buildBakeryIndex() {
   setAllBakeries({});
@@ -387,6 +394,8 @@ function buildBakeryIndex() {
     }
   });
 }
+
+registerActions({ buildBakeryIndex });
 
 let bakeryViewMode = 'all'; // 'all' | 'nearest' | 'visited'
 let userGeoCoords = null;   // { lat, lng } from geolocation
@@ -787,343 +796,17 @@ async function switchProfileTab(tab, uid) {
   }
 }
 
-// argsFor(cat) builds the full, explicit argument list for one chip's click,
-// including any trailing parameters the target function declares beyond the
-// category — e.g. cat => [uid, cat, ''] for openProfileModal(uid, catFilter,
-// locFilter). This has to be explicit: the clicked chip itself is always
-// appended as one more argument after data-args (our usual convention), so
-// any parameter the caller doesn't fill in here would otherwise silently
-// receive the button element instead of its intended default.
-function buildCategoryFilterBar(items, activeCategory, fnName, argsFor) {
-  const cats = [...new Set(items.map(i => i.category).filter(Boolean))];
-  if (cats.length <= 1) return '';
-  const allBtn = `<button class="filter-chip${!activeCategory ? ' active' : ''}" data-onclick="${fnName}" data-args='${dataArgs(argsFor(''))}'>All</button>`;
-  const catBtns = cats.map(cat => {
-    const label = CATEGORY_TREE[cat]?.label || cat;
-    const emoji = CATEGORY_TREE[cat]?.emoji || '✦';
-    return `<button class="filter-chip${activeCategory === cat ? ' active' : ''}" data-onclick="${fnName}" data-args='${dataArgs(argsFor(cat))}'>${emoji} ${label}</button>`;
-  }).join('');
-  return `<div class="filter-bar">${allBtn}${catBtns}</div>`;
-}
-
-async function fetchPlaceDetails(placeId) {
-  if (!placeId || !GOOGLE_MAPS_KEY) return null;
-  try {
-    const res = await fetch(`https://places.googleapis.com/v1/places/${placeId}`, {
-      headers: {
-        'X-Goog-Api-Key': GOOGLE_MAPS_KEY,
-        'X-Goog-FieldMask': 'id,displayName,formattedAddress,nationalPhoneNumber,internationalPhoneNumber,websiteUri,regularOpeningHours,location,rating,userRatingCount'
-      }
-    });
-    if (!res.ok) return null;
-    return await res.json();
-  } catch(e) { return null; }
-}
-
-function buildOpeningHoursHTML(openingHours) {
-  if (!openingHours?.weekdayDescriptions?.length) return '';
-  const days = openingHours.weekdayDescriptions;
-  const todayIdx = (new Date().getDay() + 6) % 7; // Mon=0 … Sun=6
-  const isOpenNow = openingHours.openNow;
-  const statusBadge = isOpenNow !== undefined
-    ? `<span class="bakery-hours-status ${isOpenNow ? 'open' : 'closed'}">${isOpenNow ? 'Open now' : 'Closed'}</span>`
-    : '';
-  const daysHTML = days.map((d, i) => {
-    const [day, ...rest] = d.split(': ');
-    return `<div class="bakery-hours-day${i === todayIdx ? ' today' : ''}">
-      <span>${day}</span><span>${rest.join(': ') || 'Closed'}</span>
-    </div>`;
-  }).join('');
-  return `
-    <div>
-      <button class="bakery-hours-toggle" data-onclick="toggleBakeryHours">
-        <span class="bakery-info-icon">🕐</span>
-        <span>Opening hours</span>
-        ${statusBadge}
-        <span class="bakery-hours-chevron">▼</span>
-      </button>
-      <div class="bakery-hours-list">${daysHTML}</div>
-    </div>`;
-}
-
-function toggleBakeryHours(btn) {
-  const list = btn.nextElementSibling;
-  const chevron = btn.querySelector('.bakery-hours-chevron');
-  const isOpen = list.classList.toggle('open');
-  chevron.classList.toggle('open', isOpen);
-}
-
-function buildBakeryMapHTML(placeId, lat, lng, name) {
-  if (placeId && GOOGLE_MAPS_KEY) {
-    return `<iframe class="bakery-map" loading="lazy"
-      src="https://www.google.com/maps/embed/v1/place?key=${GOOGLE_MAPS_KEY}&q=place_id:${placeId}&zoom=15"
-      allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe>`;
-  }
-  if (lat && lng && GOOGLE_MAPS_KEY) {
-    return `<iframe class="bakery-map" loading="lazy"
-      src="https://www.google.com/maps/embed/v1/view?key=${GOOGLE_MAPS_KEY}&center=${lat},${lng}&zoom=15"
-      allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe>`;
-  }
-  return '';
-}
-
-let bakeryActiveCatFilter = '';
-
-async function openBakeryProfile(bakeryName, catFilter, googleData) {
-  buildBakeryIndex();
-  let b = allBakeries[bakeryName];
-
-  if (!b && googleData) {
-    // Not yet reviewed on Crumbz — build a synthetic bakery record from Google data
-    b = {
-      name: bakeryName,
-      address: googleData.address || '',
-      placeId: googleData.placeId || null,
-      lat: googleData.lat || null,
-      lng: googleData.lng || null,
-      items: [],
-      totalScore: 0
-    };
-  }
-
-  if (!b) {
-    // Bakery exists in name but has no items and no Google data — show basic empty state
-    document.getElementById('bakeryModalTitle').textContent = bakeryName;
-    document.getElementById('bakeryModal').classList.add('open');
-    lockScroll();
-    document.getElementById('bakeryModalContent').innerHTML = `
-      <div class="bakery-profile-header">
-        <div class="bakery-profile-name">${bakeryName}</div>
-      </div>
-      <div class="bakery-profile-body">
-        <div class="empty-state"><div class="empty-state-icon">🥐</div><div class="empty-state-title">No reviews yet</div></div>
-      </div>`;
-    return;
-  }
-  bakeryActiveCatFilter = catFilter || '';
-  document.getElementById('bakeryModalTitle').textContent = bakeryName;
-  document.getElementById('bakeryModal').classList.add('open');
-  lockScroll();
-
-  // Fetch blurb from Firestore
-  let blurb = b.blurb || '';
-  try {
-    const { db, doc, getDoc } = fb;
-    const snap = await getDoc(doc(db, 'bakeries', encodeURIComponent(bakeryName)));
-    if (snap.exists()) blurb = snap.data().blurb || '';
-  } catch(e) {}
-
-  const avg = b.items.length ? (b.totalScore / b.items.length).toFixed(1) : '–';
-  const sortedItems = [...b.items].sort((x,y) => (y.communityAvg||y.overallRating||0) - (x.communityAvg||x.overallRating||0));
-  const canEdit = !!currentUser;
-  const isOwner = ownsBakery(bakeryName);
-  const canManage = isOwner;
-
-  const filtered = bakeryActiveCatFilter
-    ? sortedItems.filter(i => i.category === bakeryActiveCatFilter)
-    : sortedItems;
-
-  const catFilterBar = buildCategoryFilterBar(
-    sortedItems,
-    bakeryActiveCatFilter,
-    'openBakeryProfile',
-    cat => [bakeryName, cat, null]
-  );
-
-  const itemsHTML = filtered.map(item => {
-    const catDisp = getCategoryDisplay(item);
-    const score = item.communityAvg ? item.communityAvg.toFixed(1) : (item.overallRating ? item.overallRating.toFixed(1) : '–');
-    const thumb = item.photoURL
-      ? `<div class="bakery-item-thumb"><img src="${item.photoURL}" alt="${item.name}"></div>`
-      : `<div class="bakery-item-thumb">${catDisp.emoji}</div>`;
-    const rec2 = item.itemRecordId ? allItemRecords.find(r => r.id === item.itemRecordId) : null;
-    const avgP2 = rec2?.avgPrice ?? item.price ?? null;
-    const avgPStr = avgP2 !== null ? ('£' + parseFloat(avgP2).toFixed(2) + (rec2 && rec2.priceCount > 1 ? ' avg' : '')) : '';
-    return `
-      <div class="bakery-item-row" data-onclick="closeBakeryModal,openDetail" data-args='${dataArgs([item.id])}'>
-        ${thumb}
-        <div class="bakery-item-info">
-          <div class="bakery-item-name">${item.name || 'Unknown bake'}</div>
-          <div class="bakery-item-meta">${catDisp.sub || catDisp.main} · ${item.userName || 'Anonymous'}${avgPStr ? ` · <span style="color:var(--sage);font-weight:600;">${avgPStr}</span>` : ''}</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-          <div class="bakery-item-score">${score}</div>
-        </div>
-      </div>`;
-  }).join('');
-
-  // Load full bakery data including cover photo, social links
-  let fullBakeryData = {};
-  try {
-    const { db, doc, getDoc } = fb;
-    const bSnap = await getDoc(doc(db, 'bakeries', encodeURIComponent(bakeryName)));
-    if (bSnap.exists()) fullBakeryData = bSnap.data();
-  } catch(e) {}
-
-  // Find placeId from items
-  const placeId = b.placeId || fullBakeryData.placeId || null;
-  const lat = b.lat || null;
-  const lng = b.lng || null;
-
-  // Fetch Google Place Details (phone, hours, website)
-  let placeDetails = null;
-  if (placeId) placeDetails = await fetchPlaceDetails(placeId);
-
-  const coverPhoto = fullBakeryData.coverPhotoURL
-    ? `<img src="${fullBakeryData.coverPhotoURL}" class="bakery-cover" alt="${bakeryName}">`
-    : '';
-
-  // Map
-  const mapHTML = buildBakeryMapHTML(placeId, lat, lng, bakeryName);
-
-  // Info panel — website, phone, hours
-  const websiteUrl = placeDetails?.websiteUri || fullBakeryData.website || null;
-  const phone = placeDetails?.internationalPhoneNumber || placeDetails?.nationalPhoneNumber || null;
-  const hoursHTML = buildOpeningHoursHTML(placeDetails?.regularOpeningHours);
-  const googleRating = placeDetails?.rating;
-  const googleReviewCount = placeDetails?.userRatingCount;
-
-  const infoPanelRows = [];
-  if (websiteUrl) {
-    const display = websiteUrl.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '');
-    infoPanelRows.push(`<div class="bakery-info-row">
-      <span class="bakery-info-icon">🌐</span>
-      <a href="${websiteUrl}" target="_blank" rel="noopener" class="bakery-info-link">${display}</a>
-    </div>`);
-  }
-  if (fullBakeryData.instagram) {
-    infoPanelRows.push(`<div class="bakery-info-row">
-      <span class="bakery-info-icon">📸</span>
-      <a href="https://instagram.com/${fullBakeryData.instagram}" target="_blank" rel="noopener" class="bakery-info-link">@${fullBakeryData.instagram}</a>
-    </div>`);
-  }
-  if (phone) {
-    infoPanelRows.push(`<div class="bakery-info-row">
-      <span class="bakery-info-icon">📞</span>
-      <a href="tel:${phone.replace(/\s/g,'')}" class="bakery-info-link">${phone}</a>
-    </div>`);
-  }
-  if (b.address) {
-    const directionsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(bakeryName + ' ' + b.address)}${placeId ? `&query_place_id=${placeId}` : ''}`;
-    infoPanelRows.push(`<div class="bakery-info-row">
-      <span class="bakery-info-icon">📍</span>
-      <span style="color:var(--text-muted);">${b.address}</span>
-      <a href="${directionsUrl}" target="_blank" rel="noopener" style="margin-left:8px;font-size:0.78rem;color:var(--caramel);font-weight:600;text-decoration:none;">Directions ↗</a>
-    </div>`);
-  }
-  if (hoursHTML) infoPanelRows.push(hoursHTML);
-  if (googleRating) {
-    infoPanelRows.push(`<div class="bakery-info-row">
-      <span class="bakery-info-icon">⭐</span>
-      <span style="color:var(--text-muted);">${googleRating} on Google${googleReviewCount ? ` (${googleReviewCount.toLocaleString()} reviews)` : ''}</span>
-    </div>`);
-  }
-
-  const infoPanelHTML = infoPanelRows.length
-    ? `<div class="bakery-info-panel">${infoPanelRows.join('')}</div>`
-    : '';
-
-  const socialHTML = ''; // now handled in info panel
-
-  const isClaimed = !!fullBakeryData.ownedBy;
-  const claimedBadge = isClaimed ? `<span class="claimed-badge">✓ Claimed</span>` : '';
-
-  try { document.getElementById('bakeryModalContent').innerHTML = `
-    ${mapHTML}
-    ${infoPanelHTML}
-    ${coverPhoto}
-    <div class="bakery-profile-header">
-      <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
-        <div>
-          <div class="bakery-profile-name">${bakeryName}${claimedBadge}</div>
-        </div>
-        ${isOwner ? `<button class="btn-caramel" style="font-size:0.78rem;padding:7px 12px;white-space:nowrap;flex-shrink:0;" data-onclick="closeBakeryModal,openBakeryEditModal" data-args='${dataArgs([bakeryName])}'>✏️ Edit page</button>` : ''}
-        ${currentUser ? `<button class="bookmark-btn${isBookmarked(bakeryName) ? ' saved' : ''}" id="bakeryModalBookmarkBtn" data-onclick="toggleBookmark" data-args='${dataArgs([bakeryName, b.address || ''])}' title="${isBookmarked(bakeryName) ? 'Remove bookmark' : 'Save bakery'}">🔖</button>` : ''}
-      </div>
-      ${socialHTML}
-      <div class="bakery-profile-scores" style="margin-top:16px;">
-        <div class="bakery-profile-score">
-          <div class="bakery-profile-score-num">${avg}</div>
-          <div class="bakery-profile-score-label">Avg rating</div>
-        </div>
-        <div class="bakery-profile-score">
-          <div class="bakery-profile-score-num">${b.items.length}</div>
-          <div class="bakery-profile-score-label">Reviews</div>
-        </div>
-        <div class="bakery-profile-score">
-          <div class="bakery-profile-score-num">${new Set(b.items.map(i=>i.category)).size}</div>
-          <div class="bakery-profile-score-label">Item types</div>
-        </div>
-      </div>
-    </div>
-    <div class="bakery-profile-body">
-      <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
-        ${canManage ? `<button class="btn-caramel" style="font-size:0.82rem;padding:8px 16px;" data-onclick="closeBakeryModal,openManageBakeryModal" data-args='${dataArgs([bakeryName])}'>✏️ Edit page</button>` : ''}
-        ${canManage ? `<button class="btn-espresso" style="font-size:0.82rem;padding:8px 16px;" data-onclick="closeBakeryModal,openManageShopModal" data-args='${dataArgs([bakeryName])}'>🛍️ Manage shop</button>` : ''}
-        ${canManage ? `<button class="btn-espresso" style="font-size:0.82rem;padding:8px 16px;" data-onclick="openManagePreordersModal" data-args='${dataArgs([bakeryName])}'>🗓️ Manage pre-orders</button>` : ''}
-      </div>
-      ${blurb ? `<div class="bakery-blurb-section"><div class="bakery-blurb-text">"${blurb}"</div></div>` : (!isOwner ? '' : `<div class="bakery-blurb-section"><div class="bakery-blurb-text" style="color:var(--text-muted);font-style:normal;">No description yet.</div></div>`)}
-      <div class="bakery-profile-tabs">
-        <div class="profile-tab active" data-onclick="switchBakeryTab" data-args='${dataArgs(['reviews', bakeryName])}'>Reviews</div>
-        <div class="profile-tab" data-onclick="switchBakeryTab" data-args='${dataArgs(['shop', bakeryName])}'>🛍️ Shop</div>
-        <div class="profile-tab" data-onclick="switchBakeryTab" data-args='${dataArgs(['preorder', bakeryName])}'>🗓️ Pre-order</div>
-      </div>
-      <div id="bakeryTabContent">
-      ${catFilterBar}
-      <div class="bakery-items-title">${bakeryActiveCatFilter ? CATEGORY_TREE[bakeryActiveCatFilter]?.label + ' reviews' : 'All reviews'} (${filtered.length})</div>
-      ${b.items.length === 0
-        ? `<div class="empty-state" style="padding:32px 0;">
-            <div class="empty-state-icon">🥐</div>
-            <div class="empty-state-title">Not yet reviewed on Crumbz</div>
-            <div class="empty-state-text">Be the first to try something here and share your rating.</div>
-            <button class="btn-espresso" style="margin-top:14px;" data-onclick="closeBakeryModal,openAddModalForBakery" data-args='${dataArgs([bakeryName, b.address || '', b.placeId || '', b.lat || '', b.lng || ''])}'>+ Be first to review</button>
-          </div>`
-        : `<div>${itemsHTML || '<div class="empty-state" style="padding:24px 0;"><div class="empty-state-icon">🥐</div><div class="empty-state-title">No reviews in this category</div></div>'}</div>`}
-      </div>
-    </div>`; } catch(err) { console.error('Bakery render error:', err); document.getElementById('bakeryModalContent').innerHTML = '<div style="padding:24px;">Error loading bakery. Check console.</div>'; }
-}
-
-function closeBakeryModal() {
-  document.getElementById('bakeryModal').classList.remove('open');
-  unlockScroll();
-}
-
-async function switchBakeryTab(tab, bakeryName, tabEl) {
-  document.querySelectorAll('.bakery-profile-tabs .profile-tab').forEach(t => t.classList.remove('active'));
-  if (tabEl) tabEl.classList.add('active');
-  const content = document.getElementById('bakeryTabContent');
-  if (!content) return;
-  if (tab === 'reviews') {
-    openBakeryProfile(bakeryName, bakeryActiveCatFilter);
-    return;
-  }
-  if (tab === 'preorder') {
-    content.innerHTML = '<div style="text-align:center;padding:32px;"><div class="spinner" style="margin:0 auto;"></div></div>';
-    await renderPreorderTab(content, bakeryName);
-    return;
-  }
-  // Shop tab
-  content.innerHTML = '<div style="text-align:center;padding:32px;"><div class="spinner" style="margin:0 auto;"></div></div>';
-  await loadProducts();
-  const bakeryProducts = allProducts.filter(p => p.bakeryName === bakeryName && p.available !== false);
-  if (!bakeryProducts.length) {
-    content.innerHTML = '<div class="empty-state" style="padding:32px 0;"><div class="empty-state-icon">🛍️</div><div class="empty-state-title">No products yet</div><div class="empty-state-text">This bakery hasn\'t added any merchandise yet.</div></div>';
-    return;
-  }
-  content.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;padding-top:8px;">${bakeryProducts.map(p => productCardHTML(p, false)).join('')}</div>`;
-}
-
-// Bakery profile modal's opening-hours toggle. editBakeryBlurb/
-// saveBakeryBlurb (an inline blurb-edit UI) were deleted rather than
-// converted — dead code with zero call sites anywhere, and even if
-// something had called it, editBakeryBlurb's own target
-// (getElementById('bakeryBlurbSection')) doesn't exist in the real
-// template (only a similarly-named CSS *class*, `bakery-blurb-section`, on
-// the actual read-only blurb display, `:1821`) — it would have thrown.
-// Blurb editing is already fully handled by the real "✏️ Edit page" button
-// (`openManageBakeryModal`, `manageBakeryBlurb` field), which has worked
-// this whole time regardless.
-registerActions({ toggleBakeryHours });
+// buildCategoryFilterBar/fetchPlaceDetails/buildOpeningHoursHTML/
+// toggleBakeryHours/buildBakeryMapHTML/openBakeryProfile/closeBakeryModal/
+// switchBakeryTab moved to src/components/bakeryModal.js (2026-08-25, Phase
+// 5 step 21) — buildCategoryFilterBar imported below (still needed here by
+// openProfileModal); the rest are only called via delegated markup or from
+// within bakeryModal.js itself, so no import needed for them. This is the
+// FILTER HELPERS "splits three ways" grab-bag the plan already flagged —
+// see bakeryModal.js's own header comment for the full reasoning, including
+// why openBakeryProfile now calls getAction('buildBakeryIndex')() instead
+// of a direct import (buildBakeryIndex stays here, still blocked on
+// exploreCache per the Phase 0 step 3b note below).
 
 // ─── LEADERBOARD ──────────────────────────────────────────────────────────────
 let lbCurrentMode = 'items';
@@ -4106,11 +3789,10 @@ registerActions({ switchDmTab });
 
 // ─── BOOKMARKS ────────────────────────────────────────────────────────────────
 // userBookmarks/loadBookmarks moved to src/state/appState.js (2026-08-24,
-// Phase 0 step 3c) — imported above.
-
-function isBookmarked(bakeryName) {
-  return !!userBookmarks[bakeryName];
-}
+// Phase 0 step 3c) — imported above. isBookmarked moved there too
+// (2026-08-25, Phase 5 step 21) — a trivial derived-state helper, same
+// treatment as isAdmin/isBusiness/ownsBakery; see appState.js's own
+// comment for why it went there instead of bakeryModal.js.
 
 async function toggleBookmark(bakeryName, address, btnEl) {
   if (!currentUser) { openAuthModal(); return; }
@@ -4282,11 +3964,13 @@ async function renderSavedTab(container) {
 // filterShareCandidates/sendSharedReview now register from
 // src/components/shareReviewModal.js (Phase 5 step 20) instead of here.
 // removeSavedItem/removeBookmarkAndRefreshSaved had no call sites outside
-// this section, so neither needs WINDOW EXPORTS — closeProfileModal/
-// openBakeryProfile stay there (other unconverted call sites elsewhere);
-// openDetail/switchProfileTab/toggleBookmark just came out of WINDOW
-// EXPORTS entirely, since renderSavedTab's raw handlers were their last
-// remaining call sites (see the comments where each is registered, above).
+// this section, so neither needs WINDOW EXPORTS — closeProfileModal stays
+// there (other unconverted call sites elsewhere); openBakeryProfile came
+// out of WINDOW EXPORTS entirely too, now that it registers from
+// src/components/bakeryModal.js (Phase 5 step 21); openDetail/
+// switchProfileTab/toggleBookmark also came out of WINDOW EXPORTS
+// entirely, since renderSavedTab's raw handlers were their last remaining
+// call sites (see the comments where each is registered, above).
 registerActions({ removeSavedItem, removeBookmarkAndRefreshSaved });
 
 // ─── PRE-ORDER DISCOVERY PAGE ─────────────────────────────────────────────────
@@ -4502,6 +4186,12 @@ function closeBakeryModalIfOpen() {
 // ─── MY PRE-ORDERS (burger menu) ─────────────────────────────────────────────
 let myPendingPreorders = [];
 
+// Registered below (not a click action — src/components/bakeryModal.js's
+// reserveOffering calls it via getAction('loadMyPreorders')() instead of a
+// forbidden direct import, since reserveOffering itself had to move this
+// step and this function couldn't move with it — Phase 7 step 31's own
+// future cluster; Phase 4 step 18's modalNext/saveReview precedent, reused
+// here — see bakeryModal.js's own header comment).
 async function loadMyPreorders() {
   if (!currentUser || !fb) return;
   const { db, collection, query, where, getDocs } = fb;
@@ -4517,6 +4207,8 @@ async function loadMyPreorders() {
     updatePreorderBadge();
   } catch(e) { console.warn('Preorders load error:', e); }
 }
+
+registerActions({ loadMyPreorders });
 
 function updatePreorderBadge() {
   const count = myPendingPreorders.length;
@@ -4637,198 +4329,15 @@ function viewOrdersFromMyPreordersSheet() {
 // renderOrdersTab/parseSlotStartTime moved to src/components/reservations.js
 // (2026-08-24, Phase 3 step 16) — imported above. cancelReservation stays
 // here — see reservations.js's own header comment for why.
-
-// ── Customer: browse & reserve ─────────────────────────────────────────────────
-async function renderPreorderTab(container, bakeryName) {
-  if (!fb) { container.innerHTML = '<div class="empty-state"><div class="empty-state-title">Not available</div></div>'; return; }
-  const { db, collection, query, where, getDocs } = fb;
-  const now = new Date();
-  const todayStr = now.toISOString().split('T')[0];
-
-  try {
-    const snap = await getDocs(query(collection(db, 'preorderOfferings'),
-      where('bakeryName','==',bakeryName), where('active','==',true)));
-
-    // Filter to upcoming dates only, check goLiveAt
-    const offerings = snap.docs.map(d => ({id: d.id, ...d.data()}))
-      .filter(o => {
-        if (o.collectDate < todayStr) return false; // past
-        // Check go-live time
-        const goLive = o.goLiveAt ? new Date(o.goLiveAt) : (() => {
-          const d = new Date(o.collectDate + 'T00:00:00');
-          d.setDate(d.getDate() - 1); d.setHours(8,0,0,0); return d;
-        })();
-        return now >= goLive;
-      })
-      .sort((a,b) => a.collectDate.localeCompare(b.collectDate) || a.slot.localeCompare(b.slot));
-
-    // Check if there are upcoming not-yet-live offerings
-    const upcomingSnap = await getDocs(query(collection(db, 'preorderOfferings'),
-      where('bakeryName','==',bakeryName), where('active','==',true)));
-    const notYetLive = upcomingSnap.docs.map(d => ({id:d.id,...d.data()})).filter(o => {
-      if (o.collectDate < todayStr) return false;
-      const goLive = o.goLiveAt ? new Date(o.goLiveAt) : (() => {
-        const d = new Date(o.collectDate + 'T00:00:00');
-        d.setDate(d.getDate() - 1); d.setHours(8,0,0,0); return d;
-      })();
-      return now < goLive;
-    });
-
-    if (!offerings.length) {
-      const teaser = notYetLive.length ? `<div style="font-size:0.78rem;color:var(--text-muted);margin-top:8px;">🕐 Pre-orders open ${new Date(notYetLive[0].collectDate + 'T00:00:00').toLocaleDateString('en-GB',{weekday:'long'})} at 8am</div>` : '';
-      container.innerHTML = `<div class="empty-state" style="padding:32px 0;">
-        <div class="empty-state-icon">🗓️</div>
-        <div class="empty-state-title">No pre-orders available yet</div>
-        <div class="empty-state-text">Check back later — this bakery hasn't listed any items yet.</div>
-        ${teaser}
-      </div>`;
-      return;
-    }
-
-    // Group by collectDate
-    const byDate = {};
-    offerings.forEach(o => {
-      if (!byDate[o.collectDate]) byDate[o.collectDate] = [];
-      byDate[o.collectDate].push(o);
-    });
-
-    container.innerHTML = Object.entries(byDate).map(([date, dateOfferings]) => {
-      const dateLabel = new Date(date + 'T12:00:00').toLocaleDateString('en-GB', {weekday:'long', day:'numeric', month:'long'});
-      return `
-        <div style="padding:8px 0 4px;font-size:0.82rem;font-weight:700;color:var(--espresso);">Collection: ${dateLabel}</div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;margin-bottom:20px;">
-          ${dateOfferings.map(o => {
-            const remaining = o.remaining ?? o.quantity ?? 0;
-            const soldOut = remaining <= 0;
-            return `<div class="preorder-card">
-              ${o.photoURL ? `<img src="${o.photoURL}" class="preorder-img" alt="${o.name}">` : `<div class="preorder-img">🥐</div>`}
-              <div class="preorder-body">
-                <div class="preorder-name">${o.name}</div>
-                ${o.description ? `<div class="preorder-desc">${o.description}</div>` : ''}
-                <div class="preorder-meta">
-                  <span class="preorder-slot">🕐 ${o.slot}</span>
-                  <span class="preorder-qty${remaining <= 2 && !soldOut ? ' low' : ''}">${soldOut ? 'Sold out' : `${remaining} left`}</span>
-                </div>
-                <div style="display:flex;align-items:center;justify-content:space-between;">
-                  <span class="preorder-price">£${parseFloat(o.price||0).toFixed(2)}</span>
-                  ${soldOut
-                    ? `<button class="btn-ghost" disabled style="opacity:0.4;font-size:0.78rem;">Sold out</button>`
-                    : currentUser
-                      ? `<button class="btn-espresso" style="font-size:0.78rem;padding:7px 14px;" data-onclick="openReserveModal" data-args='${dataArgs([o.id, bakeryName, o.name, o.slot, date, o.remaining??o.quantity??0, o.maxPerPerson||2])}'>Reserve</button>`
-                      : `<button class="btn-espresso" style="font-size:0.78rem;padding:7px 14px;" data-onclick="openAuthModal">Sign in</button>`}
-                </div>
-              </div>
-            </div>`;
-          }).join('')}
-        </div>`;
-    }).join('');
-  } catch(e) {
-    container.innerHTML = '<div style="padding:16px;color:var(--text-muted);">Could not load pre-orders.</div>';
-    console.error(e);
-  }
-}
-
-
-function openReserveModal(offeringId, bakeryName, offeringName, slot, collectDate, remaining, maxPerPerson) {
-  const max = Math.min(remaining, maxPerPerson || 2);
-  if (max <= 1) {
-    reserveOffering(offeringId, bakeryName, offeringName, slot, collectDate, 1);
-    return;
-  }
-  const overlay = document.createElement('div');
-  overlay.id = 'reserveModalOverlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:2000;display:flex;align-items:flex-end;justify-content:center;';
-  const options = Array.from({length: max}, (_,i) => i+1).map(n =>
-    `<button data-onclick="closeReserveModal,reserveOffering" data-args='${dataArgs([offeringId, bakeryName, offeringName, slot, collectDate, n])}'
-      style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:14px 20px;border:none;border-bottom:1px solid var(--border);background:none;cursor:pointer;font-size:0.92rem;color:var(--espresso);"
-      onmouseover="this.style.background='var(--parchment)'" onmouseout="this.style.background='none'">
-      <span>${n}× ${offeringName}</span>
-      <span class="qty-price-${offeringId}-${n}" style="font-weight:700;color:var(--caramel);">…</span>
-    </button>`).join('');
-  overlay.innerHTML = `
-    <div style="background:var(--cream-white);border-radius:var(--radius) var(--radius) 0 0;width:100%;max-width:480px;">
-      <div style="padding:16px 20px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
-        <div>
-          <div style="font-family:'Playfair Display',serif;font-size:1rem;font-weight:700;color:var(--espresso);">How many would you like?</div>
-          <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px;">${offeringName} · max ${maxPerPerson} per person · ${remaining} left</div>
-        </div>
-        <button data-onclick="closeReserveModal" style="background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--text-muted);">✕</button>
-      </div>
-      <div>${options}</div>
-      <div style="padding:12px 20px 32px;">
-        <button class="btn-ghost" style="width:100%;" data-onclick="closeReserveModal">Cancel</button>
-      </div>
-    </div>`;
-  document.body.appendChild(overlay);
-  overlay.addEventListener('click', e => { if (e.target === overlay) closeReserveModal(); });
-  // Load price
-  if (fb) {
-    const { db, doc, getDoc } = fb;
-    getDoc(doc(db, 'preorderOfferings', offeringId)).then(snap => {
-      if (!snap.exists()) return;
-      const price = snap.data().price || 0;
-      Array.from({length: max}, (_,i) => i+1).forEach(n => {
-        document.querySelectorAll(`.qty-price-${offeringId}-${n}`).forEach(el => {
-          el.textContent = `£${(price * n).toFixed(2)}`;
-        });
-      });
-    });
-  }
-}
-
-function closeReserveModal() {
-  document.getElementById('reserveModalOverlay')?.remove();
-}
-
-async function reserveOffering(offeringId, bakeryName, offeringName, slot, collectDate, quantity) {
-  quantity = quantity || 1;
-  if (!currentUser || !fb) { openAuthModal(); return; }
-  const { db, doc, getDoc, updateDoc, collection, addDoc, serverTimestamp, query, where, getDocs } = fb;
-  try {
-    const offeringRef = doc(db, 'preorderOfferings', offeringId);
-    const offeringSnap = await getDoc(offeringRef);
-    if (!offeringSnap.exists()) throw new Error('Offering no longer exists');
-    const data = offeringSnap.data();
-    const remaining = data.remaining ?? data.quantity ?? 0;
-    const maxPerPerson = data.maxPerPerson || 2;
-    if (remaining <= 0 || quantity > remaining) throw new Error('SOLD_OUT');
-    if (quantity > maxPerPerson) { showToast(`Maximum ${maxPerPerson} per person`); return; }
-    const existingSnap = await getDocs(query(
-      collection(db, 'reservations'),
-      where('userId', '==', currentUser.uid),
-      where('offeringId', '==', offeringId),
-      where('status', '==', 'pending')
-    ));
-    if (!existingSnap.empty) { showToast('You already have a reservation for this item'); return; }
-    await updateDoc(offeringRef, { remaining: remaining - quantity });
-    // Note: this updateDoc requires the Firestore rule to allow authenticated users to update 'remaining'
-    // Make sure your rules allow: allow update: if request.auth != null && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['remaining']);
-    await addDoc(collection(db, 'reservations'), {
-      userId: currentUser.uid,
-      userName: currentUser.displayName || currentUser.email?.split('@')[0] || 'Customer',
-      userEmail: currentUser.email || '',
-      bakeryName, offeringId, offeringName, slot, collectDate,
-      quantity, status: 'pending',
-      price: data.price,
-      totalPrice: (data.price || 0) * quantity,
-      createdAt: serverTimestamp()
-    });
-    showToast(`🎉 Reserved ${quantity > 1 ? quantity + '× ' : ''}${offeringName}! Collect ${slot}. Pay in store.`);
-    loadMyPreorders(); // Update burger menu badge
-    const bakeryContent = document.getElementById('bakeryTabContent');
-    if (bakeryContent) await renderPreorderTab(bakeryContent, bakeryName);
-    const poResults = document.getElementById('preorderPageResults');
-    if (poResults) await renderPreorderPage();
-  } catch(e) {
-    if (e.message === 'SOLD_OUT') showToast('😔 Sorry — not enough stock. Someone got there first.');
-    else if (e.message !== 'Offering no longer exists') { showToast('Could not complete reservation'); console.error(e); }
-  }
-}
-
-
-// parseSlotStartTime/renderOrdersTab moved to src/components/reservations.js
-// (2026-08-25, Phase 3 step 16) — imported above. cancelReservation stays
-// here — see reservations.js's own header comment for why.
+// renderPreorderTab/openReserveModal/closeReserveModal/reserveOffering (the
+// "Reserve" flow from a bakery profile's own Pre-order tab, deliberately
+// left out of reservations.js at step 16) moved to
+// src/components/bakeryModal.js (2026-08-25, Phase 5 step 21) — reserveOffering
+// calls getAction('loadMyPreorders')()/getAction('renderPreorderPage')()
+// instead of importing them directly; see that file's own header comment.
+// cancelReservation itself stays here — see reservations.js's own header
+// comment for why (its own blocker, loadMyPreorders, is unrelated to this
+// step's reserveOffering move).
 async function cancelReservation(reservationId, offeringId) {
   if (!confirm('Cancel this reservation? This cannot be undone.')) return;
   if (!fb) return;
@@ -5073,13 +4582,13 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeAddMo
 // src/pages/shop.js now (Phase 2 step 11). closeDetailModal registers from
 // src/components/itemDetailModal.js now (Phase 5 step 19).
 // closeShareReviewModal registers from src/components/shareReviewModal.js
-// now (Phase 5 step 20).
+// now (Phase 5 step 20). closeBakeryModal/closeReserveModal register from
+// src/components/bakeryModal.js now (Phase 5 step 21).
 registerActions({
-  closeBakeryModal,
   closeManageShopModal, closeProductModal,
   closeProfileModal, closeBakeryEditModal,
   closeManageBakeryModal,
-  closeFeatureRequestModal, closeCalDayModal, closeReserveModal,
+  closeFeatureRequestModal, closeCalDayModal,
 });
 
 // showPage still has a real raw call site (index.html's profileEditBtn,
@@ -5123,11 +4632,13 @@ registerActions({ submitFeatureRequest, toggleFeatureVote, deleteFeatureRequest,
 
 // Bakeries page. renderBakeries stays in WINDOW EXPORTS — the location
 // filter's onchange is converted, but renderBakeries is also called from
-// plenty of plain JS elsewhere. openBakeryProfile has ~25 call sites across
-// the file; only the bakery card's onclick is converted here — the rest
-// belong to whichever section renders them (People, Explore, etc.), so it
-// also stays in WINDOW EXPORTS.
-registerActions({ setBakeryView, openBakeryProfile, toggleBookmark, renderBakeries });
+// plenty of plain JS elsewhere. openBakeryProfile registers from
+// src/components/bakeryModal.js now (Phase 5 step 21) — this comment's
+// earlier "~25 call sites... stays in WINDOW EXPORTS" claim predates the
+// handler delegation migration's completion (every one of those call
+// sites is now a delegated data-onclick, not a raw handler, so the global
+// registry resolves it regardless of which file registers it).
+registerActions({ setBakeryView, toggleBookmark, renderBakeries });
 
 // People page view toggle + rankings/location-filter onchange handlers now
 // register from src/pages/people.js itself (Phase 3 step 15) — setPeopleView/
@@ -5147,37 +4658,41 @@ registerActions({
   switchProfileTab, followAndRefreshProfile, followAndRefreshPeople,
 });
 
-// buildCategoryFilterBar + openBakeryProfile. buildCategoryFilterBar now
-// takes an argsFor(cat) callback instead of a fixedArgs array, so each
-// caller explicitly fills every parameter the target function declares —
-// this matters because the clicked chip is always appended as one more
-// trailing argument, and openProfileModal/openBakeryProfile both have an
-// extra optional parameter (locFilter/googleData) that would otherwise
-// silently receive the chip element instead of '' / null.
-// switchBakeryTab and openManageShopModal had no call sites anywhere else
-// in the file, so they've been removed from WINDOW EXPORTS entirely (not
-// just registered) — first functions to be fully
-// migrated off the global. openManageBakeryModal's last raw call site was
-// ADMIN PANEL RENDERERS' bakeries table (renderAdminBakeriesHTML);
-// openBakeryEditModal's was BUSINESS — BAKERY PAGE MANAGEMENT's own
-// settings-page "Edit page" button (renderBusinessSection) — both now
-// delegated too, so both come out of WINDOW EXPORTS entirely as well.
-// openProfileModal also verified at zero raw call sites (flagged as
-// pre-existing staleness in two earlier sessions, neither of which touched
-// it either — cleaned up now while already here). openAddModalForBakery
-// registers from src/components/addReviewModal.js now (Phase 4 step 18).
+// buildCategoryFilterBar (imported from src/components/bakeryModal.js) +
+// openProfileModal. buildCategoryFilterBar takes an argsFor(cat) callback
+// instead of a fixedArgs array, so each caller explicitly fills every
+// parameter the target function declares — this matters because the
+// clicked chip is always appended as one more trailing argument, and
+// openProfileModal/openBakeryProfile both have an extra optional parameter
+// (locFilter/googleData) that would otherwise silently receive the chip
+// element instead of '' / null. openManageShopModal had no call sites
+// anywhere else in the file, so it's been removed from WINDOW EXPORTS
+// entirely (not just registered) — first function to be fully migrated off
+// the global. openManageBakeryModal's last raw call site was ADMIN PANEL
+// RENDERERS' bakeries table (renderAdminBakeriesHTML); openBakeryEditModal's
+// was BUSINESS — BAKERY PAGE MANAGEMENT's own settings-page "Edit page"
+// button (renderBusinessSection) — both now delegated too, so both come out
+// of WINDOW EXPORTS entirely as well. openProfileModal also verified at
+// zero raw call sites (flagged as pre-existing staleness in two earlier
+// sessions, neither of which touched it either — cleaned up now while
+// already here). openAddModalForBakery registers from
+// src/components/addReviewModal.js now (Phase 4 step 18). switchBakeryTab
+// registers from src/components/bakeryModal.js now (Phase 5 step 21).
 registerActions({
   openProfileModal, openBakeryEditModal, openManageBakeryModal,
-  openManageShopModal, switchBakeryTab,
+  openManageShopModal,
 });
 
 // Pre-order discovery page. onPoCountryChange/onPoCityChange/poDetectNearest/
-// renderPreorderPage/closeBakeryModalIfOpen/openReserveModal had no call
-// sites anywhere else in the file, so they've been removed from WINDOW
-// EXPORTS entirely.
+// renderPreorderPage/closeBakeryModalIfOpen had no call sites anywhere else
+// in the file, so they've been removed from WINDOW EXPORTS entirely.
+// openReserveModal registers from src/components/bakeryModal.js now (Phase
+// 5 step 21) — renderPreorderPage's own registration here is also what
+// bakeryModal.js's reserveOffering now reaches via
+// getAction('renderPreorderPage')(), see that file's own header comment.
 registerActions({
   onPoCountryChange, onPoCityChange, poDetectNearest, renderPreorderPage,
-  closeBakeryModalIfOpen, openReserveModal,
+  closeBakeryModalIfOpen,
 });
 
 // My pre-orders sheet (burger menu). closeMyPreordersSheet and
@@ -5185,16 +4700,15 @@ registerActions({
 // EXPORTS since they have no call sites outside this sheet's own markup.
 registerActions({ closeMyPreordersSheet, viewOrdersFromMyPreordersSheet });
 
-// Reservations flow: reserve-modal quantity picker and the profile Orders
-// tab's cancel button. reserveOffering/cancelReservation had no call sites
-// outside the markup converted here, so both come out of WINDOW EXPORTS
-// entirely — as does closeReserveModal, whose last remaining raw call site
-// (the quantity-picker buttons) is converted above. markCollected/
-// openEditOffering/deleteOffering (the baker-side Manage Pre-orders modal)
-// now register from src/components/manageOfferingsModal.js instead (Phase 4
-// step 17). expandQR/closeExpandedQR (QR-code tap-to-enlarge and its close
-// button) register from src/components/qrCode.js (Phase 2 step 10).
-registerActions({ reserveOffering, cancelReservation });
+// Profile Orders tab's cancel button. markCollected/openEditOffering/
+// deleteOffering (the baker-side Manage Pre-orders modal) register from
+// src/components/manageOfferingsModal.js instead (Phase 4 step 17).
+// expandQR/closeExpandedQR (QR-code tap-to-enlarge and its close button)
+// register from src/components/qrCode.js (Phase 2 step 10). reserveOffering
+// registers from src/components/bakeryModal.js now (Phase 5 step 21) —
+// cancelReservation stays here, unaffected (different deferral, see
+// reservations.js's own header comment).
+registerActions({ cancelReservation });
 
 // Baker: manage offerings — the whole cluster (tab bar, Upcoming/Historic/
 // Month/Forecast renderers, Add/Edit offering forms, catalogue) moved to
@@ -5277,9 +4791,6 @@ function renderAdminUsers() {
 // reachable from onclick attributes in the original file either.
 Object.assign(window, {
   buildBakeryCoords,
-  buildBakeryMapHTML,
-  buildCategoryFilterBar,
-  buildOpeningHoursHTML,
   closeProfileModal,
   deactivateExploreNearby,
   detectExploreLocation,
@@ -5287,7 +4798,6 @@ Object.assign(window, {
   exploreMapLog,
   fetchGoogleBakeries,
   fetchGoogleBakeriesNearPoint,
-  fetchPlaceDetails,
   geocodeBakeryAddress,
   geocodeMissingBakeries,
   getCrumbBakeriesNearCity,
@@ -5298,12 +4808,9 @@ Object.assign(window, {
   handleSettingsPhoto,
   initExplorePage,
   initPreorderPage,
-  isBookmarked,
   loadLeafletThenMap,
-  loadMyPreorders,
   loadNotifications,
   openAddModal,
-  openBakeryProfile,
   openFeatureRequestModal,
   openSettingsPage,
   populateBakeryLocationFilter,
@@ -5332,7 +4839,6 @@ Object.assign(window, {
   renderLeaderboard,
   renderManageShop,
   renderNotifPanel,
-  renderPreorderTab,
   renderRecentGrid,
   renderSavedTab,
   runExploreNearbySearch,

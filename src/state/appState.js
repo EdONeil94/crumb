@@ -150,6 +150,17 @@ export async function loadFollows() {
 
 export let userBookmarks = {}; // bakeryName -> { id, address }
 
+// Moved here from legacy-app.js's own BOOKMARKS section (2026-08-25, Phase 5
+// step 21, pages/components carving) — a trivial derived-state helper, same
+// pattern as isAdmin/isBusiness/ownsBakery above. It has two external
+// callers post-move (src/components/bakeryModal.js's openBakeryProfile, and
+// legacy-app.js's still-unextracted renderBakeries), so co-locating it with
+// the state it reads sidesteps picking either one as its "home" — zero
+// cycle risk either way, since both are ordinary one-way imports from here.
+export function isBookmarked(bakeryName) {
+  return !!userBookmarks[bakeryName];
+}
+
 export async function loadBookmarks() {
   if (!currentUser || !fb) return;
   const { db, collection, query, where, getDocs } = fb;
