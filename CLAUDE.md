@@ -10,9 +10,10 @@ its own section below), and the **E2E test workflow** — all done on
 
 ## Carving src/legacy-app.js into src/pages/ and src/components/
 
-**Status as of 2026-08-25: Phases 0, 1, and 2 all complete, Phase 3 under
-way** (steps 12-15 of 32 done — `reviewCard.js`, `feed.js`, `follows.js`,
-`people.js`). Phase 3's remaining step (`reservations.js`) not started.
+**Status as of 2026-08-25: Phases 0, 1, 2, and 3 all complete** (steps
+1-16 of 32 done — Phase 3's five: `reviewCard.js`, `feed.js`, `follows.js`,
+`people.js`, `reservations.js`). Phase 4 (`manageOfferingsModal.js`,
+`addReviewModal.js`) not started.
 This is separate from — and comes after — the handler delegation migration
 above; don't conflate the two milestones. Plan approved 2026-08-24 (was
 drafted as a plan-mode file at `~/.claude/plans/logical-painting-kurzweil.md`,
@@ -150,7 +151,10 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   15. `src/pages/people.js` — ✅ **done** (2026-08-25, commit `4d5633e`) —
   moved wholesale (best-covered page in the app); resolved step 14's
   deferred-follow-up decision — see its own extraction-log entry below ·
-  16. `src/components/reservations.js`
+  16. `src/components/reservations.js` — ✅ **done** (2026-08-25, commit
+  `a07cb2e`) — **closes out Phase 3** — split, not clean:
+  `cancelReservation` deferred to Phase 7 step 31, see its own
+  extraction-log entry below
 - **Phase 4 — large but well-tested (the "does this scale" milestone):**
   17. `src/components/manageOfferingsModal.js` (biggest single cluster,
   ~1,020 lines, 11 real-click tests — deepest coverage in the app)
@@ -284,6 +288,51 @@ boundaries — commits happen at the module/stage level throughout.
 
 ### Extraction log (most recent first)
 
+- **`src/components/reservations.js` — step 16** (2026-08-25, commit
+  `a07cb2e`). **Closes out Phase 3.** Split, not clean — flagged before
+  writing any code: moved `parseSlotStartTime` and `renderOrdersTab` (the
+  Profile modal's own Orders tab: pending/past reservations, the 12-hour
+  cancel cutoff display, the tap-to-enlarge QR trigger). `cancelReservation`
+  stayed in `legacy-app.js` — it calls `loadMyPreorders()`, part of the
+  not-yet-extracted "MY PRE-ORDERS (burger menu)" cluster (future
+  `src/components/preordersSheet.js`, Phase 7 step 31 — a *distant* step,
+  unlike most of this plan's imminent-step deferrals, e.g. step 14's
+  1-step wait). Moving `cancelReservation` here would've meant this file
+  importing `loadMyPreorders` back from `legacy-app.js`, while
+  `legacy-app.js` already needs `renderOrdersTab` imported the normal
+  direction (from `switchProfileTab`, itself staying — the Profile modal,
+  future `profileModal.js`, Phase 5 step 22) — a genuine two-file cycle,
+  same shape as `qrCode.js`'s `confirmCollected` deferral (Phase 2 step
+  10). `legacy-app.js` imports `parseSlotStartTime` back too, since
+  `cancelReservation` needs it — an ordinary one-way import, not
+  circular, since nothing in `reservations.js` calls back into
+  `legacy-app.js`.
+  **Scope boundary decided explicitly, not left implicit**: `reserveOffering`/
+  `openReserveModal`/`closeReserveModal`/`renderPreorderTab` — the
+  "Reserve" flow reached from a bakery profile's own Pre-order tab, also
+  reading/writing the `reservations` Firestore collection — were
+  deliberately left out of this file. That's bakery-profile-modal
+  internals (future `src/components/bakeryModal.js`, Phase 5 step 21), a
+  different call path from the Orders-tab flow this file owns, and
+  `tests/reservations.spec.js` itself never exercises it directly (only
+  indirectly, via `tests/utils/preorders.js`'s own setup helper, to create
+  a reservation to then cancel/view) — confirmed by reading the spec
+  before deciding, not assumed from the file's name.
+  Explicitly grepped `index.html` for raw handler references to all 3
+  candidate functions before assuming any `WINDOW EXPORTS` entry was
+  stale, per the step 13 (`switchFeedTab`) lesson — none found.
+  `renderOrdersTab` had a stale `WINDOW EXPORTS` entry (zero raw call
+  sites) — removed; `parseSlotStartTime` was never in that block (no
+  external callers besides this cluster's own two functions, one of which
+  stayed in `legacy-app.js`, importing it back). `cancelReservation`'s own
+  `registerActions()` registration was already correctly separate
+  (untouched, since it isn't moving).
+  Verified: `check:dead-refs` clean, `npm run build` succeeds (45
+  modules), full `test:e2e` 58 passed/13 skipped/0 failed;
+  `reservations.spec.js` re-run in isolation afterward came back a clean
+  5/5 passed/0 skipped, directly confirming the 12-hour cancel cutoff and
+  QR enlarge/close paths across the new module boundary — same
+  verification pattern as step 15.
 - **`src/pages/people.js` — step 15** (2026-08-25, commit `4d5633e`). Moved
   `peopleViewMode`/`setPeopleView`/`computeUserScore`/`computeCountryRank`/
   `populateRankingLocationFilter`/`renderRankings`/`renderPeople` wholesale
