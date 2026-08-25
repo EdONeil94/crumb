@@ -58,6 +58,7 @@ import {
   photoFile, matchedItemRecord,
 } from './components/addReviewModal.js';
 import { openDetail, closeDetailModal } from './components/itemDetailModal.js';
+import { closeShareReviewModal } from './components/shareReviewModal.js';
 // Side-effect only — PWA install/update-check/status-bar-fix/pull-to-refresh/
 // keyboard-scroll all self-execute on import, no exports needed here.
 import './app/lifecycle.js';
@@ -4199,167 +4200,14 @@ async function removeSavedItem(itemId) {
 }
 
 // ─── SHARE REVIEW WITH A FOLLOWED USER ────────────────────────────────────────
-let shareModalCandidates = []; // cached list for current share session
-let shareModalItemId = null;
-
-async function openShareReviewModal(itemId) {
-  if (!currentUser) { openAuthModal(); return; }
-  const item = allItems.find(i => i.id === itemId);
-  if (!item) return;
-  shareModalItemId = itemId;
-
-  const modal = document.getElementById('shareReviewModal');
-  const content = document.getElementById('shareReviewContent');
-  modal.classList.add('open');
-  lockScroll();
-  content.innerHTML = '<div style="text-align:center;padding:24px;"><div class="spinner" style="margin:0 auto;"></div></div>';
-
-  if (!fb) return;
-  const { db, collection, query, where, getDocs } = fb;
-  try {
-    const snap = await getDocs(query(collection(db, 'follows'), where('followerId', '==', currentUser.uid)));
-    const follows = snap.docs.map(d => d.data());
-
-    if (!follows.length) {
-      content.innerHTML = `<div class="empty-state" style="padding:24px 0;">
-        <div class="empty-state-icon">👥</div>
-        <div class="empty-state-title">You're not following anyone yet</div>
-        <div class="empty-state-text">Follow other bakers to share reviews with them.</div>
-      </div>`;
-      return;
-    }
-
-    // Resolve name/photo the same way the Following tab does — profile first, fall back to their reviews
-    const baseCandidates = follows.map(f => {
-      const uid = f.followingId;
-      let name = 'Anonymous', photo = null;
-      if (allProfiles[uid]) {
-        name = allProfiles[uid].displayName || name;
-        photo = allProfiles[uid].photoURL || null;
-      } else {
-        const item2 = allItems.find(i => i.userId === uid);
-        if (item2) { name = item2.userName || name; photo = item2.userPhoto || null; }
-      }
-      const followedAt = f.createdAt?.toDate ? f.createdAt.toDate() : (f.createdAt ? new Date(f.createdAt) : new Date(0));
-      return { uid, name, photo, followedAt, score: 0, lastInteraction: null };
-    });
-
-    // Pull interaction signals from the last 30 days: shares sent + reactions given
-    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const byUid = {};
-    baseCandidates.forEach(c => byUid[c.uid] = c);
-
-    try {
-      const shareSnap = await getDocs(query(collection(db, 'sharedReviews'), where('fromUserId', '==', currentUser.uid)));
-      shareSnap.docs.forEach(d => {
-        const data = d.data();
-        const c = byUid[data.toUserId];
-        if (!c) return;
-        const ts = data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : null);
-        if (!ts || ts < cutoff) return;
-        c.score += 3; // sharing is a strong, deliberate interaction
-        if (!c.lastInteraction || ts > c.lastInteraction) c.lastInteraction = ts;
-      });
-    } catch(e) { console.warn('Share interaction lookup error:', e); }
-
-    try {
-      const reactSnap = await getDocs(query(collection(db, 'reactions'), where('userId', '==', currentUser.uid)));
-      reactSnap.docs.forEach(d => {
-        const data = d.data();
-        const c = byUid[data.targetUserId];
-        if (!c) return;
-        const ts = data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : null);
-        if (!ts || ts < cutoff) return;
-        c.score += 1;
-        if (!c.lastInteraction || ts > c.lastInteraction) c.lastInteraction = ts;
-      });
-    } catch(e) { console.warn('Reaction interaction lookup error:', e); }
-
-    // Rank: highest interaction score first, then most recent interaction, then most recently followed
-    shareModalCandidates = baseCandidates.sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      if (a.lastInteraction && b.lastInteraction) return b.lastInteraction - a.lastInteraction;
-      if (a.lastInteraction) return -1;
-      if (b.lastInteraction) return 1;
-      return b.followedAt - a.followedAt;
-    });
-
-    content.innerHTML = `
-      <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px;">Sharing <strong style="color:var(--espresso);">${item.name || 'this review'}</strong> from ${item.bakeryName || 'this bakery'}</div>
-      <input type="text" class="form-input" id="shareUserSearch" placeholder="Search people you follow…" data-oninput="filterShareCandidates" style="margin-bottom:14px;">
-      <div id="shareUserRows">${renderShareCandidateRows(shareModalCandidates)}</div>`;
-
-    // Focus search for quick typing on desktop
-    setTimeout(() => document.getElementById('shareUserSearch')?.focus(), 200);
-  } catch(e) {
-    content.innerHTML = '<div style="padding:16px;color:var(--text-muted);">Could not load your following list.</div>';
-    console.error(e);
-  }
-}
-
-function renderShareCandidateRows(list) {
-  if (!list.length) {
-    return `<div style="text-align:center;padding:20px 0;color:var(--text-muted);font-size:0.85rem;">No matches</div>`;
-  }
-  return list.map(c => {
-    const initials = (c.name || '?').charAt(0).toUpperCase();
-    const avatarInner = c.photo ? `<img src="${c.photo}" alt="${c.name}">` : initials;
-    const subtitle = c.score > 0
-      ? `<div style="font-size:0.68rem;color:var(--caramel);margin-top:1px;">Recently active together</div>`
-      : '';
-    return `<div class="share-user-row">
-      <div class="share-user-avatar">${avatarInner}</div>
-      <div style="flex:1;min-width:0;">
-        <div class="share-user-name">${c.name}</div>
-        ${subtitle}
-      </div>
-      <button class="btn-espresso" style="font-size:0.78rem;padding:6px 14px;flex-shrink:0;" data-onclick="sendSharedReview" data-args='${dataArgs([shareModalItemId, c.uid, c.name])}'>Send</button>
-    </div>`;
-  }).join('');
-}
-
-// Takes the input element itself (delegate.js's trailing-clicked-element
-// convention for handlers that need the live value) rather than a string —
-// its one call site used to pass this.value explicitly.
-function filterShareCandidates(el) {
-  const q = el.value.trim().toLowerCase();
-  const filtered = q ? shareModalCandidates.filter(c => c.name.toLowerCase().includes(q)) : shareModalCandidates;
-  const rowsEl = document.getElementById('shareUserRows');
-  if (rowsEl) rowsEl.innerHTML = renderShareCandidateRows(filtered);
-}
-
-function closeShareReviewModal() {
-  document.getElementById('shareReviewModal').classList.remove('open');
-  unlockScroll();
-}
-
-async function sendSharedReview(itemId, toUserId, toUserName, btnEl) {
-  if (!currentUser || !fb) return;
-  const item = allItems.find(i => i.id === itemId);
-  if (!item) return;
-  const { db, collection, addDoc, serverTimestamp } = fb;
-
-  if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Sending…'; }
-  try {
-    await addDoc(collection(db, 'sharedReviews'), {
-      fromUserId: currentUser.uid,
-      fromUserName: currentUser.displayName || 'Someone',
-      fromUserPhoto: currentUser.photoURL || null,
-      toUserId,
-      itemId,
-      itemName: item.name || 'Unknown bake',
-      bakeryName: item.bakeryName || '',
-      photoURL: item.photoURL || null,
-      createdAt: serverTimestamp()
-    });
-    if (btnEl) { btnEl.textContent = '✓ Sent'; btnEl.style.opacity = '0.6'; }
-    showToast(`Shared with ${toUserName}!`);
-  } catch(e) {
-    if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Send'; }
-    showToast('Could not share');
-    console.error(e);
-  }
-}
+// openShareReviewModal/renderShareCandidateRows/filterShareCandidates/
+// closeShareReviewModal/sendSharedReview + shareModalCandidates/
+// shareModalItemId moved to src/components/shareReviewModal.js (2026-08-25,
+// Phase 5 step 20) — imported below. removeBookmarkAndRefreshSaved/
+// renderSavedTab stay here, deferred to Phase 5 step 22 (profileModal.js) —
+// they're Profile-modal internals (Saved tab) that only ever shared this
+// file section by position, not topic; both call switchProfileTab, still
+// local to this file.
 
 // toggleBookmark(...).then(()=>switchProfileTab(...)) doesn't fit the plain
 // "cleanup, then one parameterized action" data-onclick shape (delegate.js)
@@ -4430,19 +4278,16 @@ async function renderSavedTab(container) {
     ${itemsSectionHTML}`;
 }
 
-// Share Review modal, plus the Saved profile tab (renderSavedTab) that
-// happens to share this file section by position rather than topic.
-// filterShareCandidates/sendSharedReview/removeSavedItem/
-// removeBookmarkAndRefreshSaved had no call sites outside this section, so
-// none need WINDOW EXPORTS — closeProfileModal/openBakeryProfile stay there
-// (other unconverted call sites elsewhere); openDetail/switchProfileTab/
-// toggleBookmark just came out of WINDOW EXPORTS entirely, since
-// renderSavedTab's raw handlers were their last remaining call sites (see
-// the comments where each is registered, above).
-registerActions({
-  filterShareCandidates, sendSharedReview, removeSavedItem,
-  removeBookmarkAndRefreshSaved,
-});
+// Saved profile tab (renderSavedTab) — the Share Review modal's own
+// filterShareCandidates/sendSharedReview now register from
+// src/components/shareReviewModal.js (Phase 5 step 20) instead of here.
+// removeSavedItem/removeBookmarkAndRefreshSaved had no call sites outside
+// this section, so neither needs WINDOW EXPORTS — closeProfileModal/
+// openBakeryProfile stay there (other unconverted call sites elsewhere);
+// openDetail/switchProfileTab/toggleBookmark just came out of WINDOW
+// EXPORTS entirely, since renderSavedTab's raw handlers were their last
+// remaining call sites (see the comments where each is registered, above).
+registerActions({ removeSavedItem, removeBookmarkAndRefreshSaved });
 
 // ─── PRE-ORDER DISCOVERY PAGE ─────────────────────────────────────────────────
 let poActiveCountry = 'United Kingdom';
@@ -5227,11 +5072,13 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeAddMo
 // haven't been converted yet. closeProductDetailModal registers from
 // src/pages/shop.js now (Phase 2 step 11). closeDetailModal registers from
 // src/components/itemDetailModal.js now (Phase 5 step 19).
+// closeShareReviewModal registers from src/components/shareReviewModal.js
+// now (Phase 5 step 20).
 registerActions({
   closeBakeryModal,
   closeManageShopModal, closeProductModal,
   closeProfileModal, closeBakeryEditModal,
-  closeManageBakeryModal, closeShareReviewModal,
+  closeManageBakeryModal,
   closeFeatureRequestModal, closeCalDayModal, closeReserveModal,
 });
 
@@ -5387,12 +5234,11 @@ registerActions({ switchLbMode, switchLbTab, closeLbAndOpenBakery, onLbFilterCha
 // via a comma-chained data-onclick, e.g. "closeDetailModal,openEditModal")
 // registers from src/components/editReviewModal.js now (Phase 2 step 9).
 // prefillItemForReview registers from src/components/addReviewModal.js now
-// (Phase 4 step 18). closeDetailAndOpenProfile stays here, deferred — see
-// its own definition's header comment above.
-registerActions({
-  toggleSaveItem, openShareReviewModal, closeDetailAndOpenProfile,
-  flagReview,
-});
+// (Phase 4 step 18). openShareReviewModal registers from
+// src/components/shareReviewModal.js now (Phase 5 step 20).
+// closeDetailAndOpenProfile stays here, deferred — see its own
+// definition's header comment above.
+registerActions({ toggleSaveItem, closeDetailAndOpenProfile, flagReview });
 
 // Category migration (admin settings panel) — single button, single
 // zero-arg call site, no compound logic.
@@ -5489,7 +5335,6 @@ Object.assign(window, {
   renderPreorderTab,
   renderRecentGrid,
   renderSavedTab,
-  renderShareCandidateRows,
   runExploreNearbySearch,
   saveBakeryProfile,
   saveSettingsProfile,
