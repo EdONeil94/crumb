@@ -11,12 +11,12 @@ its own section below), and the **E2E test workflow** — all done on
 ## Carving src/legacy-app.js into src/pages/ and src/components/
 
 **Status as of 2026-08-25: Phases 0-4 complete, Phase 5 in progress**
-(steps 1-20 of 32 done — Phase 4's `manageOfferingsModal.js` (the "does
+(steps 1-21 of 32 done — Phase 4's `manageOfferingsModal.js` (the "does
 this scale" milestone) and `addReviewModal.js` (the modalNext/modalBack
 cluster — held to an explicitly elevated verification bar, see its own
 extraction-log entry). Phase 5 (composite modals: `itemDetailModal.js` —
 ✅ done, step 19; `shareReviewModal.js` — ✅ done, step 20;
-`bakeryModal.js`, `profileModal.js` not started).
+`bakeryModal.js` — ✅ done, step 21; `profileModal.js` not started).
 This is separate from — and comes after — the handler delegation migration
 above; don't conflate the two milestones. Plan approved 2026-08-24 (was
 drafted as a plan-mode file at `~/.claude/plans/logical-painting-kurzweil.md`,
@@ -196,7 +196,14 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   `49a31db`) — split, not clean: `renderSavedTab`/
   `removeBookmarkAndRefreshSaved` deferred to step 22, see its own
   extraction-log entry below ·
-  21. `src/components/bakeryModal.js` · 22. `src/components/profileModal.js`
+  21. `src/components/bakeryModal.js` — ✅ **done** (2026-08-25, commit
+  `7b89f37`) — brought in the reserveOffering/openReserveModal/
+  closeReserveModal/renderPreorderTab cluster deliberately left out of
+  step 16 (confirmed by reading, not trusted from the plan alone); two
+  genuinely blocked calls (buildBakeryIndex, loadMyPreorders/
+  renderPreorderPage) resolved via the getAction() pattern from step 18 —
+  see its own extraction-log entry below ·
+  22. `src/components/profileModal.js`
 - **Phase 6 — admin/business surfaces (spec exists, but destructive actions
   are wiring-only, not click-verified — extra manual QA regardless of order):**
   23. `src/components/adminPanel.js` ·
@@ -296,6 +303,92 @@ boundaries — commits happen at the module/stage level throughout.
 
 ### Extraction log (most recent first)
 
+- **`src/components/bakeryModal.js` — step 21** (2026-08-25, commit
+  `7b89f37`). Re-grepped legacy-app.js's section headers fresh and found
+  the bakery-profile-modal cluster doesn't live under its own heading at
+  all — it's inside "FILTER HELPERS", the grab-bag CLAUDE.md's own plan
+  already flagged as splitting three ways (People page, already extracted;
+  Profile modal; Bakery modal). Confirmed every function's cluster
+  membership by reading its actual dependencies rather than trusting the
+  heading, per steps 19/20's own lesson — this plan has now three times
+  found functions living under the "wrong" apparent heading.
+  Moved 8 functions wholesale: `fetchPlaceDetails`, `buildOpeningHoursHTML`,
+  `toggleBakeryHours`, `buildBakeryMapHTML`, `openBakeryProfile`,
+  `closeBakeryModal`, `switchBakeryTab`, plus `bakeryActiveCatFilter`
+  (module-private state, zero external references, no setter needed).
+  **`buildCategoryFilterBar` moved here too**, despite `openProfileModal`
+  (not moving — Phase 5 step 22) also calling it — verified it's a
+  completely pure, stateless UI-string builder (only `CATEGORY_TREE` +
+  `dataArgs`, both already available, no reference to any global state at
+  all), so it got the same "shared, zero-risk value gets a real home"
+  treatment `GOOGLE_MAPS_KEY` got at Phase 4 step 18, rather than being
+  duplicated or left blocking this cluster. `legacy-app.js` imports it
+  back one-way for `openProfileModal`'s continued use; step 22
+  (`profileModal.js`) will need to import it from here too, an ordinary
+  leaf-to-leaf import like several others already in this plan (e.g.
+  `qrCode.js` importing `markCollected` from `manageOfferingsModal.js`).
+  **`isBookmarked` moved to `src/state/appState.js` instead of here** —
+  co-located with `userBookmarks`, the same treatment `isAdmin`/
+  `isBusiness`/`ownsBakery` already got there. Unlike step 19's
+  `isSavedItem` (one external caller, moved with it), `isBookmarked` has
+  two post-move callers (this file's `openBakeryProfile`, and
+  `legacy-app.js`'s still-unextracted `renderBakeries`) — neither a clean
+  "sole caller" home, so co-locating with the state it reads sidesteps
+  picking one arbitrarily, with zero cycle risk either way.
+  **Explicitly confirmed, per this step's own instruction, that
+  `reserveOffering`/`openReserveModal`/`closeReserveModal`/
+  `renderPreorderTab` (the "Reserve" flow from a bakery profile's own
+  Pre-order tab) belong here** — re-read them fresh rather than trusting
+  step 16's note alone, confirmed they're genuinely bakery-profile-modal
+  internals with no dependency on anything reservations.js already owns,
+  and brought all 4 in as one more part of this same commit.
+  **The two-blocked-dependency shape, resolved by extending step 18's
+  precedent rather than re-deferring against explicit instruction**:
+  `openBakeryProfile` (unavoidably core — deferring it would mean not
+  extracting this file at all) calls `buildBakeryIndex()`, which stays in
+  `legacy-app.js` (still blocked on Explore's `exploreCache`, per the
+  already-documented Phase 0 step 3b / Phase 7 step 29 note).
+  `reserveOffering` (core to the Reserve flow this step was explicitly
+  asked to bring in) calls `loadMyPreorders()` and `renderPreorderPage()`,
+  both distant future clusters (Phase 7 steps 31 and 30). Direct imports
+  back into `legacy-app.js` for any of the three would have broken the
+  sink invariant confirmed at step 18 (leaf modules never import from
+  `legacy-app.js`), so all three now resolve via
+  `getAction('name')()` instead — the same action-registry lookup
+  `modalNext` used for `saveReview` at Phase 4 step 18, reused here for
+  the first time since, exactly as that entry predicted it might be.
+  `buildBakeryIndex`/`loadMyPreorders` needed new `registerActions()`
+  calls added in `legacy-app.js` (neither was previously a click action);
+  `renderPreorderPage` already had one, pre-existing and unrelated to any
+  markup call site of its own — discovered, not added, and reused as-is.
+  8 stale `WINDOW EXPORTS` entries removed (`buildBakeryMapHTML`/
+  `buildCategoryFilterBar`/`buildOpeningHoursHTML`/`closeBakeryModal`/
+  `fetchPlaceDetails`/`isBookmarked`/`openBakeryProfile`/
+  `renderPreorderTab`), each verified against a fresh `index.html` grep
+  per the step 13 lesson — zero raw call sites for any of them.
+  `loadMyPreorders`'s own stale entry also removed, now that it has a
+  proper `registerActions()` entry instead. 6 `registerActions()` calls
+  trimmed across the file (the bulk close-modal call, two different
+  FILTER-HELPERS-adjacent bulk calls, the Pre-order discovery page's bulk
+  call, and the reserveOffering/cancelReservation pair) — same pattern as
+  every prior step's bulk-call trims, plus a handful of now-stale
+  historical comments corrected while already touching each block (e.g.
+  a "~25 call sites... stays in WINDOW EXPORTS" claim that predated the
+  handler delegation migration's own completion).
+  Verified: `check:dead-refs` clean across all targets (one informational,
+  pre-existing `unusedParameters` note on `buildBakeryMapHTML`'s `name`
+  parameter — present in the original code verbatim, not introduced by
+  this move, left alone). `npm run build` succeeds (51 modules). Given the
+  size and the two getAction() workarounds, ran a fast targeted check
+  first — `reservations.spec.js` (whose own setup helper drives the real
+  Reserve flow end-to-end: bakery profile → Pre-order tab → Reserve button
+  → quantity picker → confirm, exactly the moved cluster) +
+  `bakery-profile-management.spec.js` (opening-hours toggle) +
+  `activity-calendar.spec.js` (calendar day → bakery profile, a plain-JS
+  `openBakeryProfile` call site) + `admin-panel.spec.js` (Bakeries tab
+  "View page") — 11/11 passed — before the full `test:e2e` gate: 59
+  passed/12 skipped/0 failed, within this doc's own documented normal
+  range.
 - **`src/components/shareReviewModal.js` — step 20** (2026-08-25, commit
   `49a31db`). Re-grepped the "SHARE REVIEW WITH A FOLLOWED USER" section
   fresh (line numbers had shifted since step 19). Its own header comment
