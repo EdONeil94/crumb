@@ -11,12 +11,12 @@ its own section below), and the **E2E test workflow** — all done on
 ## Carving src/legacy-app.js into src/pages/ and src/components/
 
 **Status as of 2026-08-25: Phases 0-4 complete, Phase 5 in progress**
-(steps 1-19 of 32 done — Phase 4's `manageOfferingsModal.js` (the "does
+(steps 1-20 of 32 done — Phase 4's `manageOfferingsModal.js` (the "does
 this scale" milestone) and `addReviewModal.js` (the modalNext/modalBack
 cluster — held to an explicitly elevated verification bar, see its own
 extraction-log entry). Phase 5 (composite modals: `itemDetailModal.js` —
-✅ done, step 19; `shareReviewModal.js`, `bakeryModal.js`,
-`profileModal.js` not started).
+✅ done, step 19; `shareReviewModal.js` — ✅ done, step 20;
+`bakeryModal.js`, `profileModal.js` not started).
 This is separate from — and comes after — the handler delegation migration
 above; don't conflate the two milestones. Plan approved 2026-08-24 (was
 drafted as a plan-mode file at `~/.claude/plans/logical-painting-kurzweil.md`,
@@ -192,7 +192,10 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   `2d90c6a`) — **opens Phase 5** — split, not clean:
   `closeDetailAndOpenProfile` deferred to step 22, see its own
   extraction-log entry below ·
-  20. `src/components/shareReviewModal.js` ·
+  20. `src/components/shareReviewModal.js` — ✅ **done** (2026-08-25, commit
+  `49a31db`) — split, not clean: `renderSavedTab`/
+  `removeBookmarkAndRefreshSaved` deferred to step 22, see its own
+  extraction-log entry below ·
   21. `src/components/bakeryModal.js` · 22. `src/components/profileModal.js`
 - **Phase 6 — admin/business surfaces (spec exists, but destructive actions
   are wiring-only, not click-verified — extra manual QA regardless of order):**
@@ -293,6 +296,56 @@ boundaries — commits happen at the module/stage level throughout.
 
 ### Extraction log (most recent first)
 
+- **`src/components/shareReviewModal.js` — step 20** (2026-08-25, commit
+  `49a31db`). Re-grepped the "SHARE REVIEW WITH A FOLLOWED USER" section
+  fresh (line numbers had shifted since step 19). Its own header comment
+  already flagged, before this session even read it, that the section
+  mixed clusters by file position — `renderSavedTab` (Profile modal's own
+  Saved tab) and `removeBookmarkAndRefreshSaved` shared the section but
+  not the topic. Confirmed by reading rather than trusting the comment
+  outright, per step 19's own lesson: both call `switchProfileTab`, still
+  local to `legacy-app.js` (future `src/components/profileModal.js`,
+  Phase 5 step 22) — genuinely Profile-modal internals, not Share Review.
+  Moved the 5 functions that are actually topically "Share Review"
+  wholesale: `openShareReviewModal`, `renderShareCandidateRows`,
+  `filterShareCandidates`, `closeShareReviewModal`, `sendSharedReview`,
+  plus their own `shareModalCandidates`/`shareModalItemId` state (kept
+  module-private — no setters needed, since every read/write site moved
+  together with them). Explicitly checked for a profileModal.js
+  cross-cluster dependency before writing any code, per the resume
+  prompt's own instruction (mirroring step 19's `closeDetailAndOpenProfile`
+  deferral) — none of the 5 moved functions reference `openProfileModal`,
+  `switchProfileTab`, or anything else still local to `legacy-app.js`
+  beyond ordinary appState.js/utils imports; only the two functions that
+  stayed behind (`renderSavedTab`/`removeBookmarkAndRefreshSaved`) have
+  that dependency, and they aren't moving.
+  `closeShareReviewModal` is called as plain JS from `legacy-app.js`'s own
+  modal outside-click listener — imported back, one-way, no cycle (the
+  moved functions don't call anything back into `legacy-app.js`).
+  `openShareReviewModal`/`filterShareCandidates`/`sendSharedReview` are
+  only ever reached via delegated markup (including from
+  `itemDetailModal.js`'s own "📤 Share" button, extracted last step) — no
+  import needed, resolved via the global `registerActions()` registry
+  regardless of which module registers them.
+  Three `registerActions()` calls trimmed: `openShareReviewModal` pulled
+  out of the ITEM DETAIL bulk call (`toggleSaveItem`/
+  `closeDetailAndOpenProfile`/`flagReview` stay); `closeShareReviewModal`
+  pulled out of the bulk close-modal-buttons call (8 other functions
+  stay); `filterShareCandidates`/`sendSharedReview` pulled out of the
+  section's own trailing call (`removeSavedItem`/
+  `removeBookmarkAndRefreshSaved` stay, registered from `legacy-app.js`
+  since neither moved) — same pattern as every prior step's bulk-call
+  trims. `renderShareCandidateRows` had a stale `WINDOW EXPORTS` entry
+  (zero raw call sites in `index.html`, confirmed via grep per the step 13
+  lesson) — removed; the other 4 moved functions were never in that block.
+  Verified: `check:dead-refs` clean (27 targets, including a check
+  specifically confirming `shareReviewModal.js` itself passes all five
+  checks), `npm run build` succeeds (50 modules). Ran a fast targeted
+  check first — `share-and-saved.spec.js` (Share modal following-status +
+  search filter + Send-button wiring + Saved-tab save/remove flows) +
+  `feed.spec.js` (item detail's own Share button reachability) — 5/5
+  passed — before the full `test:e2e` gate: 58 passed/13 skipped/0
+  failed, within this doc's own documented normal skip-count range.
 - **`src/components/itemDetailModal.js` — step 19** (2026-08-25, commit
   `2d90c6a`). **Opens Phase 5.** Re-grepped the ITEM DETAIL section fresh
   (line numbers had shifted since step 18) and found it's just 3 functions:
