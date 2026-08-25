@@ -33,7 +33,6 @@ import {
 } from './components/reactions.js';
 import {
   closeEditModal, editingItemId, editPhotoFile, editPhotoDataURL,
-  setEditPhotoFile, setEditPhotoDataURL,
 } from './components/editReviewModal.js';
 import { processScannedReservation } from './components/qrCode.js';
 import {
@@ -3219,20 +3218,11 @@ function renderExploreResults(city, crumbBakeries, googleResults, isNearby) {
 // openEditModal/updateDimDisplay/updateEditSubCategory/closeEditModal/
 // clearEditPhoto/editingItemId/editPhotoFile/editPhotoDataURL moved to
 // src/components/editReviewModal.js (2026-08-24, Phase 2 step 9) —
-// imported above. handleEditPhoto/saveEdit/deleteReview stay here,
-// deferred — see CLAUDE.md's own callout for why and when to revisit.
-// handleEditPhoto's compressImage/compressToDataURL now come from
-// src/components/addReviewModal.js (Phase 4 step 18) instead of being
-// same-file calls.
-
-async function handleEditPhoto(input) {
-  if (!input.files[0]) return;
-  const original = input.files[0];
-  setEditPhotoFile(await compressImage(original, 1200, 0.82));
-  setEditPhotoDataURL(await compressToDataURL(original, 1200, 0.82));
-  const wrap = document.getElementById('editPhotoWrap');
-  if (wrap) wrap.innerHTML = `<img src="${editPhotoDataURL}" style="max-height:180px;width:100%;object-fit:cover;border-radius:var(--radius);">`;
-}
+// imported above. handleEditPhoto moved there too (2026-08-25, once Phase
+// 4 step 18 landed and compressImage/compressToDataURL got a real
+// importable home) — resolving that step's own tied deferred-follow-up.
+// saveEdit/deleteReview stay here, still deferred — see CLAUDE.md's own
+// callout for why and when to revisit (step 29, a separate trigger).
 
 async function saveEdit() {
   if (!editingItemId || !currentUser) return;
@@ -3338,11 +3328,11 @@ async function deleteReview() {
 
 // Edit Review modal. saveEdit/deleteReview's onclick= call sites are in
 // index.html (the modal's static footer buttons), not here.
-// updateDimDisplay/updateEditSubCategory/closeEditModal/clearEditPhoto
-// registered from src/components/editReviewModal.js now (Phase 2 step 9);
-// handleEditPhoto/saveEdit/deleteReview stay registered here — deferred,
-// see CLAUDE.md.
-registerActions({ handleEditPhoto, saveEdit, deleteReview });
+// updateDimDisplay/updateEditSubCategory/closeEditModal/clearEditPhoto/
+// handleEditPhoto registered from src/components/editReviewModal.js now
+// (Phase 2 step 9 / Phase 4 step 18); saveEdit/deleteReview stay
+// registered here — deferred, see CLAUDE.md.
+registerActions({ saveEdit, deleteReview });
 
 // ─── CATEGORY MIGRATION ───────────────────────────────────────────────────────
 const CATEGORY_MIGRATION_MAP = {

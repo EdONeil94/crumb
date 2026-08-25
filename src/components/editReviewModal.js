@@ -1,32 +1,40 @@
 // ─── EDIT REVIEW (partial) ──────────────────────────────────────────────────
 // The Edit Review modal (pages/components carving, Phase 2 step 9 — see
 // CLAUDE.md). Split, not moved wholesale, per explicit confirmation:
-// handleEditPhoto()/saveEdit()/deleteReview() each depend on code not yet
-// extracted (compressImage()/compressToDataURL() — step 18,
+// handleEditPhoto()/saveEdit()/deleteReview() each depended on code not yet
+// extracted at the time (compressImage()/compressToDataURL() — step 18,
 // addReviewModal.js; loadData() — deferred since 3b, step 29;
-// renderLeaderboard()/lbCurrentTab — step 27, leaderboard.js) and stay in
-// legacy-app.js, deferred — see CLAUDE.md's own callout for the exact
-// trigger condition.
+// renderLeaderboard()/lbCurrentTab — step 27, leaderboard.js).
 //
-// editingItemId/editPhotoFile/editPhotoDataURL are read/written from BOTH
-// sides of this split (handleEditPhoto, staying behind, writes
-// editPhotoFile/editPhotoDataURL; saveEdit/deleteReview, also staying,
-// read editingItemId) — exported as live bindings + setters for the two
-// that get written from outside this module, same pattern as
-// src/state/appState.js.
+// handleEditPhoto() moved in here 2026-08-25, once step 18 landed and
+// compressImage()/compressToDataURL() got a real importable home in
+// addReviewModal.js — the tied deferred-follow-up decision that step's own
+// header comment pointed back to. Verified one-way before moving: this
+// file importing from addReviewModal.js doesn't risk a cycle, since
+// nothing in addReviewModal.js needs anything from editReviewModal.js.
+// saveEdit()/deleteReview() stay deferred — separate trigger (step 29),
+// unaffected by step 18 landing.
+//
+// editingItemId/editPhotoFile/editPhotoDataURL are read from legacy-app.js
+// (saveEdit/deleteReview, still deferred there) but, now that
+// handleEditPhoto lives here too, never WRITTEN from outside this module
+// any more — setEditPhotoFile()/setEditPhotoDataURL() (setters this file
+// used to export for exactly that) were genuinely dead as of this move and
+// deleted; handleEditPhoto assigns editPhotoFile/editPhotoDataURL directly
+// now, matching openEditModal/clearEditPhoto's own existing style in this
+// same file. Exported as plain live bindings — no setters needed, same as
+// any other appState.js-style state nothing external writes.
 
 import { registerActions } from '../events/actions.js';
 import { dataArgs } from '../events/delegate.js';
 import { allItems, currentUser } from '../state/appState.js';
 import { CATEGORY_TREE, getTastingDims } from '../data/categories.js';
 import { lockScroll, unlockScroll } from '../utils/dom.js';
+import { compressImage, compressToDataURL } from './addReviewModal.js';
 
 export let editingItemId = null;
 export let editPhotoFile = null;
 export let editPhotoDataURL = null;
-
-export function setEditPhotoFile(file) { editPhotoFile = file; }
-export function setEditPhotoDataURL(url) { editPhotoDataURL = url; }
 
 export function openEditModal(id) {
   const item = allItems.find(i => i.id === id);
@@ -127,19 +135,27 @@ export function openEditModal(id) {
 }
 
 // Shared by every per-dimension rating slider — the edit form's, and (via
-// buildTastingDims, ADD ITEM MODAL — still in legacy-app.js) the add
-// form's — plus each form's own overall-rating slider. Each one's own
-// live-value display span id is passed via data-args, and the slider
-// itself arrives as the trailing element (delegate.js's convention for
-// handlers that need the live value). Originally named
-// updateEditDimDisplay, before the add form's identical inline oninput=
-// was converted to reuse it instead of adding a near-duplicate. No JS
-// import needed back into legacy-app.js — buildTastingDims references it
-// only via a data-oninput="updateDimDisplay" string, resolved at runtime
-// through the shared actions.js registry regardless of which file
-// registers it.
+// buildTastingDims, now src/components/addReviewModal.js) the add form's —
+// plus each form's own overall-rating slider. Each one's own live-value
+// display span id is passed via data-args, and the slider itself arrives
+// as the trailing element (delegate.js's convention for handlers that need
+// the live value). Originally named updateEditDimDisplay, before the add
+// form's identical inline oninput= was converted to reuse it instead of
+// adding a near-duplicate. No import needed either direction —
+// buildTastingDims references it only via a data-oninput="updateDimDisplay"
+// string, resolved at runtime through the shared actions.js registry
+// regardless of which file registers it.
 export function updateDimDisplay(displayId, el) {
   document.getElementById(displayId).textContent = parseFloat(el.value).toFixed(1);
+}
+
+async function handleEditPhoto(input) {
+  if (!input.files[0]) return;
+  const original = input.files[0];
+  editPhotoFile = await compressImage(original, 1200, 0.82);
+  editPhotoDataURL = await compressToDataURL(original, 1200, 0.82);
+  const wrap = document.getElementById('editPhotoWrap');
+  if (wrap) wrap.innerHTML = `<img src="${editPhotoDataURL}" style="max-height:180px;width:100%;object-fit:cover;border-radius:var(--radius);">`;
 }
 
 export function updateEditSubCategory() {
@@ -164,4 +180,4 @@ export function clearEditPhoto() {
   if (wrap) wrap.innerHTML = `<div style="background:var(--parchment-dark);border-radius:var(--radius);height:80px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:0.85rem;">No photo</div>`;
 }
 
-registerActions({ openEditModal, updateDimDisplay, updateEditSubCategory, closeEditModal, clearEditPhoto });
+registerActions({ openEditModal, updateDimDisplay, updateEditSubCategory, closeEditModal, clearEditPhoto, handleEditPhoto });
