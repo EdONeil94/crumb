@@ -10,10 +10,11 @@ its own section below), and the **E2E test workflow** — all done on
 
 ## Carving src/legacy-app.js into src/pages/ and src/components/
 
-**Status as of 2026-08-25: Phases 0, 1, 2, and 3 all complete** (steps
-1-16 of 32 done — Phase 3's five: `reviewCard.js`, `feed.js`, `follows.js`,
-`people.js`, `reservations.js`). Phase 4 (`manageOfferingsModal.js`,
-`addReviewModal.js`) not started.
+**Status as of 2026-08-25: Phases 0-3 complete, Phase 4 under way** (steps
+1-17 of 32 done — Phase 4 step 17, `manageOfferingsModal.js`, the biggest
+single cluster in the plan, landed as one commit — the "does this scale"
+milestone passed). Phase 4's remaining step (`addReviewModal.js`) not
+started.
 This is separate from — and comes after — the handler delegation migration
 above; don't conflate the two milestones. Plan approved 2026-08-24 (was
 drafted as a plan-mode file at `~/.claude/plans/logical-painting-kurzweil.md`,
@@ -156,20 +157,20 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   `cancelReservation` deferred to Phase 7 step 31, see its own
   extraction-log entry below
 - **Phase 4 — large but well-tested (the "does this scale" milestone):**
-  17. `src/components/manageOfferingsModal.js` (biggest single cluster,
-  ~1,020 lines, 11 real-click tests — deepest coverage in the app)
+  17. `src/components/manageOfferingsModal.js` — ✅ **done** (2026-08-25,
+  commit `ebeec4e`) — the "does this scale" milestone passed: biggest
+  single cluster in the plan (~1,020 lines, 11 real-click tests — deepest
+  coverage in the app), moved wholesale as **one** commit, not split — see
+  its own extraction-log entry below for why no sub-staging applied here
+  (unlike `appState.js`'s 3a/3b/3c)
 
-  **⚠️ Deferred follow-up tied to this step — set up in Phase 2 step 10,
-  don't lose track of it.** `confirmCollected()`/`closeQrConfirmOverlay()`
-  (`qrCode.js`) stayed in `legacy-app.js` because `confirmCollected()`
-  calls `markCollected()`, part of this cluster. Moving them during step
-  10 would've meant `qrCode.js` importing back from `legacy-app.js` while
-  `legacy-app.js` already needs `generateOrderQRCodes()`/
-  `processScannedReservation()` imported back the normal direction — a
-  genuine two-file cycle. **Once step 17 lands and `markCollected()` has a
-  real importable home, revisit whether `confirmCollected()`/
-  `closeQrConfirmOverlay()` can move into `qrCode.js`.** Deliberate,
-  separate decision at that point.
+  **✅ Resolved (2026-08-25, same commit).** The Phase 2 step 10 deferral
+  on `confirmCollected()`/`closeQrConfirmOverlay()` (`qrCode.js`) is
+  closed: `markCollected()` now has a real importable home in this file,
+  so both moved into `qrCode.js` — one-way dependency
+  (`qrCode.js` → `manageOfferingsModal.js`), no cycle, verified explicitly
+  before moving. See `qrCode.js`'s own updated header comment and the
+  extraction-log entry below for the full reasoning.
 
   18. `src/components/addReviewModal.js` (kept as **one** module — internal
   state is deeply cross-referential; this is the exact cluster where
@@ -288,6 +289,87 @@ boundaries — commits happen at the module/stage level throughout.
 
 ### Extraction log (most recent first)
 
+- **`src/components/manageOfferingsModal.js` — step 17** (2026-08-25,
+  commit `ebeec4e`). **Opens Phase 4 — the "does this scale" milestone.**
+  Re-grepped the whole "PRE-ORDER / RESERVATIONS" section fresh (line
+  numbers had shifted since step 16) and catalogued all 38 top-level
+  functions in it before touching anything. Confirmed the cluster boundary
+  by reading `tests/reservations.spec.js` and `tests/manage-offerings.spec.js`
+  rather than assuming from file position: the baker-side "Manage
+  pre-orders" modal (31 functions: `openManagePreordersModal` through
+  `markCollected`, plus `openCatalogueManager`/`closeCatalogueManager`/
+  `removeCatalogueItem`) is this file; `renderPreorderTab`/
+  `openReserveModal`/`closeReserveModal`/`reserveOffering` (the "Reserve"
+  flow from a bakery profile's own Pre-order tab) and `cancelReservation`
+  are different clusters that happen to live in the same original file
+  section — both scope boundaries were already decided at step 16, not
+  revisited here.
+  **Sub-staging explicitly considered and rejected, flagged before writing
+  any code**: unlike `appState.js` (Phase 0 step 3, 3 commits across 3
+  genuinely independent state domains with different dependency-resolution
+  profiles), this cluster has zero shared module-level state (only 2
+  static constants, `COLLECTION_TIMES`/`COLLECTION_SLOTS`) and a dense
+  internal call graph all belonging to one feature (`renderMpUpcoming`
+  alone is called from `saveOffering`/`saveEditOffering`/`deleteOffering`/
+  `markCollected`). There's no fault line splitting it into commits
+  wouldn't manufacture — moving a subset first would force one-way-back
+  imports in both directions simultaneously for functions that don't
+  actually need them in the finished module. Landed as one commit instead,
+  matching how every other single-feature cluster has moved in this plan
+  (`reviewCard.js`, `feed.js`, `people.js`), just much larger. Used `sed`
+  to extract exact source line ranges into scratch files rather than
+  retyping ~1,080 lines by hand — the `shop.js` step-11 lesson (an
+  `escJS()` call silently dropped while retyping) made this worth avoiding
+  entirely for a cluster this size, not just double-checking after the
+  fact; verified line counts and function-boundary matches before ever
+  writing to `src/`.
+  **Zero imports back into `legacy-app.js`** — a first for a cluster this
+  size, confirmed by grepping the full file for all 31 function names plus
+  the two constants and checking every hit outside the moved ranges: each
+  was either a `data-onclick` markup string (resolved via the delegated-
+  actions registry at click time, no import needed) or a `registerActions()`
+  call being moved/trimmed. `openManagePreordersModal`/
+  `closeManagePreordersModal` pulled out of two bulk `registerActions()`
+  calls that mix several other not-yet-extracted clusters' own open/close-
+  modal functions (same pattern as `authModal.js`'s `closeAuthModal`,
+  Phase 1 step 6) — the other 18-function `registerActions()` call moved
+  wholesale, now living in this file instead. All 31 functions exported
+  uniformly (matching `reactions.js`'s precedent) even though only
+  `markCollected` has an external importer (`qrCode.js`, see below).
+  11 stale `WINDOW EXPORTS` entries removed (`getEditSlotValue`/
+  `getSlotValue`/`loadBakeryCatalogue`/`mpItemBreakdownHTML`/
+  `renderMpForecast`/`renderMpHistoric`/`renderMpMonth`/`renderMpTab`/
+  `renderMpUpcoming`/`saveToCatalogue`/`uploadItemPhoto`) — `index.html`
+  explicitly grepped for all 31 candidate names first, per the step 13
+  (`switchFeedTab`) lesson: only `closeManagePreordersModal` had a static
+  markup call site, already correctly `data-onclick`-delegated, not raw.
+  Also found and fixed a stale comment (not caught by any tooling, just
+  read carefully): the "Reservations flow" `registerActions()` comment
+  above `reserveOffering`/`cancelReservation` said `markCollected`/
+  `openEditOffering`/`deleteOffering` were "converted separately below" —
+  no longer true once this cluster moved out from under it.
+  **Resolves Phase 2 step 10's deferral, decided explicitly rather than
+  automatically**: `confirmCollected`/`closeQrConfirmOverlay` moved into
+  `qrCode.js`, importing `markCollected` back from this file — verified
+  one-way before moving, not assumed: `manageOfferingsModal.js`'s only
+  reference to anything in `qrCode.js` is a markup
+  `data-onclick="openQRScanner"` string, never a real import, so no cycle.
+  Also found and fixed, while already touching `qrCode.js`'s header
+  comment: its claim that `generateOrderQRCodes()` was "called from inside
+  manageOfferingsModal.js's own not-yet-extracted code" was already stale
+  as of step 16 — it's actually called from `reservations.js` now, and
+  nobody updated the comment then. Corrected, and the now-genuinely-dead
+  `generateOrderQRCodes` import removed from `legacy-app.js` (a leftover
+  from step 16, not this step, but caught and fixed here).
+  Verified: `check:dead-refs` clean (14 targets), `npm run build` succeeds
+  (46 modules). Given the size, ran a fast targeted check first —
+  `manage-offerings.spec.js` + `qr-scanner-baker.spec.js` in isolation
+  (15/15 passed, including the "marking a reservation collected" test,
+  which directly exercises the new `qrCode.js`↔`manageOfferingsModal.js`
+  boundary) — before the full `test:e2e` gate (61 passed/10 skipped/0
+  failed). One more full run after the dead-import cleanup: 59 passed/12
+  skipped/0 failed — clean, skip-count variance within this doc's own
+  documented normal range.
 - **`src/components/reservations.js` — step 16** (2026-08-25, commit
   `a07cb2e`). **Closes out Phase 3.** Split, not clean — flagged before
   writing any code: moved `parseSlotStartTime` and `renderOrdersTab` (the
