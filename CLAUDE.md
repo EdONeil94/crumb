@@ -11,7 +11,7 @@ its own section below), and the **E2E test workflow** — all done on
 ## Carving src/legacy-app.js into src/pages/ and src/components/
 
 **Status as of 2026-08-26: Phases 0-5 complete, Phase 6 in progress**
-(steps 1-23 of 32 done — Phase 4's `manageOfferingsModal.js` (the "does
+(steps 1-24 of 32 done — Phase 4's `manageOfferingsModal.js` (the "does
 this scale" milestone) and `addReviewModal.js` (the modalNext/modalBack
 cluster — held to an explicitly elevated verification bar, see its own
 extraction-log entry). Phase 5 (composite modals: `itemDetailModal.js` —
@@ -21,7 +21,10 @@ closing out the phase and resolving the largest backlog of deferred items
 in the whole plan, see its own extraction-log entry). Phase 6 opened with
 `adminPanel.js` — ✅ done, step 23, which corrected the plan's own "5
 headers, one real feature" framing (see its own extraction-log entry) —
-`businessBakeryManagement.js`/`notifications.js` not started.
+`businessBakeryManagement.js` — ✅ done, step 24, a clean single-feature
+move, no split needed, but caught a real check:dead-refs regression
+(`closeBakeryEditModal` exported but never registered) before build/tests
+ran, see its own extraction-log entry — `notifications.js` not started.
 This is separate from — and comes after — the handler delegation migration
 above; don't conflate the two milestones. Plan approved 2026-08-24 (was
 drafted as a plan-mode file at `~/.claude/plans/logical-painting-kurzweil.md`,
@@ -228,9 +231,14 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   pre-existing bug (`refreshAdminUsersPanel`/`renderAdminUsers` target a
   nonexistent DOM id) rather than fixing it — see its own extraction-log
   entry ·
-  24. `src/components/businessBakeryManagement.js` (carries the documented
-  `renderBusinessSection()`-missing-`buildBakeryIndex()` bug — natural point
-  to surface it, not obligated to fix) ·
+  24. `src/components/businessBakeryManagement.js` — ✅ **done** (2026-08-26,
+  commit `a127a52`) — carries the documented
+  `renderBusinessSection()`-missing-`buildBakeryIndex()` bug forward,
+  surfaced not fixed. Genuinely one clean feature, no split needed —
+  distinct from adminPanel.js's similarly-named MANAGE BAKERY (separate
+  modal, separate Firestore collection). `check:dead-refs` caught a real
+  bug before build/tests ran (`closeBakeryEditModal` exported but never
+  registered as a delegated action) — see its own extraction-log entry ·
   25. `src/components/notifications.js` (thin direct coverage, wide fan-in)
 - **Phase 7 — last, zero/confirmed-zero direct test coverage, budget extra
   manual QA, write/extend specs at extraction time rather than leaving the
@@ -324,6 +332,86 @@ boundaries — commits happen at the module/stage level throughout.
 
 ### Extraction log (most recent first)
 
+- **`src/components/businessBakeryManagement.js` — step 24** (2026-08-26,
+  commit `a127a52`). Re-grepped the "BUSINESS — BAKERY PAGE MANAGEMENT"
+  section fresh and, unlike steps 19/20/22/23's own repeated finding, this
+  one's single header actually matched its own code cleanly — confirmed by
+  reading every function's own dependencies before concluding that, not
+  assumed from the header alone. Moved wholesale: `renderBusinessSection`,
+  `editingBakeryName`/`bakeryEditPhotoFile` (module-private state),
+  `openBakeryEditModal`, `handleBakeryEditPhoto`, `saveBakeryPage`,
+  `closeBakeryEditModal`.
+  Every real (non-markup) call site checked before moving, per step 22's
+  own lesson: `renderBusinessSection()` is called as plain JS from
+  `openSettingsPage()` (stays in `legacy-app.js` — Settings page, Phase 7
+  step 32) and `closeBakeryEditModal()` from the modal's own outside-click
+  listener and the keydown Escape handler (also stay) — both exported and
+  imported back one-way, no cycle (nothing here calls back into
+  `legacy-app.js`). Found and removed one more now-genuinely-unused import
+  while already touching this exact line: `currentUserBakery` (the raw
+  value, not the setter) had zero real uses left in `legacy-app.js` once
+  `renderBusinessSection` — its only reader — moved.
+  **Explicitly distinguished from adminPanel.js's similarly-named MANAGE
+  BAKERY cluster (step 23)**, confirmed by reading rather than assumed from
+  the near-identical "Edit page" button labels: this file owns
+  `#bakeryEditModal` and the `bakeries` Firestore collection, reached from
+  Settings' Business section and (per a fresh grep of `bakeryModal.js`)
+  also from the bakery profile modal's own `isOwner`-gated "✏️ Edit page"
+  button (line ~316); adminPanel.js's MANAGE BAKERY owns a *different*
+  modal (`#manageBakeryModal`) and the `bakeryProfiles` collection, reached
+  from the Admin Panel's Bakeries tab and the *same* bakery profile modal's
+  *other*, `canManage`-gated "✏️ Edit page" button (line ~337) — two
+  genuinely separate features with near-identical names and near-identical
+  button labels, a pre-existing naming quirk in the app, not something
+  either extraction introduced or was in scope to fix. Noted while already
+  reading this: `isOwner` and `canManage` (the two gates behind
+  bakeryModal.js's two different "Edit page" buttons) are the literal same
+  boolean (`canManage = isOwner`) — both buttons show simultaneously to the
+  same owner/admin, a pre-existing UI redundancy, also out of scope.
+  Carries forward, unfixed, the pre-existing bug CLAUDE.md's own "Known
+  pre-existing issues" section already documents:
+  `renderBusinessSection()` never calls `buildBakeryIndex()`, so Settings
+  can show "No bakeries assigned yet" for an admin who actually manages
+  bakeries, on a fresh session. No `getAction()` workaround needed here
+  (unlike adminPanel.js's two blocked calls) — the function simply doesn't
+  call `buildBakeryIndex()` at all, so there's no dependency to resolve,
+  only to leave alone.
+  Two `registerActions()` bulk calls trimmed (the modal-close call, the
+  open-modal call) — same pattern as every prior step's bulk-call trims.
+  One stale `WINDOW EXPORTS` entry removed (`renderBusinessSection`, zero
+  raw call sites confirmed via grep) — `openBakeryEditModal`/
+  `handleBakeryEditPhoto`/`saveBakeryPage`/`closeBakeryEditModal` were
+  already fully delegated from an earlier session (`#bakeryEditModal`'s own
+  static markup in `index.html` uses `data-onclick` throughout, unlike
+  adminPanel.js's `#manageBakeryModal`, which still has 2 genuinely raw
+  handlers) and were never in that block to begin with.
+  **A real bug of this session's own making, caught by `check:dead-refs`
+  before build or tests ran, not discovered via a failing E2E click**: the
+  first pass exported `closeBakeryEditModal` for `legacy-app.js`'s own
+  listeners but never added it to this file's own `registerActions()` call
+  — conflating "exported for plain-JS use" with "registered as a delegated
+  action," two separate mechanisms. `index.html`'s own static
+  `#bakeryEditModal` close (✕) and Cancel buttons both reach it via
+  `data-onclick`, so this would have silently no-opped both on a real page
+  load, past a clean build. Fixed by adding it to the file's own
+  `registerActions()` call alongside `openBakeryEditModal`/
+  `handleBakeryEditPhoto`/`saveBakeryPage`. The exact same shape of mistake
+  as the `modalNext`/`modalBack` (delegation migration) and
+  `editReviewModal.js` (Phase 2 step 9) incidents this doc's own
+  `check:dead-refs` section already documents — this time caught by the
+  tool itself, at the point this extraction's own workflow runs it, rather
+  than by a failing spec afterward.
+  Verified: `check:dead-refs` clean (30 targets, including a check
+  specifically confirming `businessBakeryManagement.js` itself passes all
+  five checks — this is what caught the bug above), `npm run build`
+  succeeds (54 modules). Ran a fast targeted check first —
+  `bakery-profile-management.spec.js` (3 passed/1 skipped) plus a
+  throwaway debug spec exercising the bakery-profile-modal's own
+  `isOwner`-gated "Edit page" button end-to-end (a second entry point not
+  covered by the existing spec, which only exercises the Settings-page
+  path) with a `pageerror`/console-error listener attached — zero errors —
+  before the full `test:e2e` gate: 59 passed/12 skipped/0 failed, within
+  this doc's own documented normal skip-count range.
 - **`src/components/adminPanel.js` — step 23** (2026-08-26, commit
   `b86c34e`). **Opens Phase 6.** Re-grepped fresh and found the plan's own
   "5 headers, one real feature" framing (ADMIN PANEL, ADMIN PANEL
