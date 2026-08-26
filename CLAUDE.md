@@ -10,8 +10,8 @@ its own section below), and the **E2E test workflow** — all done on
 
 ## Carving src/legacy-app.js into src/pages/ and src/components/
 
-**Status as of 2026-08-26: Phases 0-5 complete, Phase 6 in progress**
-(steps 1-24 of 32 done — Phase 4's `manageOfferingsModal.js` (the "does
+**Status as of 2026-08-26: Phases 0-5 complete, Phase 6 complete**
+(steps 1-25 of 32 done — Phase 4's `manageOfferingsModal.js` (the "does
 this scale" milestone) and `addReviewModal.js` (the modalNext/modalBack
 cluster — held to an explicitly elevated verification bar, see its own
 extraction-log entry). Phase 5 (composite modals: `itemDetailModal.js` —
@@ -24,7 +24,10 @@ headers, one real feature" framing (see its own extraction-log entry) —
 `businessBakeryManagement.js` — ✅ done, step 24, a clean single-feature
 move, no split needed, but caught a real check:dead-refs regression
 (`closeBakeryEditModal` exported but never registered) before build/tests
-ran, see its own extraction-log entry — `notifications.js` not started.
+ran, see its own extraction-log entry — `notifications.js` — ✅ done, step
+25, closing out Phase 6, another clean single-feature move, zero prior
+test coverage (verified manually with a throwaway debug spec), see its own
+extraction-log entry.
 This is separate from — and comes after — the handler delegation migration
 above; don't conflate the two milestones. Plan approved 2026-08-24 (was
 drafted as a plan-mode file at `~/.claude/plans/logical-painting-kurzweil.md`,
@@ -239,7 +242,15 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   modal, separate Firestore collection). `check:dead-refs` caught a real
   bug before build/tests ran (`closeBakeryEditModal` exported but never
   registered as a delegated action) — see its own extraction-log entry ·
-  25. `src/components/notifications.js` (thin direct coverage, wide fan-in)
+  25. `src/components/notifications.js` — ✅ **done** (2026-08-26, commit
+  `0be56ae`) — **closes out Phase 6**. Zero prior test coverage confirmed
+  (no dedicated spec, no existing spec references it) — verified manually
+  with a throwaway debug spec (bell open/close, empty-state render,
+  mark-read timer, zero console errors); direct Firestore write to
+  simulate a real notification was correctly blocked by security rules,
+  not attempted further. `loadNotifications` imported back for 4 real
+  plain-JS callers in `legacy-app.js`'s `initFirebaseApp()` — see its own
+  extraction-log entry
 - **Phase 7 — last, zero/confirmed-zero direct test coverage, budget extra
   manual QA, write/extend specs at extraction time rather than leaving the
   gap open:**
@@ -332,6 +343,76 @@ boundaries — commits happen at the module/stage level throughout.
 
 ### Extraction log (most recent first)
 
+- **`src/components/notifications.js` — step 25** (2026-08-26, commit
+  `0be56ae`). **Closes out Phase 6.** Re-grepped the "NOTIFICATIONS"
+  section fresh and confirmed, by reading every function's own
+  dependencies before concluding anything, that this cluster is genuinely
+  one clean, self-contained feature — matching step 24's finding, not
+  steps 19/20/22/23's "splits" pattern. Moved wholesale: `notifLastSeen`/
+  `notifItems` (module-private state), `loadNotifications`,
+  `updateBellBadge`, `toggleNotifPanel`, `closeNotifPanel`,
+  `renderNotifPanel`, `openNotifItem`, `markAllNotifsRead`.
+  Every real (non-markup) call site of `loadNotifications` checked before
+  moving, per step 22's own lesson: 4 plain-JS callers, all inside
+  `initFirebaseApp()`'s `onAuthStateChanged` handler (one direct call plus
+  3 `onSnapshot` real-time-listener callbacks for
+  follows/sharedReviews/reactions) — `legacy-app.js` still needs all 4, so
+  `loadNotifications` is the only export this file needs, imported back
+  one-way (no cycle — nothing here calls back into `legacy-app.js`).
+  `updateBellBadge`/`renderNotifPanel` have zero callers outside this file,
+  confirmed via grep, despite both having stale `WINDOW EXPORTS` entries —
+  removed, along with `loadNotifications`'s own (also stale — its real
+  callers are now an ordinary ES import, not `window`-global access).
+  `openProfileModal`/`openDetail` (used inside `loadNotifications`'s own
+  follow/shared-review notification click closures) import one-way from
+  `profileModal.js`/`itemDetailModal.js` respectively — confirmed neither
+  file imports anything from here, so no cycle.
+  **Applied the new standing checklist item from step 24's own
+  `closeBakeryEditModal` bug, this time catching nothing wrong but
+  confirming the check is worth doing every time**: grepped `index.html`
+  for every moved name before assuming any export/registration was
+  correct. `toggleNotifPanel` (`#navBell`) and `closeNotifPanel`
+  (`#notifBackdrop`) both have real static `data-onclick` markup in
+  `index.html` — both were correctly included in this file's own
+  `registerActions()` call from the first pass this time, verified
+  explicitly against that markup rather than assumed from their having
+  been registered in the original file.
+  Two `registerActions()` calls removed entirely from `legacy-app.js`
+  (`{ openNotifItem }` and `{ toggleNotifPanel, closeNotifPanel,
+  markAllNotifsRead }`, both standalone, not mixed bulk calls) — both now
+  register from `notifications.js` itself.
+  **A test-environment lesson worth remembering, not a code bug**: the
+  fresh `test:e2e` baseline kicked off at the start of this step showed 1
+  failure (`ReferenceError: loadNotifications is not defined`, thrown by
+  the live Vite dev server) purely because source edits for this same step
+  were made *while* that background baseline was still running against the
+  same dev server — Vite's HMR picked up the mid-edit state (function
+  deleted, import not yet added) and served it to the browser mid-suite.
+  Not a real regression — confirmed by finishing the edit, then re-running
+  `test:e2e` fresh with no concurrent editing, which came back clean. Don't
+  edit source files while a baseline or gating `test:e2e` run is active
+  against the dev server.
+  Zero prior test coverage for this cluster confirmed (no dedicated spec,
+  and grepping `tests/` for every notification-related identifier found
+  zero hits anywhere) — matches CLAUDE.md's own Phase 6 checklist
+  description ("thin direct coverage, wide fan-in"), though "thin" turned
+  out to mean "none," not "some." Verified manually with a throwaway debug
+  spec instead: bell open (`toggleNotifPanel`) → panel shows the empty
+  state correctly (no notifications for the test account) → close via
+  backdrop (`closeNotifPanel`) → reopen and wait out the 1.5s
+  `markAllNotifsRead` delay — zero console/page errors throughout. A
+  further attempt to write a throwaway `follows` doc directly via
+  `window._crumb` to exercise `openNotifItem`'s real dispatch
+  (`openProfileModal`) was correctly rejected by Firestore security rules
+  (an unprivileged write with a fabricated `followerId`) — expected
+  behavior, not a bug, and not worth working around for a debug-only
+  check; the open/close/badge-timer path plus a clean `check:dead-refs` +
+  build already gave adequate confidence for a verbatim code move.
+  Verified: `check:dead-refs` clean (31 targets, including a check
+  specifically confirming `notifications.js` itself passes all five
+  checks), `npm run build` succeeds (55 modules). Full `test:e2e` (run
+  cleanly, after finishing all edits): 58 passed/13 skipped/0 failed,
+  within this doc's own documented normal skip-count range.
 - **`src/components/businessBakeryManagement.js` — step 24** (2026-08-26,
   commit `a127a52`). Re-grepped the "BUSINESS — BAKERY PAGE MANAGEMENT"
   section fresh and, unlike steps 19/20/22/23's own repeated finding, this
