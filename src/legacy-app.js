@@ -65,6 +65,7 @@ import {
 import {
   renderBusinessSection, closeBakeryEditModal,
 } from './components/businessBakeryManagement.js';
+import { loadNotifications } from './components/notifications.js';
 // Side-effect only — PWA install/update-check/status-bar-fix/pull-to-refresh/
 // keyboard-scroll all self-execute on import, no exports needed here.
 import './app/lifecycle.js';
@@ -3209,184 +3210,13 @@ async function cancelReservation(reservationId, offeringId) {
 // home in src/components/manageOfferingsModal.js — see qrCode.js's own
 // header comment for the full reasoning.
 
-// ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
-let notifLastSeen = null; // timestamp of last time user opened panel
-let notifItems = [];      // cached notification objects
-
-async function loadNotifications() {
-  if (!currentUser || !fb) return;
-  const { db, collection, query, where, orderBy, getDocs, getDoc, doc } = fb;
-
-  // Load last-seen timestamp from profile
-  try {
-    const profileSnap = await getDoc(doc(db, 'profiles', currentUser.uid));
-    notifLastSeen = profileSnap.data()?.notifLastSeen?.toDate() || null;
-  } catch(e) { notifLastSeen = null; }
-
-  const notifications = [];
-  const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // 30 days
-
-  // 1. New followers
-  try {
-    const followsSnap = await getDocs(
-      query(collection(db, 'follows'), where('followingId', '==', currentUser.uid))
-    );
-    followsSnap.docs.forEach(d => {
-      const data = d.data();
-      const ts = data.createdAt?.toDate();
-      if (!ts || ts < cutoff) return;
-      notifications.push({
-        id: d.id,
-        type: 'follow',
-        actorId: data.followerId,
-        actorName: data.followerName || 'Someone',
-        actorPhoto: data.followerPhoto || null,
-        text: `started following you`,
-        ts,
-        unread: !notifLastSeen || ts > notifLastSeen,
-        onClick: () => openProfileModal(data.followerId)
-      });
-    });
-  } catch(e) { console.warn('Notif follows error:', e); }
-
-  // 2. Reactions on my items
-  try {
-    const reactSnap = await getDocs(
-      query(collection(db, 'reactions'), where('targetUserId', '==', currentUser.uid))
-    );
-    reactSnap.docs.forEach(d => {
-      const data = d.data();
-      if (data.userId === currentUser.uid) return; // skip own reactions
-      const ts = data.createdAt?.toDate();
-      if (!ts || ts < cutoff) return;
-      notifications.push({
-        id: d.id,
-        type: 'reaction',
-        actorId: data.userId,
-        actorName: data.userName || 'Someone',
-        actorPhoto: data.userPhoto || null,
-        emoji: data.emoji,
-        itemName: data.itemName || 'your review',
-        text: `reacted ${data.emoji} to <em>${data.itemName || 'your review'}</em>`,
-        ts,
-        unread: !notifLastSeen || ts > notifLastSeen,
-        onClick: () => { /* could open item detail */ }
-      });
-    });
-  } catch(e) { console.warn('Notif reactions error:', e); }
-
-  // 3. Shared reviews
-  try {
-    const shareSnap = await getDocs(
-      query(collection(db, 'sharedReviews'), where('toUserId', '==', currentUser.uid))
-    );
-    shareSnap.docs.forEach(d => {
-      const data = d.data();
-      const ts = data.createdAt?.toDate();
-      if (!ts || ts < cutoff) return;
-      notifications.push({
-        id: d.id,
-        type: 'shared',
-        actorId: data.fromUserId,
-        actorName: data.fromUserName || 'Someone',
-        actorPhoto: data.fromUserPhoto || null,
-        itemName: data.itemName || 'a review',
-        text: `shared <em>${data.itemName || 'a review'}</em> from ${data.bakeryName || 'a bakery'} with you`,
-        ts,
-        unread: !notifLastSeen || ts > notifLastSeen,
-        onClick: () => openDetail(data.itemId)
-      });
-    });
-  } catch(e) { console.warn('Notif shared reviews error:', e); }
-
-  // Sort newest first
-  notifications.sort((a, b) => b.ts - a.ts);
-  notifItems = notifications;
-
-  const unreadCount = notifications.filter(n => n.unread).length;
-  updateBellBadge(unreadCount);
-}
-
-function updateBellBadge(count) {
-  const badge = document.getElementById('navBellBadge');
-  if (!badge) return;
-  if (count > 0) {
-    badge.textContent = count > 99 ? '99+' : count;
-    badge.style.display = 'flex';
-  } else {
-    badge.style.display = 'none';
-  }
-}
-
-function toggleNotifPanel() {
-  const panel = document.getElementById('notifPanel');
-  const backdrop = document.getElementById('notifBackdrop');
-  const isOpen = panel.classList.contains('open');
-  if (isOpen) {
-    closeNotifPanel();
-  } else {
-    // Always fetch the latest notifications when opening — don't rely on
-    // whatever was cached at login, since shares/reactions have no live push.
-    loadNotifications().then(renderNotifPanel);
-    renderNotifPanel(); // show cached data immediately while the refresh runs
-    panel.classList.add('open');
-    backdrop.style.display = 'block';
-    // Mark as seen after a short delay
-    setTimeout(() => markAllNotifsRead(), 1500);
-  }
-}
-
-function closeNotifPanel() {
-  document.getElementById('notifPanel').classList.remove('open');
-  document.getElementById('notifBackdrop').style.display = 'none';
-}
-
-function renderNotifPanel() {
-  const list = document.getElementById('notifList');
-  if (!notifItems.length) {
-    list.innerHTML = `<div class="notif-empty"><div class="notif-empty-icon">🔔</div>No notifications yet</div>`;
-    return;
-  }
-  list.innerHTML = notifItems.map((n, i) => {
-    const avatarHTML = n.type === 'reaction'
-      ? `<div class="notif-emoji">${n.emoji}</div>`
-      : n.actorPhoto
-        ? `<div class="notif-avatar"><img src="${n.actorPhoto}" alt=""></div>`
-        : `<div class="notif-avatar">${(n.actorName || '?').charAt(0).toUpperCase()}</div>`;
-    return `
-      <div class="notif-item ${n.unread ? 'unread' : ''}" data-onclick="closeNotifPanel,openNotifItem" data-args='${dataArgs([i])}'>
-        ${avatarHTML}
-        <div class="notif-body">
-          <div class="notif-text"><strong>${escJS(n.actorName)}</strong> ${n.text}</div>
-          <div class="notif-time">${timeAgo(n.ts)}</div>
-        </div>
-      </div>`;
-  }).join('');
-}
-
-// Each notification carries its own ad-hoc onClick closure (see
-// loadNotifications) rather than a single named action, so this thin,
-// index-based wrapper is what's registered — it looks the closure up from
-// module-scope notifItems and invokes it, instead of the old raw
-// onclick="notifItems[i].onClick()", which broke post-modularization for the
-// same reason as the avatar dropdown: notifItems is a plain module-level
-// `let`, invisible to inline onclick="..." attributes (global scope) — it
-// was never in WINDOW EXPORTS, only functions are.
-function openNotifItem(i) {
-  notifItems[i]?.onClick?.();
-}
-
-async function markAllNotifsRead() {
-  if (!currentUser || !fb) return;
-  const { db, doc, updateDoc, serverTimestamp } = fb;
-  notifItems.forEach(n => n.unread = false);
-  updateBellBadge(0);
-  // Persist last-seen timestamp to profile
-  try {
-    await updateDoc(doc(db, 'profiles', currentUser.uid), { notifLastSeen: serverTimestamp() });
-    notifLastSeen = new Date();
-  } catch(e) { console.warn('Could not save notif seen time:', e); }
-}
+// notifLastSeen/notifItems/loadNotifications/updateBellBadge/
+// toggleNotifPanel/closeNotifPanel/renderNotifPanel/openNotifItem/
+// markAllNotifsRead moved to src/components/notifications.js (2026-08-26,
+// Phase 6 step 25) — genuinely one clean, self-contained feature, no split
+// needed (matching step 24's finding). loadNotifications imported below
+// for this file's own remaining callers (initFirebaseApp's direct call
+// plus 3 onSnapshot real-time-listener callbacks).
 
 // openAuthModal/closeAuthModal/switchAuthTab/signInGoogle/signInEmail/
 // signUpEmail/showAuthError/friendlyAuthError moved to
@@ -3434,11 +3264,8 @@ registerActions({
 // registered from src/components/nav.js now (Phase 1 step 5) instead of here.
 registerActions({ showPage });
 
-// Notifications panel item click. openNotifItem is new — replaces the raw
-// onclick="notifItems[i].onClick()", broken the same way (notifItems is a
-// bare module-scope array) — see openNotifItem's own comment for why a thin
-// index-based wrapper was the fix instead of a bigger redesign.
-registerActions({ openNotifItem });
+// openNotifItem registers from src/components/notifications.js now (Phase
+// 6 step 25).
 
 // Auth modal (openAuthModal/closeAuthModal/switchAuthTab/signInGoogle/
 // signInEmail/signUpEmail) registered from src/components/authModal.js now
@@ -3578,9 +3405,9 @@ registerActions({ toggleSaveItem, flagReview });
 // zero-arg call site, no compound logic.
 registerActions({ runCategoryMigration });
 
-// Notifications panel. Each notif-item's click is now converted too — see
-// openNotifItem, registered further up alongside the avatar-dropdown bug fix.
-registerActions({ toggleNotifPanel, closeNotifPanel, markAllNotifsRead });
+// Notifications panel — toggleNotifPanel/closeNotifPanel/
+// markAllNotifsRead register from src/components/notifications.js now
+// (Phase 6 step 25).
 
 initDelegatedEvents();
 
@@ -3626,7 +3453,6 @@ Object.assign(window, {
   handleSettingsPhoto,
   initExplorePage,
   initPreorderPage,
-  loadNotifications,
   openAddModal,
   openSettingsPage,
   populateBakeryLocationFilter,
@@ -3642,7 +3468,6 @@ Object.assign(window, {
   renderExploreResults,
   renderLeaderboard,
   renderManageShop,
-  renderNotifPanel,
   renderRecentGrid,
   runExploreNearbySearch,
   saveBakeryProfile,
@@ -3659,7 +3484,6 @@ Object.assign(window, {
   // unavoidable rather than staleness.
   switchFeedTab,
   switchLbTab,
-  updateBellBadge,
   updateOverallRating,
   updatePreorderBadge,
   updateStats,
