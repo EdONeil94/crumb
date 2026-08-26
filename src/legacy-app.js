@@ -11,9 +11,9 @@ import { distKm, extractCity, extractCountry } from './utils/geo.js';
 import { escJS } from './utils/strings.js';
 import {
   SUPER_ADMIN_UID, currentUser, fb, currentUserRole, currentUserBakery,
-  allUserRoles, bakeryProfiles, setCurrentUser, setFb, setCurrentUserRole,
+  setCurrentUser, setFb, setCurrentUserRole,
   setCurrentUserBakery, isAdmin, isBusiness, ownsBakery, loadUserRole,
-  loadBakeryProfiles, loadAllUserRoles,
+  loadBakeryProfiles,
   allItems, allBakeries, allProfiles, allItemRecords, setAllItems,
   setAllBakeries, loadItemRecords, ensureProfileExists,
   myFollowing, myFollowers, loadFollows, loadBookmarks,
@@ -59,6 +59,9 @@ import { openBakeryProfile, closeBakeryModal } from './components/bakeryModal.js
 import {
   openProfileModal, closeProfileModal, switchProfileTab, refreshOpenProfile,
 } from './components/profileModal.js';
+import {
+  showAdminTab, closeManageBakeryModal, handleBakeryPhoto, saveBakeryProfile,
+} from './components/adminPanel.js';
 // Side-effect only — PWA install/update-check/status-bar-fix/pull-to-refresh/
 // keyboard-scroll all self-execute on import, no exports needed here.
 import './app/lifecycle.js';
@@ -71,7 +74,14 @@ import './app/lifecycle.js';
 // SUPER_ADMIN_UID/currentUserRole/currentUserBakery/allUserRoles/
 // bakeryProfiles/isAdmin/isBusiness/ownsBakery/loadUserRole/
 // loadBakeryProfiles/loadAllUserRoles moved to src/state/appState.js
-// (2026-08-24, pages/components carving Phase 0 step 3a) — imported above.
+// (2026-08-24, pages/components carving Phase 0 step 3a). allUserRoles/
+// bakeryProfiles/loadAllUserRoles are no longer imported here at all —
+// their only real (non-comment) uses in this file were
+// refreshAdminUsersPanel/promoteUser/promptAssignBakery/removeUserRole/
+// showAdminTab, all moved to src/components/adminPanel.js (2026-08-26,
+// Phase 6 step 23); SUPER_ADMIN_UID/isAdmin/isBusiness/ownsBakery/
+// loadUserRole/loadBakeryProfiles are still imported above — genuinely
+// still needed elsewhere in this file.
 
 async function loadProfiles() {
   if (!fb) return;
@@ -86,46 +96,13 @@ async function loadProfiles() {
   } catch(e) { console.log('Profiles load error:', e.message); }
 }
 
-async function refreshAdminUsersPanel() {
-  await loadAllUserRoles();
-  const panel = document.getElementById('adminUsersPanel');
-  if (panel) panel.innerHTML = renderAdminUsersHTML();
-}
-
-async function promoteUser(uid, role, bakeryName) {
-  if (!isAdmin() || !fb) return;
-  if (!confirm(`Make this user an admin? They will get full admin access.`)) return;
-  const { db, doc, setDoc } = fb;
-  try {
-    await setDoc(doc(db, 'userRoles', uid), { role, bakeryName: bakeryName || '' }, { merge: true });
-    showToast('✅ User promoted to admin');
-    await refreshAdminUsersPanel();
-  } catch(e) { showToast('Could not update role'); console.error(e); }
-}
-
-async function promptAssignBakery(uid, name) {
-  if (!isAdmin() || !fb) return;
-  const bakeryName = prompt(`Assign which bakery to ${name}? (Enter the exact bakery name as it appears on Crumbz)`);
-  if (bakeryName === null) return; // cancelled
-  if (!bakeryName.trim()) { showToast('Bakery name cannot be empty'); return; }
-  const { db, doc, setDoc } = fb;
-  try {
-    await setDoc(doc(db, 'userRoles', uid), { role: 'business', bakeryName: bakeryName.trim() }, { merge: true });
-    showToast(`✅ ${name} assigned to ${bakeryName.trim()}`);
-    await refreshAdminUsersPanel();
-  } catch(e) { showToast('Could not assign bakery'); console.error(e); }
-}
-
-async function removeUserRole(uid) {
-  if (!isAdmin() || !fb) return;
-  if (!confirm('Remove this user\'s admin/business role? They will go back to being a regular member.')) return;
-  const { db, doc, deleteDoc } = fb;
-  try {
-    await deleteDoc(doc(db, 'userRoles', uid));
-    showToast('Role removed');
-    await refreshAdminUsersPanel();
-  } catch(e) { showToast('Could not remove role'); console.error(e); }
-}
+// refreshAdminUsersPanel/promoteUser/promptAssignBakery/removeUserRole
+// moved to src/components/adminPanel.js (2026-08-26, Phase 6 step 23) —
+// genuinely Admin Panel Users-tab actions despite living under this
+// otherwise-fully-migrated "ROLES" header (a position-vs-topic split, same
+// class as several earlier steps' findings). See that file's own header
+// comment for the full reasoning, including a real pre-existing bug
+// surfaced (not fixed) in refreshAdminUsersPanel's own DOM target.
 
 // ─── STATE ────────────────────────────────────────────────────────────────────
 /* ────────────────────────────────────────────────────────────────────────
@@ -1232,164 +1209,33 @@ function closeBakeryEditModal() {
 registerActions({ handleBakeryEditPhoto, saveBakeryPage });
 
 // ─── REVIEW FLAGGING ──────────────────────────────────────────────────────────
+// Genuinely empty — no code under this header, confirmed while extracting
+// src/components/adminPanel.js (2026-08-26, Phase 6 step 23).
 
-// ─── ADMIN PANEL ──────────────────────────────────────────────────────────────
-async function showAdminTab(tab) {
-  ['users','bakeries','flags','features'].forEach(t => {
-    const btn = document.getElementById('adminTab' + t.charAt(0).toUpperCase() + t.slice(1));
-    if (btn) {
-      btn.className = t === tab ? 'btn-espresso' : 'btn-ghost';
-      btn.style.cssText = t === tab ? 'font-size:0.85rem;padding:9px 18px;' : 'font-size:0.85rem;padding:9px 18px;border:1.5px solid var(--border);';
-    }
-  });
-  const tabContent = document.getElementById('adminTabContent');
-  tabContent.innerHTML = '<div style="text-align:center;padding:24px;"><div class="spinner" style="margin:0 auto;"></div></div>';
-
-  await loadAllUserRoles();
-
-  if (tab === 'users') {
-    tabContent.innerHTML = renderAdminUsersHTML();
-  } else if (tab === 'bakeries') {
-    tabContent.innerHTML = renderAdminBakeriesHTML();
-  } else if (tab === 'flags') {
-    tabContent.innerHTML = '<div id="adminFlagsPanel"></div>';
-    await renderAdminFlags();
-  } else if (tab === 'features') {
-    await renderAdminFeatures();
-  }
-}
-
-// showAdminTab's 4 tab-button call sites are in index.html; had no call
-// sites outside this cluster, so it comes out of WINDOW EXPORTS entirely.
-registerActions({ showAdminTab });
-
-
-async function renderAdminFlags() {
-  const panel = document.getElementById('adminFlagsPanel');
-  if (!fb) return;
-  const { db, collection, getDocs, query, orderBy } = fb;
-  try {
-    const snap = await getDocs(query(collection(db, 'flaggedReviews'), orderBy('createdAt', 'desc')));
-    const flags = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    if (!flags.length) {
-      panel.innerHTML = '<div class="empty-state" style="padding:24px 0;"><div class="empty-state-icon">✓</div><div class="empty-state-title">No flagged reviews</div></div>';
-      return;
-    }
-    panel.innerHTML = flags.map(f => {
-      const item = allItems.find(i => i.id === f.itemId);
-      return `
-        <div class="flag-item">
-          <div class="flag-item-name">${item?.name || 'Unknown item'} — ${f.bakeryName || ''}</div>
-          <div class="flag-item-meta">Flagged by ${f.flaggedByName || 'someone'} · ${f.reason || 'No reason given'}</div>
-          <div class="flag-item-actions">
-            <button class="admin-btn" data-onclick="dismissFlag" data-args='${dataArgs([f.id])}'>Dismiss flag</button>
-            <button class="admin-btn danger" data-onclick="removeReviewAndFlag" data-args='${dataArgs([f.itemId, f.id])}'>Remove review</button>
-          </div>
-        </div>`;
-    }).join('');
-  } catch(e) { panel.innerHTML = '<div style="padding:16px;color:var(--text-muted);">Could not load flagged reviews.</div>'; }
-}
-
-async function dismissFlag(flagId) {
-  const { db, doc, deleteDoc } = fb;
-  await deleteDoc(doc(db, 'flaggedReviews', flagId));
-  showToast('Flag dismissed');
-  renderAdminFlags();
-}
-
-async function removeReviewAndFlag(itemId, flagId) {
-  if (!confirm('Permanently remove this review?')) return;
-  const { db, doc, deleteDoc } = fb;
-  await Promise.all([
-    deleteDoc(doc(db, 'items', itemId)),
-    deleteDoc(doc(db, 'flaggedReviews', flagId))
-  ]);
-  showToast('Review removed');
-  await loadData();
-  renderAdminFlags();
-}
-
-// dismissFlag/removeReviewAndFlag had no call sites outside this cluster, so
-// both come out of WINDOW EXPORTS entirely.
-registerActions({ dismissFlag, removeReviewAndFlag });
-
-// ─── MANAGE BAKERY ────────────────────────────────────────────────────────────
-let managingBakeryName = null;
-let bakeryPhotoFile = null;
-
-async function openManageBakeryModal(bakeryName) {
-  if (!ownsBakery(bakeryName)) return;
-  managingBakeryName = bakeryName;
-  bakeryPhotoFile = null;
-  document.getElementById('manageBakeryTitle').textContent = bakeryName;
-
-  // Load existing profile
-  let profile = bakeryProfiles[encodeURIComponent(bakeryName)] || bakeryProfiles[bakeryName] || {};
-  try {
-    const { db, doc, getDoc } = fb;
-    const snap = await getDoc(doc(db, 'bakeryProfiles', encodeURIComponent(bakeryName)));
-    if (snap.exists()) profile = snap.data();
-  } catch(e) {}
-
-  document.getElementById('manageBakeryBlurb').value = profile.blurb || '';
-  document.getElementById('manageBakeryWebsite').value = profile.website || '';
-  document.getElementById('manageBakeryInstagram').value = profile.instagram || '';
-
-  const photoWrap = document.getElementById('bakeryPhotoWrap');
-  if (profile.photoURL) {
-    photoWrap.innerHTML = `<img src="${profile.photoURL}" class="bakery-hero-photo" alt="${bakeryName}">`;
-  } else {
-    photoWrap.innerHTML = '🏪';
-  }
-
-  document.getElementById('manageBakeryModal').classList.add('open');
-  lockScroll();
-}
-
-function closeManageBakeryModal() {
-  document.getElementById('manageBakeryModal').classList.remove('open');
-  unlockScroll();
-}
-
-async function handleBakeryPhoto(input) {
-  if (!input.files[0]) return;
-  const compressed = await compressImage(input.files[0], 1400, 0.85);
-  bakeryPhotoFile = compressed;
-  const dataURL = await compressToDataURL(input.files[0], 1400, 0.85);
-  document.getElementById('bakeryPhotoWrap').innerHTML = `<img src="${dataURL}" class="bakery-hero-photo" alt="">`;
-}
-
-async function saveBakeryProfile() {
-  if (!managingBakeryName || !fb) return;
-  const btn = document.querySelector('#manageBakeryModal .btn-espresso');
-  btn.disabled = true; btn.textContent = 'Saving…';
-  try {
-    const { db, storage, doc, setDoc, ref, uploadBytes, getDownloadURL } = fb;
-    const key = encodeURIComponent(managingBakeryName);
-    let photoURL = bakeryProfiles[key]?.photoURL || null;
-    if (bakeryPhotoFile) {
-      const storageRef = ref(storage, `bakeries/${key}/hero.jpg`);
-      const snap = await uploadBytes(storageRef, bakeryPhotoFile, { contentType: 'image/jpeg' });
-      photoURL = await getDownloadURL(snap.ref);
-    }
-    const profileData = {
-      name: managingBakeryName,
-      blurb: document.getElementById('manageBakeryBlurb').value.trim(),
-      website: document.getElementById('manageBakeryWebsite').value.trim(),
-      instagram: document.getElementById('manageBakeryInstagram').value.trim().replace(/^@/, ''),
-      photoURL,
-      ownerId: currentUser.uid,
-      updatedAt: new Date().toISOString()
-    };
-    await setDoc(doc(db, 'bakeryProfiles', key), profileData, { merge: true });
-    bakeryProfiles[key] = profileData;
-    closeManageBakeryModal();
-    showToast('Bakery page saved ✓');
-  } catch(e) { showToast('Error saving — try again'); console.error(e); }
-  finally { btn.disabled = false; btn.textContent = 'Save'; }
-}
+// showAdminTab/renderAdminFlags/dismissFlag/removeReviewAndFlag (ADMIN
+// PANEL) and openManageBakeryModal/closeManageBakeryModal/handleBakeryPhoto/
+// saveBakeryProfile/managingBakeryName/bakeryPhotoFile (MANAGE BAKERY)
+// moved to src/components/adminPanel.js (2026-08-26, Phase 6 step 23) —
+// imported below. showAdminTab/closeManageBakeryModal/handleBakeryPhoto/
+// saveBakeryProfile imported back for this file's own remaining callers
+// (openSettingsPage's plain call, the #manageBakeryModal outside-click
+// listener, and the two raw handlers on that same modal — see
+// adminPanel.js's own header comment for the full reasoning, including a
+// pre-existing bug surfaced in removeReviewAndFlag's dependency on
+// loadData()). removeReviewAndFlag() calls loadData() (stays here, blocked
+// on Explore's exploreCache — Phase 0 step 3b / Phase 7 step 29's own note)
+// via getAction('loadData')() instead of a forbidden direct import; this
+// file now registers loadData for that lookup to resolve (new — loadData
+// had no prior action registration).
+registerActions({ loadData });
 
 // ─── FLAG REVIEW ──────────────────────────────────────────────────────────────
+// flagReview did NOT move to adminPanel.js despite this header's physical
+// proximity to ADMIN PANEL/MANAGE BAKERY — it's the general-purpose "report
+// a review" action (any signed-in user, from the item detail modal's flag
+// button), not an admin action; its only relationship to that cluster is
+// writing to the same flaggedReviews collection renderAdminFlags later
+// reads. See adminPanel.js's own header comment for the full reasoning.
 async function flagReview(itemId, bakeryName) {
   if (!currentUser) return;
   const reason = prompt('Reason for reporting this review (optional):');
@@ -1407,79 +1253,11 @@ async function flagReview(itemId, bakeryName) {
   } catch(e) { showToast('Could not flag review'); }
 }
 
-// ─── ADMIN PANEL RENDERERS ────────────────────────────────────────────────────
-function renderAdminUsersHTML() {
-  const members = {};
-  allItems.forEach(item => {
-    if (!item.userId) return;
-    if (!members[item.userId]) members[item.userId] = {
-      uid: item.userId, name: item.userName || 'Anonymous',
-      photo: item.userPhoto || null, reviews: 0
-    };
-    members[item.userId].reviews++;
-  });
-  Object.entries(allProfiles).forEach(([uid, p]) => {
-    if (!members[uid]) members[uid] = { uid, name: p.displayName || 'Anonymous', photo: p.photoURL || null, reviews: 0 };
-    else { members[uid].name = p.displayName || members[uid].name; members[uid].photo = p.photoURL || members[uid].photo; }
-  });
-
-  const users = Object.values(members).filter(u => u.uid !== SUPER_ADMIN_UID);
-  if (!users.length) return '<div class="empty-state" style="padding:24px 0;"><div class="empty-state-title">No other users yet</div></div>';
-
-  return users.map(u => {
-    const role = allUserRoles[u.uid];
-    const roleBadge = role?.role === 'admin' ? '<span class="role-badge admin">Admin</span>'
-      : role?.role === 'business' ? `<span class="role-badge business">Business · ${role.bakeryName || ''}</span>`
-      : '<span style="font-size:0.75rem;color:var(--text-muted);">Member</span>';
-    const avatarInner = u.photo ? `<img src="${u.photo}" alt="" style="width:100%;height:100%;object-fit:cover;">` : (u.name || '?').charAt(0).toUpperCase();
-    return `
-      <div class="admin-user-row">
-        <div class="admin-user-avatar">${avatarInner}</div>
-        <div class="admin-user-info">
-          <div class="admin-user-name">${u.name} ${roleBadge}</div>
-          <div class="admin-user-email">${u.reviews} review${u.reviews !== 1 ? 's' : ''}</div>
-        </div>
-        <div class="admin-user-actions">
-          ${role?.role !== 'admin' ? `<button class="admin-btn" data-onclick="promoteUser" data-args='${dataArgs([u.uid, 'admin', ''])}'>Make admin</button>` : ''}
-          <button class="admin-btn" data-onclick="promptAssignBakery" data-args='${dataArgs([u.uid, u.name])}'>${role?.role === 'business' ? 'Change bakery' : 'Assign bakery'}</button>
-          ${role ? `<button class="admin-btn danger" data-onclick="removeUserRole" data-args='${dataArgs([u.uid])}'>Remove role</button>` : ''}
-        </div>
-      </div>`;
-  }).join('');
-}
-
-function renderAdminBakeriesHTML() {
-  buildBakeryIndex();
-  const names = Object.keys(allBakeries);
-  if (!names.length) return '<div class="empty-state" style="padding:24px 0;"><div class="empty-state-title">No bakeries yet</div></div>';
-
-  return `<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:16px;">
-    Assign a bakery to a business user via the Users tab. The table below shows current ownership.</div>` +
-  names.map(name => {
-    const b = allBakeries[name];
-    const owner = Object.entries(allUserRoles).find(([, r]) => r.bakeryName === name);
-    const ownerName = owner ? (allProfiles[owner[0]]?.displayName || 'User ' + owner[0].slice(0,6)) : '—';
-    const bp = bakeryProfiles[encodeURIComponent(name)] || {};
-    const claimed = bp.ownerId ? '<span class="claimed-badge">✓ Claimed</span>' : '';
-    return `
-      <div class="admin-user-row">
-        <div class="admin-user-info">
-          <div class="admin-user-name">${name} ${claimed}</div>
-          <div class="admin-user-email">${b.items.length} review${b.items.length !== 1 ? 's' : ''} · Owner: ${ownerName}</div>
-        </div>
-        <div class="admin-user-actions">
-          <button class="admin-btn" data-onclick="openBakeryProfile" data-args='${dataArgs([name, ''])}'>View page</button>
-          ${isAdmin() ? `<button class="admin-btn primary" data-onclick="openManageBakeryModal" data-args='${dataArgs([name])}'>Edit page</button>` : ''}
-        </div>
-      </div>`;
-  }).join('');
-}
-
-// Admin panel's Users/Bakeries tables. promoteUser/promptAssignBakery/
-// removeUserRole had no call sites outside this cluster, so all come out of
-// WINDOW EXPORTS entirely. openBakeryProfile/openManageBakeryModal are
-// already registered elsewhere — no change needed for those here.
-registerActions({ promoteUser, promptAssignBakery, removeUserRole });
+// renderAdminUsersHTML/renderAdminBakeriesHTML moved to
+// src/components/adminPanel.js (2026-08-26, Phase 6 step 23) — imported
+// below. renderAdminBakeriesHTML's own buildBakeryIndex() call resolves via
+// getAction('buildBakeryIndex')() there instead (same blocked dependency,
+// same resolution as bakeryModal.js's openBakeryProfile at step 21).
 
 // ─── EXPLORE PAGE ─────────────────────────────────────────────────────────────
 // ─── EXPLORE: WORLD CITIES DATA ───────────────────────────────────────────────
@@ -3046,89 +2824,17 @@ async function submitFeatureRequest() {
   }
 }
 
-async function toggleFeatureVote(requestId) {
-  if (!currentUser) { openAuthModal(); return; }
-  const { db, doc, getDoc, updateDoc } = fb;
-  try {
-    const ref = doc(db, 'featureRequests', requestId);
-    const snap = await getDoc(ref);
-    const data = snap.data();
-    const voterIds = data.voterIds || [];
-    const alreadyVoted = voterIds.includes(currentUser.uid);
-    const newVoterIds = alreadyVoted
-      ? voterIds.filter(id => id !== currentUser.uid)
-      : [...voterIds, currentUser.uid];
-    await updateDoc(ref, { votes: newVoterIds.length, voterIds: newVoterIds });
-    showToast(alreadyVoted ? 'Vote removed' : '👍 Upvoted!');
-    await renderAdminFeatures();
-  } catch(e) { showToast('Could not save vote'); console.error(e); }
-}
-
-async function updateFeatureStatus(requestId, selectEl) {
-  if (!isAdmin() || !fb) return;
-  const status = selectEl.value;
-  const { db, doc, updateDoc } = fb;
-  try {
-    await updateDoc(doc(db, 'featureRequests', requestId), { status });
-    showToast('Status updated');
-    await renderAdminFeatures();
-  } catch(e) { showToast('Could not update status'); }
-}
-
-async function deleteFeatureRequest(requestId) {
-  if (!isAdmin() || !confirm('Delete this feature request?')) return;
-  const { db, doc, deleteDoc } = fb;
-  try {
-    await deleteDoc(doc(db, 'featureRequests', requestId));
-    showToast('Request deleted');
-    await renderAdminFeatures();
-  } catch(e) { showToast('Could not delete'); }
-}
-
-async function renderAdminFeatures() {
-  const panel = document.getElementById('adminTabContent');
-  if (!fb || !panel) return;
-  const { db, collection, getDocs, query, orderBy } = fb;
-  panel.innerHTML = '<div style="text-align:center;padding:24px;"><div class="spinner" style="margin:0 auto;"></div></div>';
-  try {
-    const snap = await getDocs(query(collection(db, 'featureRequests')));
-    const requests = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-      .sort((a, b) => (b.votes || 0) - (a.votes || 0));
-    if (!requests.length) {
-      panel.innerHTML = '<div class="empty-state" style="padding:24px 0;"><div class="empty-state-icon">💡</div><div class="empty-state-title">No feature requests yet</div></div>';
-      return;
-    }
-    const statusLabels = { new: 'New', 'under-review': 'Under review', planned: 'Planned', 'in-progress': 'In progress', done: 'Done', declined: 'Declined' };
-    panel.innerHTML = requests.map(r => {
-      const voted = currentUser && (r.voterIds || []).includes(currentUser.uid);
-      const statusClass = (r.status || 'new').replace(' ', '-');
-      return `
-        <div class="fr-item">
-          <div class="fr-vote">
-            <button class="fr-vote-btn ${voted ? 'voted' : ''}" data-onclick="toggleFeatureVote" data-args='${dataArgs([r.id])}' title="${voted ? 'Remove vote' : 'Upvote'}">▲</button>
-            <div class="fr-vote-count">${r.votes || 0}</div>
-          </div>
-          <div class="fr-body">
-            <div class="fr-title">${r.title || 'Untitled'}</div>
-            ${r.detail ? `<div class="fr-detail">${r.detail}</div>` : ''}
-            <div class="fr-meta">
-              <span class="fr-by">by ${r.userName || 'Anonymous'}</span>
-              <span class="fr-status ${statusClass}">${statusLabels[r.status] || 'New'}</span>
-            </div>
-            <div class="fr-admin-actions">
-              <select class="fr-status-select" data-onchange="updateFeatureStatus" data-args='${dataArgs([r.id])}'>
-                ${Object.entries(statusLabels).map(([val, label]) => `<option value="${val}" ${r.status === val ? 'selected' : ''}>${label}</option>`).join('')}
-              </select>
-              <button class="admin-btn danger" data-onclick="deleteFeatureRequest" data-args='${dataArgs([r.id])}'>Delete</button>
-            </div>
-          </div>
-        </div>`;
-    }).join('');
-  } catch(e) {
-    panel.innerHTML = '<div style="padding:16px;color:var(--text-muted);">Could not load feature requests.</div>';
-    console.error(e);
-  }
-}
+// toggleFeatureVote/updateFeatureStatus/deleteFeatureRequest/
+// renderAdminFeatures moved to src/components/adminPanel.js (2026-08-26,
+// Phase 6 step 23) — a split, not the whole FEATURE REQUESTS section:
+// openFeatureRequestModal/closeFeatureRequestModal/submitFeatureRequest
+// above stay here (the general "💡 Request a feature" submit flow, reached
+// by any signed-in user via the avatar dropdown menu). renderAdminFeatures
+// only ever renders into #adminTabContent (this cluster's own tab content
+// area) — confirmed via DOM id before moving, not assumed from its name —
+// so despite toggleFeatureVote not being isAdmin()-gated in its own body,
+// its only reachable UI lives entirely inside the admin-gated panel. See
+// adminPanel.js's own header comment for the full reasoning.
 
 document.getElementById('featureRequestModal').addEventListener('click', e => {
   if (e.target === document.getElementById('featureRequestModal')) closeFeatureRequestModal();
@@ -3831,11 +3537,11 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeAddMo
 // now (Phase 5 step 20). closeBakeryModal/closeReserveModal register from
 // src/components/bakeryModal.js now (Phase 5 step 21). closeProfileModal/
 // closeCalDayModal register from src/components/profileModal.js now
-// (Phase 5 step 22).
+// (Phase 5 step 22). closeManageBakeryModal registers from
+// src/components/adminPanel.js now (Phase 6 step 23).
 registerActions({
   closeManageShopModal, closeProductModal,
   closeBakeryEditModal,
-  closeManageBakeryModal,
   closeFeatureRequestModal,
 });
 
@@ -3872,11 +3578,10 @@ registerActions({
   openMyPreordersSheet, openFeatureRequestModal,
 });
 
-// Feature requests. updateFeatureStatus's onchange is now converted (see
-// onchange/oninput delegation, registered further down) — its signature
-// changed from (requestId, status) to (requestId, selectEl), reading
-// selectEl.value itself, since it had no other call sites.
-registerActions({ submitFeatureRequest, toggleFeatureVote, deleteFeatureRequest, updateFeatureStatus });
+// Feature requests — the general submit flow only; toggleFeatureVote/
+// deleteFeatureRequest/updateFeatureStatus register from
+// src/components/adminPanel.js now (Phase 6 step 23).
+registerActions({ submitFeatureRequest });
 
 // Bakeries page. renderBakeries stays in WINDOW EXPORTS — the location
 // filter's onchange is converted, but renderBakeries is also called from
@@ -3903,18 +3608,17 @@ registerActions({
 
 // openManageShopModal had no call sites anywhere else in the file, so it's
 // been removed from WINDOW EXPORTS entirely (not just registered) — first
-// function to be fully migrated off the global. openManageBakeryModal's
-// last raw call site was ADMIN PANEL RENDERERS' bakeries table
-// (renderAdminBakeriesHTML); openBakeryEditModal's was BUSINESS — BAKERY
-// PAGE MANAGEMENT's own settings-page "Edit page" button
-// (renderBusinessSection) — both now delegated too, so both come out of
-// WINDOW EXPORTS entirely as well. openAddModalForBakery registers from
-// src/components/addReviewModal.js now (Phase 4 step 18). switchBakeryTab
-// registers from src/components/bakeryModal.js now (Phase 5 step 21).
-// openProfileModal registers from src/components/profileModal.js now
-// (Phase 5 step 22).
+// function to be fully migrated off the global. openBakeryEditModal's last
+// raw call site was BUSINESS — BAKERY PAGE MANAGEMENT's own settings-page
+// "Edit page" button (renderBusinessSection), now delegated too, so it
+// comes out of WINDOW EXPORTS entirely as well. openAddModalForBakery
+// registers from src/components/addReviewModal.js now (Phase 4 step 18).
+// switchBakeryTab registers from src/components/bakeryModal.js now (Phase 5
+// step 21). openProfileModal registers from src/components/profileModal.js
+// now (Phase 5 step 22). openManageBakeryModal registers from
+// src/components/adminPanel.js now (Phase 6 step 23).
 registerActions({
-  openBakeryEditModal, openManageBakeryModal,
+  openBakeryEditModal,
   openManageShopModal,
 });
 
@@ -4003,11 +3707,11 @@ initDelegatedEvents();
 buildTastingDims();
 buildCategoryChips();
 
-function renderAdminUsers() {
-  const panel = document.getElementById('adminUsersPanel');
-  if (panel) panel.innerHTML = renderAdminUsersHTML();
-}
-
+// renderAdminUsers (dead code — zero real callers anywhere, confirmed via
+// grep; carried the exact same #adminUsersPanel bug as
+// refreshAdminUsersPanel) moved to src/components/adminPanel.js alongside
+// that bug's other half (2026-08-26, Phase 6 step 23) rather than deleted,
+// per this extraction's own scope (surface, don't fix/delete).
 
 // ── NEXT SCRIPT BLOCK ──
 
@@ -4043,7 +3747,6 @@ Object.assign(window, {
   initPreorderPage,
   loadNotifications,
   openAddModal,
-  openFeatureRequestModal,
   openSettingsPage,
   populateBakeryLocationFilter,
   populateExploreCityDropdown,
@@ -4051,13 +3754,7 @@ Object.assign(window, {
   populateLbLocationFilter,
   populatePoCityDropdown,
   processScannedReservation,
-  refreshAdminUsersPanel,
   refreshFollowButtons,
-  renderAdminBakeriesHTML,
-  renderAdminFeatures,
-  renderAdminFlags,
-  renderAdminUsers,
-  renderAdminUsersHTML,
   renderBakeryLeaderboard,
   renderBusinessSection,
   renderExploreCityGrid,
