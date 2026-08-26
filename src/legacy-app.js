@@ -10,7 +10,7 @@ import { lockScroll, unlockScroll, showToast, timeAgo } from './utils/dom.js';
 import { distKm, extractCity, extractCountry } from './utils/geo.js';
 import { escJS } from './utils/strings.js';
 import {
-  SUPER_ADMIN_UID, currentUser, fb, currentUserRole, currentUserBakery,
+  SUPER_ADMIN_UID, currentUser, fb, currentUserRole,
   setCurrentUser, setFb, setCurrentUserRole,
   setCurrentUserBakery, isAdmin, isBusiness, ownsBakery, loadUserRole,
   loadBakeryProfiles,
@@ -62,6 +62,9 @@ import {
 import {
   showAdminTab, closeManageBakeryModal, handleBakeryPhoto, saveBakeryProfile,
 } from './components/adminPanel.js';
+import {
+  renderBusinessSection, closeBakeryEditModal,
+} from './components/businessBakeryManagement.js';
 // Side-effect only — PWA install/update-check/status-bar-fix/pull-to-refresh/
 // keyboard-scroll all self-execute on import, no exports needed here.
 import './app/lifecycle.js';
@@ -1076,137 +1079,16 @@ function signOutFromSettings() {
   }
 }
 
-// ─── BUSINESS — BAKERY PAGE MANAGEMENT ───────────────────────────────────────
-function renderBusinessSection() {
-  const body = document.getElementById('settingsBusinessBody');
-  const myBakeries = isAdmin()
-    ? Object.keys(allBakeries || {})
-    : (currentUserBakery ? [currentUserBakery] : []);
-
-  if (!myBakeries.length) {
-    body.innerHTML = `<div class="empty-state" style="padding:20px 0;"><div class="empty-state-icon">🏪</div><div class="empty-state-title">No bakeries assigned yet</div><div class="empty-state-text">Ask an admin to assign your bakery to your account.</div></div>`;
-    return;
-  }
-  body.innerHTML = myBakeries.map(name => {
-    const b = allBakeries[name];
-    const avg = b ? (b.totalScore / b.items.length).toFixed(1) : '–';
-    return `
-      <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--border);">
-        <div>
-          <div style="font-weight:600; color:var(--espresso);">${name}</div>
-          <div style="font-size:0.78rem; color:var(--text-muted);">${b ? b.items.length : 0} reviews · avg ${avg}</div>
-        </div>
-        <button class="btn-caramel" style="font-size:0.82rem; padding:8px 14px;" data-onclick="openBakeryEditModal" data-args='${dataArgs([name])}'>✏️ Edit page</button>
-      </div>`;
-  }).join('');
-}
-
-let editingBakeryName = null;
-let bakeryEditPhotoFile = null;
-
-async function openBakeryEditModal(bakeryName) {
-  editingBakeryName = bakeryName;
-  bakeryEditPhotoFile = null;
-  document.getElementById('bakeryEditModalTitle').textContent = bakeryName;
-  document.getElementById('bakeryEditModal').classList.add('open');
-  lockScroll();
-
-  // Load current bakery data
-  let bData = {};
-  try {
-    const { db, doc, getDoc } = fb;
-    const snap = await getDoc(doc(db, 'bakeries', encodeURIComponent(bakeryName)));
-    if (snap.exists()) bData = snap.data();
-  } catch(e) {}
-
-  const photoPreview = bData.coverPhotoURL
-    ? `<div class="photo-preview"><img src="${bData.coverPhotoURL}" style="max-height:180px;width:100%;object-fit:cover;border-radius:var(--radius);"></div>`
-    : `<div class="photo-upload" style="height:120px;">
-        <input type="file" accept="image/*" id="bakeryEditPhotoInput" data-onchange="handleBakeryEditPhoto">
-        <div class="photo-upload-icon">🏪</div>
-        <div class="photo-upload-text">Add a cover photo</div>
-       </div>`;
-
-  document.getElementById('bakeryEditModalBody').innerHTML = `
-    <div style="padding:0 0 20px; display:flex; flex-direction:column; gap:16px;">
-      <div class="form-group" style="margin:0;">
-        <label class="form-label">Cover photo</label>
-        <div id="bakeryEditPhotoWrap">${photoPreview}</div>
-        ${bData.coverPhotoURL ? `<label style="cursor:pointer;font-size:0.78rem;color:var(--caramel);margin-top:6px;display:inline-block;">🔄 Change photo<input type="file" accept="image/*" style="display:none;" data-onchange="handleBakeryEditPhoto"></label>` : ''}
-      </div>
-      <div class="form-group" style="margin:0;">
-        <label class="form-label">About this bakery</label>
-        <textarea class="form-textarea" id="bakeryEditBlurb" style="min-height:100px;" placeholder="Tell your story — what makes your bakery special, what to order, when to visit…">${bData.blurb || ''}</textarea>
-      </div>
-      <div class="form-group" style="margin:0;">
-        <label class="form-label">Website</label>
-        <input type="url" class="form-input" id="bakeryEditWebsite" placeholder="https://yourbakery.com" value="${bData.website || ''}">
-      </div>
-      <div class="form-group" style="margin:0;">
-        <label class="form-label">Instagram</label>
-        <div style="position:relative;">
-          <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-muted);">@</span>
-          <input type="text" class="form-input" id="bakeryEditInstagram" placeholder="yourbakery" value="${bData.instagram || ''}" style="padding-left:30px;">
-        </div>
-      </div>
-    </div>`;
-}
-
-function handleBakeryEditPhoto(input) {
-  if (!input.files[0]) return;
-  const file = input.files[0];
-  compressImage(file, 1200, 0.85).then(blob => { bakeryEditPhotoFile = blob; });
-  const reader = new FileReader();
-  reader.onload = e => {
-    document.getElementById('bakeryEditPhotoWrap').innerHTML =
-      `<img src="${e.target.result}" style="max-height:180px;width:100%;object-fit:cover;border-radius:var(--radius);">`;
-  };
-  reader.readAsDataURL(file);
-}
-
-async function saveBakeryPage() {
-  if (!editingBakeryName) return;
-  const btn = document.querySelector('#bakeryEditModal .btn-espresso');
-  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
-  try {
-    const { db, storage, doc, setDoc, ref, uploadBytes, getDownloadURL } = fb;
-    let coverPhotoURL = null;
-    // Get existing first
-    const snap = await fb.getDoc(doc(db, 'bakeries', encodeURIComponent(editingBakeryName)));
-    if (snap.exists()) coverPhotoURL = snap.data().coverPhotoURL || null;
-
-    if (bakeryEditPhotoFile) {
-      const storageRef = ref(storage, `bakeries/${encodeURIComponent(editingBakeryName)}/cover.jpg`);
-      const s = await uploadBytes(storageRef, bakeryEditPhotoFile, { contentType: 'image/jpeg' });
-      coverPhotoURL = await getDownloadURL(s.ref);
-    }
-    const data = {
-      name: editingBakeryName,
-      blurb: document.getElementById('bakeryEditBlurb').value.trim(),
-      website: document.getElementById('bakeryEditWebsite').value.trim(),
-      instagram: document.getElementById('bakeryEditInstagram').value.trim().replace('@',''),
-      coverPhotoURL,
-      ownedBy: currentUser.uid,
-      updatedAt: new Date().toISOString()
-    };
-    await setDoc(doc(db, 'bakeries', encodeURIComponent(editingBakeryName)), data, { merge: true });
-    closeBakeryEditModal();
-    showToast('Bakery page updated ✓');
-  } catch(e) { showToast('Could not save'); console.error(e); }
-  finally { if (btn) { btn.disabled = false; btn.textContent = 'Save changes'; } }
-}
-
-function closeBakeryEditModal() {
-  document.getElementById('bakeryEditModal').classList.remove('open');
-  unlockScroll();
-  editingBakeryName = null;
-}
-
-// handleBakeryEditPhoto/saveBakeryPage had no call sites outside this
-// cluster, so both come out of WINDOW EXPORTS entirely.
-// closeBakeryEditModal is already registered elsewhere (the modal-close
-// pilot block) — no change needed here.
-registerActions({ handleBakeryEditPhoto, saveBakeryPage });
+// renderBusinessSection/editingBakeryName/bakeryEditPhotoFile/
+// openBakeryEditModal/handleBakeryEditPhoto/saveBakeryPage/
+// closeBakeryEditModal moved to
+// src/components/businessBakeryManagement.js (2026-08-26, Phase 6 step
+// 24) — genuinely one clean, self-contained feature, no split needed.
+// renderBusinessSection/closeBakeryEditModal imported below for this
+// file's own remaining callers (openSettingsPage's plain call, and the
+// #bakeryEditModal outside-click/keydown-Escape listeners). See that
+// file's own header comment for the full reasoning, including how this
+// differs from adminPanel.js's similarly-named MANAGE BAKERY cluster.
 
 // ─── REVIEW FLAGGING ──────────────────────────────────────────────────────────
 // Genuinely empty — no code under this header, confirmed while extracting
@@ -3539,9 +3421,10 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeAddMo
 // closeCalDayModal register from src/components/profileModal.js now
 // (Phase 5 step 22). closeManageBakeryModal registers from
 // src/components/adminPanel.js now (Phase 6 step 23).
+// closeBakeryEditModal registers from
+// src/components/businessBakeryManagement.js now (Phase 6 step 24).
 registerActions({
   closeManageShopModal, closeProductModal,
-  closeBakeryEditModal,
   closeFeatureRequestModal,
 });
 
@@ -3608,17 +3491,15 @@ registerActions({
 
 // openManageShopModal had no call sites anywhere else in the file, so it's
 // been removed from WINDOW EXPORTS entirely (not just registered) — first
-// function to be fully migrated off the global. openBakeryEditModal's last
-// raw call site was BUSINESS — BAKERY PAGE MANAGEMENT's own settings-page
-// "Edit page" button (renderBusinessSection), now delegated too, so it
-// comes out of WINDOW EXPORTS entirely as well. openAddModalForBakery
+// function to be fully migrated off the global. openAddModalForBakery
 // registers from src/components/addReviewModal.js now (Phase 4 step 18).
 // switchBakeryTab registers from src/components/bakeryModal.js now (Phase 5
 // step 21). openProfileModal registers from src/components/profileModal.js
 // now (Phase 5 step 22). openManageBakeryModal registers from
 // src/components/adminPanel.js now (Phase 6 step 23).
+// openBakeryEditModal registers from
+// src/components/businessBakeryManagement.js now (Phase 6 step 24).
 registerActions({
-  openBakeryEditModal,
   openManageShopModal,
 });
 
@@ -3756,7 +3637,6 @@ Object.assign(window, {
   processScannedReservation,
   refreshFollowButtons,
   renderBakeryLeaderboard,
-  renderBusinessSection,
   renderExploreCityGrid,
   renderExploreMap,
   renderExploreResults,
