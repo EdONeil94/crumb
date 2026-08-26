@@ -10,13 +10,15 @@ its own section below), and the **E2E test workflow** — all done on
 
 ## Carving src/legacy-app.js into src/pages/ and src/components/
 
-**Status as of 2026-08-25: Phases 0-4 complete, Phase 5 in progress**
-(steps 1-21 of 32 done — Phase 4's `manageOfferingsModal.js` (the "does
+**Status as of 2026-08-26: Phases 0-5 complete, Phase 6 not started**
+(steps 1-22 of 32 done — Phase 4's `manageOfferingsModal.js` (the "does
 this scale" milestone) and `addReviewModal.js` (the modalNext/modalBack
 cluster — held to an explicitly elevated verification bar, see its own
 extraction-log entry). Phase 5 (composite modals: `itemDetailModal.js` —
 ✅ done, step 19; `shareReviewModal.js` — ✅ done, step 20;
-`bakeryModal.js` — ✅ done, step 21; `profileModal.js` not started).
+`bakeryModal.js` — ✅ done, step 21; `profileModal.js` — ✅ done, step 22,
+closing out the phase and resolving the largest backlog of deferred items
+in the whole plan, see its own extraction-log entry).
 This is separate from — and comes after — the handler delegation migration
 above; don't conflate the two milestones. Plan approved 2026-08-24 (was
 drafted as a plan-mode file at `~/.claude/plans/logical-painting-kurzweil.md`,
@@ -203,7 +205,14 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   genuinely blocked calls (buildBakeryIndex, loadMyPreorders/
   renderPreorderPage) resolved via the getAction() pattern from step 18 —
   see its own extraction-log entry below ·
-  22. `src/components/profileModal.js`
+  22. `src/components/profileModal.js` — ✅ **done** (2026-08-26, commit
+  `45b33a3`) — **closes out Phase 5**, resolving the largest backlog of
+  deferred items in the whole plan (closeDetailAndOpenProfile from step 19,
+  renderSavedTab/removeBookmarkAndRefreshSaved from step 20,
+  openProfileIfSignedIn from step 12, half of follows.js's step 14 pair);
+  also brought in Activity Calendar/Dining Map (never their own plan step)
+  and toggleBookmark (a dependency found only by reading, not pre-flagged
+  anywhere) — see its own extraction-log entry below
 - **Phase 6 — admin/business surfaces (spec exists, but destructive actions
   are wiring-only, not click-verified — extra manual QA regardless of order):**
   23. `src/components/adminPanel.js` ·
@@ -303,6 +312,156 @@ boundaries — commits happen at the module/stage level throughout.
 
 ### Extraction log (most recent first)
 
+- **`src/components/profileModal.js` — step 22** (2026-08-26, commit
+  `45b33a3`). **Closes out Phase 5.** Re-grepped legacy-app.js's "FILTER
+  HELPERS" section fresh (line numbers had shifted since step 21) and
+  confirmed its last remaining code — `profileActiveCatFilter`/
+  `profileActiveLocFilter`/`profileModalUid`, `openProfileModal`,
+  `closeProfileModal`, `switchProfileTab` — is genuinely the Profile
+  modal's own rendering, exactly as step 21's own header comment said it
+  would be. Moving these three functions resolved this section down to
+  pure historical comments, confirmed by reading before moving, not
+  assumed from the plan.
+  This step was explicitly framed as resolving the largest deferred-item
+  backlog in the plan, and each item was checked individually before
+  writing any code, per the resume prompt's own instruction — not assumed
+  resolved just because this file now exists:
+  - **`closeDetailAndOpenProfile`** (deferred step 19, `itemDetailModal.js`)
+    — moved wholesale. Needed `closeDetailModal` imported one-way from
+    `itemDetailModal.js` — verified that file imports nothing from here
+    first, so no cycle.
+  - **`renderSavedTab`/`removeBookmarkAndRefreshSaved`** (deferred step 20,
+    `shareReviewModal.js`) — moved wholesale, confirming step 20's own
+    header comment that both were genuinely Profile-modal internals that
+    only shared a file section with Share Review by position.
+  - **`openProfileIfSignedIn`** (deferred step 12, `reviewCard.js`) — moved
+    wholesale. Its `data-onclick="openProfileIfSignedIn"` references inside
+    `cardHTML`/`feedCardHTML` markup keep resolving via the global
+    `registerActions()` registry regardless of which file registers it.
+  - **`refreshOpenProfile`** — the narrower half of a pair follows.js's own
+    step-14 header comment named as both waiting for this step
+    (`followAndRefreshProfile`/`refreshOpenProfile`). Only `refreshOpenProfile`
+    actually moved: it needed only the Profile modal's own now-local state
+    (`profileModalUid`/`profileActiveCatFilter`/`profileActiveLocFilter`)
+    and `openProfileModal` (also now-local) — a clean wholesale move,
+    exported since `legacy-app.js`'s own `followAndRefreshProfile` needs it
+    imported back. `followAndRefreshProfile` itself could **not** move too,
+    despite being the pair's other half — a distinction surfaced by reading
+    its own dependency, not by trusting the pair framing: it also calls
+    `toggleFollow()`, which stays in `legacy-app.js` (`toggleFollow` calls
+    `refreshFollowButtons`, which calls `renderPeople()`, still local to
+    `legacy-app.js` — the same reason `follows.js`'s own step 14/15 notes
+    already gave for `toggleFollow` staying put). Moving
+    `followAndRefreshProfile` here would have meant this file importing
+    `toggleFollow` back from `legacy-app.js` — the forbidden direction,
+    since `legacy-app.js` already needs `openProfileModal`/
+    `closeProfileModal`/`switchProfileTab`/`refreshOpenProfile` imported the
+    normal way. `followAndRefreshProfile` stays behind as a genuine
+    one-function leftover of that pair, not an oversight.
+  **A second new dependency, found only by reading this step's own code,
+  not pre-flagged anywhere**: `removeBookmarkAndRefreshSaved` calls
+  `toggleBookmark()`, which had never been claimed by any step and was
+  still sitting in `legacy-app.js`'s own "BOOKMARKS" section. A fresh grep
+  for every real (non-markup) call site of `toggleBookmark` found exactly
+  one: `removeBookmarkAndRefreshSaved`, moving this same step — its other
+  two "callers" (`bakeryModal.js`'s bookmark button,
+  `legacy-app.js`'s own not-yet-extracted `renderBakeries`) are both
+  `data-onclick="toggleBookmark"` markup strings, resolved via the global
+  registry regardless of which file registers the action, so no import was
+  needed for either. `toggleBookmark` moved here too, alongside its sole
+  real caller — the same "small self-contained function moves with its
+  only caller" reasoning as step 19's `isSavedItem` and step 15's
+  `computeUserScore`.
+  **Activity Calendar** (`renderActivityTab`/`renderCalendar`/`calNav`/
+  `onCalDayClick`/`closeCalDayModal` + `calViewYear`/`calViewMonth`/`calUid`,
+  module-private) **and Dining Map** (`renderDiningMapTab`/`switchDmTab`/
+  `renderDmStats`/`renderDmStatRows`/`geocodeBakeryAddress`/
+  `buildBakeryCoords`/`loadLeafletThenMap` + `diningMapInstance`,
+  module-private) were never named as their own steps in this plan's
+  32-step list — confirmed by a full-file grep before moving either, not
+  assumed from that omission, that both clusters' only caller anywhere in
+  the codebase is `switchProfileTab`'s own `'activity'`/`'map'` branches.
+  Brought in here rather than left as a future standalone module, matching
+  this file's role as the last and largest of Phase 5's composite modals.
+  Every dependency this file needs already had a real importable home —
+  unlike steps 18/21, nothing here needed the `getAction()` workaround for
+  a genuinely blocked cross-cluster call. `buildCategoryFilterBar`/
+  `openBakeryProfile` import one-way from `bakeryModal.js`,
+  `computeCountryRank` one-way from `pages/people.js`, `followBtnHTML`/
+  `getFollowersForUser`/`getFollowingForUser`/`buildFollowUserRowHTML`
+  one-way from `follows.js`, `renderOrdersTab` one-way from
+  `reservations.js` — all ordinary leaf-to-leaf imports, each verified for
+  no cycle before writing any code. Export policy follows `bakeryModal.js`'s
+  precedent (minimal — only functions with a real external caller get
+  `export`), not `manageOfferingsModal.js`'s uniform-export approach: only
+  `openProfileModal`/`closeProfileModal`/`switchProfileTab`/
+  `refreshOpenProfile` are exported; everything else (including
+  `toggleBookmark`) is markup-only or same-file-internal, registered via
+  `registerActions()` but never imported by name elsewhere.
+  9 stale `WINDOW EXPORTS` entries removed (`buildBakeryCoords`/
+  `geocodeBakeryAddress`/`loadLeafletThenMap`/`renderActivityTab`/
+  `renderCalendar`/`renderDiningMapTab`/`renderDmStatRows`/`renderDmStats`/
+  `renderSavedTab`) — `closeProfileModal` kept, verified via grep to have a
+  real raw call site (`index.html`'s ✏️ edit-profile button, `onclick=
+  "closeProfileModal(); showPage('settings');"` — the SETTINGS cluster's
+  one raw site, already named in the handler-delegation migration's own
+  status table, not staleness). Several `registerActions()` bulk calls
+  trimmed across the file (the modal-close bulk call, the
+  `switchProfileTab`/`followAndRefreshProfile`/`followAndRefreshPeople`
+  bulk call, the `openProfileModal`/`openBakeryEditModal`/
+  `openManageBakeryModal`/`openManageShopModal` bulk call, the Bakeries
+  page's `setBakeryView`/`toggleBookmark`/`renderBakeries` bulk call) —
+  same pattern as every prior step's bulk-call trims. Also removed a
+  genuinely dead import discovered while already touching this exact
+  import line: `getFollowState` (imported from `follows.js` into
+  `legacy-app.js` since step 14, but never actually called anywhere in that
+  file — pre-existing staleness, not introduced this step, caught only
+  because the whole follows.js import block became empty once
+  `getFollowersForUser`/`getFollowingForUser`/`buildFollowUserRowHTML`/
+  `followBtnHTML` moved with the code that used them).
+  **A real regression, caught by the targeted spec run before the full
+  gate, not by `check:dead-refs` or `npm run build`**: the first pass at
+  trimming `legacy-app.js`'s `reservations.js` import dropped
+  `renderOrdersTab` entirely, on the assumption its only caller was
+  `switchProfileTab` (moving). That missed `cancelReservation()` — staying
+  in `legacy-app.js`, deferred since step 16 — which also calls
+  `renderOrdersTab(content)` directly after a successful cancel, to
+  refresh the Orders tab in place. Both `check:dead-refs` and `npm run
+  build` passed clean regardless (a bare reference inside an `if (cond)
+  await fn(args);` statement isn't the standalone-statement shape
+  `checkDeadStatementCalls` recognizes — a narrower variant of the same
+  blind-spot class as the `modalNext`/`modalBack` and `editReviewModal.js`
+  incidents, not yet fixed here). Only caught because the targeted
+  `reservations.spec.js` run (part of this step's own pre-full-suite
+  check, given the size and risk) failed deterministically — confirmed
+  against the pre-change commit via `git stash` that this was a real
+  regression, not pre-existing flakiness, before debugging further. Root
+  cause confirmed directly via a throwaway debug spec with a
+  `page.on('pageerror', ...)` listener: `ReferenceError: renderOrdersTab is
+  not defined, at cancelReservation`, thrown right after the Firestore
+  write itself had already succeeded (the status really did change
+  server-side) — the reference error was inside `cancelReservation`'s own
+  `try` block, so its `catch(e)` swallowed it into a "Could not cancel"
+  toast despite the cancel having actually worked, and the Orders tab card
+  never got its in-place re-render, staying stuck on stale "Pending" text.
+  Fixed by restoring `renderOrdersTab` to the import list alongside
+  `parseSlotStartTime`. Worth remembering for any future step
+  that trims an import list shared by both a moving and a staying
+  function: grep every real call site of the function being removed from
+  an import, not just the ones inside the code that's moving.
+  Verified: `check:dead-refs` clean (28 targets, including a check
+  specifically confirming `profileModal.js` itself passes all five
+  checks), `npm run build` succeeds (52 modules). Given the size and the
+  number of resolved deferrals, ran a targeted check first —
+  `people-filters.spec.js` (Profile modal tabs, Followers/Following rows,
+  location filter chips) + `activity-calendar.spec.js` + `share-and-saved.spec.js`
+  (Saved tab bookmarks/items) + `reservations.spec.js` (Orders tab) +
+  `feed.spec.js` (`openProfileIfSignedIn` reachability) — this first pass
+  surfaced the `renderOrdersTab` regression above (1 failed, in
+  `reservations.spec.js`); after the fix, the same targeted set came back
+  14 passed/8 skipped/0 failed, then the full `test:e2e` gate: 59
+  passed/12 skipped/0 failed, within this doc's own documented normal
+  skip-count range.
 - **`src/components/bakeryModal.js` — step 21** (2026-08-25, commit
   `7b89f37`). Re-grepped legacy-app.js's section headers fresh and found
   the bakery-profile-modal cluster doesn't live under its own heading at
