@@ -5,13 +5,12 @@
 // belongs — verify by reading). The original "SHARE REVIEW WITH A FOLLOWED
 // USER" file section also contained renderSavedTab (the Profile modal's
 // own Saved tab) and removeBookmarkAndRefreshSaved — both stayed in
-// legacy-app.js, by topic rather than position: renderSavedTab calls
-// switchProfileTab, still local to legacy-app.js (future
-// src/components/profileModal.js, Phase 5 step 22), and
-// removeBookmarkAndRefreshSaved calls that same switchProfileTab too. Both
-// are genuinely Profile-modal internals that happened to share this file
-// section by position, not by topic — legacy-app.js's own header comment
-// above them already said so before this extraction.
+// legacy-app.js at the time, by topic rather than position: both call
+// switchProfileTab. Both later moved to src/components/profileModal.js
+// (2026-08-26, Phase 5 step 22), confirming they were genuinely
+// Profile-modal internals that happened to share this file section by
+// position, not by topic — legacy-app.js's own header comment above them
+// already said so before this extraction.
 // No cross-cluster dependency on profileModal.js exists for the 5 functions
 // that DID move here — confirmed via a full dependency read before moving,
 // same check step 19 flagged doing for closeDetailAndOpenProfile.

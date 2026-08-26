@@ -10,13 +10,16 @@
 // step 31 — a distant step, unlike most of this plan's imminent-step
 // deferrals). Moving cancelReservation() here would mean this file
 // importing loadMyPreorders() back from legacy-app.js, while legacy-app.js
-// already needs renderOrdersTab() imported the normal direction (from
-// switchProfileTab, itself staying in legacy-app.js — the Profile modal,
-// future src/components/profileModal.js, Phase 5 step 22) — a genuine
+// already needs renderOrdersTab() imported the normal direction — a genuine
 // two-file cycle. cancelReservation() stays in legacy-app.js instead,
-// importing parseSlotStartTime() back from here (its only dependency this
-// file owns) — an ordinary one-way import, not circular, since nothing
-// here calls back into legacy-app.js.
+// importing parseSlotStartTime() back from here (its own dependency, plus
+// renderOrdersTab() itself, its own call after cancelling) — an ordinary
+// one-way import, not circular, since nothing here calls back into
+// legacy-app.js. switchProfileTab (the Profile modal's own tab dispatcher,
+// which also calls renderOrdersTab for its Orders tab) moved to
+// src/components/profileModal.js (2026-08-26, Phase 5 step 22) — that file
+// imports renderOrdersTab from here too, an ordinary second one-way import,
+// still no cycle.
 //
 // Explicitly out of scope for this step, despite also reading/writing the
 // 'reservations' Firestore collection: reserveOffering()/openReserveModal()/

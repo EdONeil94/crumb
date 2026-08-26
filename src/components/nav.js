@@ -10,10 +10,12 @@
 // initExplorePage, initPreorderPage, renderShopPage,
 // populateRankingLocationFilter, renderRankings, renderPeople,
 // openSettingsPage), and openMyProfileFromMobileMenu() calls
-// openProfileModal() (future profileModal.js, not until Phase 5). Moving
-// them now would mean this module importing back from the file that
-// imports it — the same shape of problem as 3b's loadData()/
-// buildBakeryIndex(), just at a larger scale here.
+// openProfileModal() (now src/components/profileModal.js, Phase 5 step 22,
+// but showPage()'s other 12 dependencies are still what actually blocks
+// this move — see CLAUDE.md's Phase 7 step 32 callout). Moving them now
+// would mean this module importing back from the file that imports it — the
+// same shape of problem as 3b's loadData()/buildBakeryIndex(), just at a
+// larger scale here.
 
 import { registerActions } from '../events/actions.js';
 import { dataArgs } from '../events/delegate.js';

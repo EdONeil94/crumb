@@ -13,17 +13,16 @@
 //
 // openProfileIfSignedIn (also referenced by data-onclick in both markups,
 // via the username link) did NOT move here, despite being registered
-// alongside noop in the same original registerActions() call — it calls
-// openProfileModal, which is still in src/legacy-app.js (future
-// src/components/profileModal.js, Phase 5 step 22). Moving it would've
-// meant this file importing back from legacy-app.js while legacy-app.js
-// already needs cardHTML/feedCardHTML imported the normal one-way
-// direction — a genuine two-file cycle, flagged before writing any of this
-// file rather than discovered mid-move. It stays registered from
-// legacy-app.js; the GLOBAL registerActions() registry means the
-// data-onclick references in this file's markup still resolve fine
-// regardless of which file does the registering. Revisit once step 22
-// lands and openProfileModal has a real importable home.
+// alongside noop in the same original registerActions() call — it called
+// openProfileModal, still in src/legacy-app.js at the time. Moving it
+// would've meant this file importing back from legacy-app.js while
+// legacy-app.js already needs cardHTML/feedCardHTML imported the normal
+// one-way direction — a genuine two-file cycle, flagged before writing any
+// of this file rather than discovered mid-move. It moved to
+// src/components/profileModal.js instead (2026-08-26, Phase 5 step 22),
+// once openProfileModal had a real importable home there; the GLOBAL
+// registerActions() registry means the data-onclick references in this
+// file's markup resolve fine regardless of which file does the registering.
 
 import { registerActions } from '../events/actions.js';
 import { dataArgs } from '../events/delegate.js';

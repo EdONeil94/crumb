@@ -7,18 +7,13 @@
 // removeSavedItem, neither of which call it. userSavedItems (its own
 // dependency) was already in src/state/appState.js since Phase 0 step 3c.
 //
-// closeDetailAndOpenProfile stays in legacy-app.js, deferred — it calls
-// openProfileModal(), still local to legacy-app.js (future
-// src/components/profileModal.js, Phase 5 step 22). Moving it here would
-// have created a genuine two-file cycle: legacy-app.js already needs
-// openDetail/closeDetailModal imported back (a direct plain-JS call from
-// notifications' onClick, and from the outside-click/Escape-key modal
-// listeners + its own registerActions call), while this file would need
-// openProfileModal imported the other way — same shape as reviewCard.js's
-// openProfileIfSignedIn deferral (Phase 3 step 12). closeDetailAndOpenProfile
-// keeps working via the delegated data-onclick="closeDetailAndOpenProfile"
-// registered from legacy-app.js — the global registerActions() registry
-// resolves it regardless of which module registers it.
+// closeDetailAndOpenProfile moved to src/components/profileModal.js
+// (2026-08-26, Phase 5 step 22) — it called openProfileModal(), which moved
+// there too. It imports closeDetailModal one-way from this file (verified no
+// cycle: this file imports nothing from profileModal.js) — its own
+// data-onclick="closeDetailAndOpenProfile" markup in this file's own
+// openDetail() keeps resolving fine via the global registerActions()
+// registry regardless of which module registers the action.
 import { registerActions } from '../events/actions.js';
 import { dataArgs } from '../events/delegate.js';
 import { getCategoryDisplay, getTastingDims } from '../data/categories.js';

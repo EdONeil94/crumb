@@ -6,7 +6,7 @@
 // Phase 0): getFollowState, followBtnHTML, getFollowersForUser,
 // getFollowingForUser, buildFollowUserRowHTML.
 //
-// Stayed in legacy-app.js: toggleFollow, refreshFollowButtons,
+// Stayed in legacy-app.js at the time: toggleFollow, refreshFollowButtons,
 // followAndRefreshProfile, followAndRefreshPeople, refreshOpenProfile.
 // toggleFollow calls refreshFollowButtons, which calls renderPeople() —
 // still in legacy-app.js (future src/pages/people.js, Phase 3 step 15, the
@@ -19,9 +19,15 @@
 // renderPeople/openProfileModal, while legacy-app.js already needs
 // getFollowState/followBtnHTML/etc. imported the normal direction — a
 // genuine two-file cycle, flagged before writing any of this file rather
-// than discovered mid-move. Revisit toggleFollow/refreshFollowButtons/
-// followAndRefreshPeople once step 15 lands (imminent — the very next
-// extraction); followAndRefreshProfile/refreshOpenProfile wait for step 22.
+// than discovered mid-move. toggleFollow/refreshFollowButtons/
+// followAndRefreshPeople stayed put once step 15 landed (see people.js's
+// own header comment for that decision). Once step 22 landed, only half of
+// the remaining pair actually moved: refreshOpenProfile went to
+// profileModal.js (it only needed the Profile modal's own now-local state),
+// but followAndRefreshProfile stayed here — it also calls toggleFollow,
+// which stays in legacy-app.js, so moving it would have flipped which file
+// needed the forbidden back-import. See profileModal.js's own header
+// comment for the full reasoning.
 
 import { dataArgs } from '../events/delegate.js';
 import { currentUser, fb, allItems, myFollowing, myFollowers } from '../state/appState.js';

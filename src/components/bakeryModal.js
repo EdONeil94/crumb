@@ -2,7 +2,7 @@
 // Extracted from src/legacy-app.js (2026-08-25, Phase 5 step 21).
 // The bakery-profile-modal cluster lived inside legacy-app.js's "FILTER
 // HELPERS" grab-bag section, mixed with the Profile modal (openProfileModal/
-// closeProfileModal/switchProfileTab — future src/components/profileModal.js,
+// closeProfileModal/switchProfileTab — now src/components/profileModal.js,
 // Phase 5 step 22) and the People page (already extracted, Phase 3 step 15)
 // — exactly the "splits three ways" shape CLAUDE.md's plan already flagged
 // before this extraction started. Verified by reading each function's own
@@ -14,12 +14,13 @@
 // moving) also calls it — it's a completely pure, stateless UI-string
 // builder (only CATEGORY_TREE + dataArgs, both already available), the
 // same "shared, zero-risk value gets a real home" treatment GOOGLE_MAPS_KEY
-// got in Phase 4 step 18. legacy-app.js imports it back for
-// openProfileModal's own use — one ordinary one-way import, no cycle, since
-// nothing in this file calls back into legacy-app.js for it. Step 22
-// (profileModal.js) will need to import it from here too, same as any
-// other established leaf-to-leaf import in this plan (e.g. qrCode.js
-// importing markCollected from manageOfferingsModal.js).
+// got in Phase 4 step 18. Originally imported back into legacy-app.js for
+// openProfileModal's own use; now that openProfileModal has moved to
+// src/components/profileModal.js (Phase 5 step 22), that file imports
+// buildCategoryFilterBar directly from here instead — an ordinary
+// leaf-to-leaf import, no cycle, since nothing in this file calls back into
+// profileModal.js — the same shape as qrCode.js importing markCollected
+// from manageOfferingsModal.js.
 //
 // isBookmarked moved to src/state/appState.js instead of here (alongside
 // userBookmarks, matching the isAdmin/isBusiness/ownsBakery pattern already

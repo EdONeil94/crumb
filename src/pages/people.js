@@ -6,13 +6,14 @@
 //
 // Not moved here, despite reading/writing this page's own state or being
 // reached from its markup: openProfileModal/closeProfileModal/
-// profileModalUid/profileActiveCatFilter/profileActiveLocFilter
-// (src/legacy-app.js — future src/components/profileModal.js, Phase 5 step
-// 22) — the Profile modal opened from a ranking/member card click, not part
-// of the People page itself. computeCountryRank is called from inside that
-// still-not-extracted openProfileModal(), so legacy-app.js imports it back
-// from here — ordinary one-way direction, no cycle, since nothing in this
-// file calls back into legacy-app.js.
+// profileModalUid/profileActiveCatFilter/profileActiveLocFilter — the
+// Profile modal opened from a ranking/member card click, not part of the
+// People page itself. Those moved to src/components/profileModal.js
+// (2026-08-26, Phase 5 step 22) instead; computeCountryRank, called from
+// inside openProfileModal(), is now imported one-way from here by that file
+// (no cycle, since nothing in this file calls back into profileModal.js) —
+// legacy-app.js no longer needs computeCountryRank imported at all, now that
+// openProfileModal itself has moved out.
 //
 // showPage() (legacy-app.js, Phase 7 step 32) reads peopleViewMode and
 // calls setPeopleView/renderRankings/renderPeople/
