@@ -10,15 +10,18 @@ its own section below), and the **E2E test workflow** — all done on
 
 ## Carving src/legacy-app.js into src/pages/ and src/components/
 
-**Status as of 2026-08-26: Phases 0-5 complete, Phase 6 not started**
-(steps 1-22 of 32 done — Phase 4's `manageOfferingsModal.js` (the "does
+**Status as of 2026-08-26: Phases 0-5 complete, Phase 6 in progress**
+(steps 1-23 of 32 done — Phase 4's `manageOfferingsModal.js` (the "does
 this scale" milestone) and `addReviewModal.js` (the modalNext/modalBack
 cluster — held to an explicitly elevated verification bar, see its own
 extraction-log entry). Phase 5 (composite modals: `itemDetailModal.js` —
 ✅ done, step 19; `shareReviewModal.js` — ✅ done, step 20;
 `bakeryModal.js` — ✅ done, step 21; `profileModal.js` — ✅ done, step 22,
 closing out the phase and resolving the largest backlog of deferred items
-in the whole plan, see its own extraction-log entry).
+in the whole plan, see its own extraction-log entry). Phase 6 opened with
+`adminPanel.js` — ✅ done, step 23, which corrected the plan's own "5
+headers, one real feature" framing (see its own extraction-log entry) —
+`businessBakeryManagement.js`/`notifications.js` not started.
 This is separate from — and comes after — the handler delegation migration
 above; don't conflate the two milestones. Plan approved 2026-08-24 (was
 drafted as a plan-mode file at `~/.claude/plans/logical-painting-kurzweil.md`,
@@ -215,7 +218,16 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   anywhere) — see its own extraction-log entry below
 - **Phase 6 — admin/business surfaces (spec exists, but destructive actions
   are wiring-only, not click-verified — extra manual QA regardless of order):**
-  23. `src/components/adminPanel.js` ·
+  23. `src/components/adminPanel.js` — ✅ **done** (2026-08-26, commit
+  `b86c34e`) — **opens Phase 6**. Corrected the plan's own "5 headers, one
+  real feature" framing: `flagReview` (FLAG REVIEW) stayed behind (general
+  "report a review" action, not admin-only), and FEATURE REQUESTS split
+  (general submit flow stays, admin-only vote/status/delete/render moves).
+  Also picked up 5 functions never under any of the 5 named headers at all
+  (living under the otherwise-fully-migrated ROLES header). Surfaced a real
+  pre-existing bug (`refreshAdminUsersPanel`/`renderAdminUsers` target a
+  nonexistent DOM id) rather than fixing it — see its own extraction-log
+  entry ·
   24. `src/components/businessBakeryManagement.js` (carries the documented
   `renderBusinessSection()`-missing-`buildBakeryIndex()` bug — natural point
   to surface it, not obligated to fix) ·
@@ -312,6 +324,94 @@ boundaries — commits happen at the module/stage level throughout.
 
 ### Extraction log (most recent first)
 
+- **`src/components/adminPanel.js` — step 23** (2026-08-26, commit
+  `b86c34e`). **Opens Phase 6.** Re-grepped fresh and found the plan's own
+  "5 headers, one real feature" framing (ADMIN PANEL, ADMIN PANEL
+  RENDERERS, MANAGE BAKERY, REVIEW FLAGGING (empty), FLAG REVIEW) was an
+  overstatement — verified by reading each function's own dependencies and
+  actual DOM reachability, per steps 19-22's own repeated lesson, rather
+  than trusting the plan's characterization as-is:
+  - **`flagReview`** (the whole reason "FLAG REVIEW" has its own header)
+    did **not** move. It's the general-purpose "report a review" action —
+    reachable by any signed-in user from the item detail modal's flag
+    button, gated only on `currentUser`, not `isAdmin()`. Its only
+    relationship to this cluster is writing to the same `flaggedReviews`
+    collection `renderAdminFlags` later reads — the same "shares a
+    collection, not a feature" shape as `toggleSaveItem`/`removeSavedItem`
+    vs. `renderSavedTab` (step 22). Stays in `legacy-app.js`, registered
+    from its own existing (untouched) `registerActions()` call.
+  - **FEATURE REQUESTS split**, the same shape as step 22's Activity
+    Calendar/Dining Map (a real cluster never named as its own plan step):
+    `openFeatureRequestModal`/`closeFeatureRequestModal`/
+    `submitFeatureRequest` (the general "💡 Request a feature" submit flow,
+    reachable by any signed-in user via the avatar dropdown) stayed;
+    `renderAdminFeatures`/`toggleFeatureVote`/`updateFeatureStatus`/
+    `deleteFeatureRequest` moved — `renderAdminFeatures` only ever renders
+    into `#adminTabContent` (confirmed via DOM id, not assumed from
+    proximity), and `toggleFeatureVote` isn't itself `isAdmin()`-gated in
+    its own body but has zero reachable UI outside this admin-gated panel,
+    so by actual current reachability it belongs here.
+  - **`refreshAdminUsersPanel`/`promoteUser`/`promptAssignBakery`/
+    `removeUserRole`**, plus dead code **`renderAdminUsers`** (found later,
+    near NOTIFICATIONS/UTILS), were never under any of the 5 named headers
+    at all — they sit under the file's much earlier, otherwise-fully-migrated
+    "ROLES" section, yet another "position vs. topic" split this plan keeps
+    finding. All 5 moved regardless of heading, confirmed genuinely
+    Users-tab admin actions by reading.
+  **A real, previously-undocumented bug surfaced while reading, not
+  introduced by this move**: both `refreshAdminUsersPanel()` and
+  `renderAdminUsers()` target `document.getElementById('adminUsersPanel')`
+  — an id that doesn't exist anywhere in `index.html` (confirmed via grep).
+  The real Users tab renders into `#adminTabContent`
+  (`showAdminTab`'s own target). Both functions' `if (panel) ...` guard
+  means this fails silently — after promoting/assigning/removing a role,
+  the visible Users list doesn't refresh in place until the tab is
+  re-clicked. Left as-is, matching this plan's own established treatment
+  of pre-existing bugs found while extracting (e.g.
+  `renderBusinessSection()`'s missing `buildBakeryIndex()` call).
+  Two genuinely blocked calls resolved via the `getAction()` pattern from
+  steps 18/21, not a forbidden direct import back into `legacy-app.js`:
+  `renderAdminBakeriesHTML()`'s `buildBakeryIndex()` (already registered as
+  an action since step 21 — reused, no new registration needed) and
+  `removeReviewAndFlag()`'s `loadData()` (both stay in `legacy-app.js`,
+  blocked on Explore's `exploreCache`, Phase 0 step 3b / Phase 7 step 29's
+  own already-documented note) — `loadData` had no prior action
+  registration, so `legacy-app.js` now registers it via a new
+  `registerActions({ loadData })` call for this lookup to resolve, the same
+  treatment `saveReview` got at step 18.
+  Verified every real (non-markup) call site of each moving name before
+  trimming any import, per step 22's own lesson (a function staying behind
+  can still call something that's leaving) — found and removed two more
+  now-genuinely-unused imports from `legacy-app.js`'s own `appState.js`
+  import while already there: `allUserRoles` and `loadAllUserRoles`, both
+  left dangling once `promoteUser`/`promptAssignBakery`/`removeUserRole`/
+  `showAdminTab` moved (their only real callers). `bakeryProfiles` also
+  removed — genuinely zero real (non-comment) uses left in `legacy-app.js`.
+  `SUPER_ADMIN_UID`/`isAdmin`/`ownsBakery`/`loadBakeryProfiles` all confirmed
+  still needed elsewhere and kept. One incidental stale `WINDOW EXPORTS`
+  entry found and removed while already scanning this exact block:
+  `openFeatureRequestModal` (zero raw call sites, confirmed via grep,
+  reached only via delegated markup — pre-existing staleness, unrelated to
+  this step's own moves). 4 functions exported (`showAdminTab` — plain-JS
+  call from `openSettingsPage()`; `closeManageBakeryModal` — the modal's own
+  outside-click listener; `handleBakeryPhoto`/`saveBakeryProfile` — the two
+  raw, undelegated handlers on `#manageBakeryModal` itself, `index.html:988`
+  /`:1009`, the admin-only "Manage Bakery assignment modal" already named in
+  the handler-delegation migration's own status table as permanently out of
+  scope), matching steps 21/22's minimal-export precedent over
+  `manageOfferingsModal.js`'s uniform-export approach.
+  Verified: `check:dead-refs` clean (29 targets, including a check
+  specifically confirming `adminPanel.js` itself passes all five checks),
+  `npm run build` succeeds (53 modules). Given the size and the two
+  getAction() resolutions, ran a fast targeted check first —
+  `admin-panel.spec.js` (5 passed/1 skipped) plus a throwaway debug spec
+  exercising the Bakeries tab (71 rows rendered, confirming
+  `getAction('buildBakeryIndex')()` resolves), the Features tab (2 rows
+  rendered, vote button visible, confirming the split cluster renders
+  correctly), and the Flags/Users tabs, with a `pageerror`/console-error
+  listener attached throughout — zero errors — before the full `test:e2e`
+  gate: 58 passed/13 skipped/0 failed, within this doc's own documented
+  normal skip-count range.
 - **`src/components/profileModal.js` — step 22** (2026-08-26, commit
   `45b33a3`). **Closes out Phase 5.** Re-grepped legacy-app.js's "FILTER
   HELPERS" section fresh (line numbers had shifted since step 21) and
