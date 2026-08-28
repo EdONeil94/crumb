@@ -154,7 +154,8 @@ export let userBookmarks = {}; // bakeryName -> { id, address }
 // step 21, pages/components carving) — a trivial derived-state helper, same
 // pattern as isAdmin/isBusiness/ownsBakery above. It has two external
 // callers post-move (src/components/bakeryModal.js's openBakeryProfile, and
-// legacy-app.js's still-unextracted renderBakeries), so co-locating it with
+// src/pages/bakeries.js's renderBakeries — the latter in legacy-app.js until
+// Phase 7 step 26), so co-locating it with
 // the state it reads sidesteps picking either one as its "home" — zero
 // cycle risk either way, since both are ordinary one-way imports from here.
 export function isBookmarked(bakeryName) {

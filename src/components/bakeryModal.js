@@ -26,7 +26,8 @@
 // userBookmarks, matching the isAdmin/isBusiness/ownsBakery pattern already
 // there) rather than living in whichever cluster happened to need it first
 // — it has two external callers post-move (this file's own
-// openBakeryProfile, and legacy-app.js's still-unextracted renderBakeries),
+// openBakeryProfile, and src/pages/bakeries.js's renderBakeries — the latter
+// in legacy-app.js until Phase 7 step 26),
 // so "moves with its sole caller" (step 19's isSavedItem precedent) didn't
 // apply cleanly; co-locating it with the state it reads sidesteps the
 // two-caller question entirely, with zero cycle risk.

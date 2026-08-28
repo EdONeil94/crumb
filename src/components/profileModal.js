@@ -60,8 +60,9 @@
 // and was still sitting in legacy-app.js's own "BOOKMARKS" section. A fresh
 // grep for every real (non-markup) call site of toggleBookmark found exactly
 // one: removeBookmarkAndRefreshSaved, moving this same step. Its other two
-// "callers" (bakeryModal.js's bookmark button, legacy-app.js's own
-// not-yet-extracted renderBakeries) are both data-onclick="toggleBookmark"
+// "callers" (bakeryModal.js's bookmark button, and renderBakeries — in
+// legacy-app.js then, src/pages/bakeries.js since Phase 7 step 26) are both
+// data-onclick="toggleBookmark"
 // markup strings, resolved via the global registerActions() registry
 // regardless of which file registers the action — no import needed for
 // either. So toggleBookmark moved here too, alongside its sole real caller,
@@ -105,8 +106,8 @@
 // button — genuinely NOT stale, confirmed via grep, the SETTINGS cluster's
 // one raw call site named in the handler-delegation migration's own status
 // table) are these four functions' only real callers outside this file.
-// Everything else here — including toggleBookmark, despite legacy-app.js's
-// own not-yet-extracted renderBakeries referencing it too — is reached
+// Everything else here — including toggleBookmark, despite
+// src/pages/bakeries.js's renderBakeries referencing it too — is reached
 // exclusively via delegated data-onclick markup or from within this file,
 // so none of it needs a JS-level export, only a registerActions() entry.
 import { registerActions } from '../events/actions.js';

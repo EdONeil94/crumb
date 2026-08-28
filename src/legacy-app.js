@@ -40,6 +40,7 @@ import {
 } from './pages/shop.js';
 import { cardHTML, feedCardHTML } from './components/reviewCard.js';
 import { switchFeedTab, renderFeed } from './pages/feed.js';
+import { setBakeryViewMode, renderBakeries } from './pages/bakeries.js';
 import {
   peopleViewMode, setPeopleView,
   populateRankingLocationFilter, renderRankings, renderPeople,
@@ -215,7 +216,7 @@ function showPage(name) {
     if (lbCurrentMode === 'bakeries') renderBakeryLeaderboard(); else renderLeaderboard(lbCurrentTab);
   }
   if (name === 'feed') renderFeed();
-  if (name === 'bakeries') { bakeryViewMode = 'all'; renderBakeries(); }
+  if (name === 'bakeries') { setBakeryViewMode('all'); renderBakeries(); }
   if (name === 'explore') initExplorePage();
   if (name === 'preorders') initPreorderPage();
   if (name === 'shop') renderShopPage();
@@ -361,170 +362,6 @@ function buildBakeryIndex() {
 
 registerActions({ buildBakeryIndex });
 
-let bakeryViewMode = 'all'; // 'all' | 'nearest' | 'visited'
-let userGeoCoords = null;   // { lat, lng } from geolocation
-
-async function geocodeMissingBakeries() {
-  // For bakeries with an address but no lat/lng, use Places text search to get coords
-  const missing = Object.values(allBakeries).filter(b => !b.lat && b.address);
-  if (!missing.length || !GOOGLE_MAPS_KEY) return;
-  await Promise.all(missing.map(async b => {
-    try {
-      const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Goog-Api-Key': GOOGLE_MAPS_KEY,
-          'X-Goog-FieldMask': 'places.id,places.location,places.displayName'
-        },
-        body: JSON.stringify({ textQuery: `${b.name} ${b.address}`, maxResultCount: 1 })
-      });
-      if (!res.ok) return;
-      const data = await res.json();
-      const place = data.places?.[0];
-      if (place?.location) {
-        b.lat = place.location.latitude;
-        b.lng = place.location.longitude;
-        if (!b.placeId) b.placeId = place.id;
-      }
-    } catch(e) { /* silent — best effort */ }
-  }));
-}
-
-function setBakeryView(mode) {
-  bakeryViewMode = mode;
-  ['all','nearest','visited'].forEach(m => {
-    const btn = document.getElementById('bakeryView' + m.charAt(0).toUpperCase() + m.slice(1));
-    if (btn) btn.classList.toggle('active', m === mode);
-  });
-  if (mode === 'nearest') {
-    const doNearest = async () => {
-      buildBakeryIndex();
-      const missing = Object.values(allBakeries).filter(b => !b.lat && b.address);
-      if (missing.length) {
-        document.getElementById('bakeriesGrid').innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:32px;color:var(--text-muted)"><div class="spinner" style="margin:0 auto 12px;"></div>Finding nearby bakeries…</div>';
-      }
-      await geocodeMissingBakeries();
-      renderBakeries();
-    };
-    if (userGeoCoords) {
-      doNearest();
-    } else {
-      navigator.geolocation.getCurrentPosition(
-        pos => {
-          userGeoCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          doNearest();
-        },
-        () => {
-          showToast('Location access denied — can\'t sort by distance');
-          setBakeryView('all');
-        }
-      );
-    }
-  } else {
-    renderBakeries();
-  }
-}
-
-function populateBakeryLocationFilter() {
-  const sel = document.getElementById('bakeryLocationFilter');
-  if (!sel) return;
-  const cities = [...new Set(
-    Object.values(allBakeries)
-      .map(b => b.city)
-      .filter(Boolean)
-  )].sort();
-  const current = sel.value;
-  sel.innerHTML = '<option value="">All locations</option>' +
-    cities.map(c => `<option value="${c}" ${c === current ? 'selected' : ''}>${c}</option>`).join('');
-}
-
-function distKmUser(b) {
-  if (!userGeoCoords || !b.lat || !b.lng) return Infinity;
-  return distKm(userGeoCoords.lat, userGeoCoords.lng, b.lat, b.lng);
-}
-
-function renderBakeries() {
-  buildBakeryIndex();
-  populateBakeryLocationFilter();
-
-  const grid = document.getElementById('bakeriesGrid');
-  const locationFilter = document.getElementById('bakeryLocationFilter')?.value || '';
-
-  let bakeries = Object.values(allBakeries);
-
-  // Location filter
-  if (locationFilter) {
-    bakeries = bakeries.filter(b => b.city === locationFilter);
-  }
-
-  // View mode filter
-  if (bakeryViewMode === 'visited' && currentUser) {
-    const myBakeryNames = new Set(allItems.filter(i => i.userId === currentUser.uid).map(i => i.bakeryName));
-    bakeries = bakeries.filter(b => myBakeryNames.has(b.name));
-  }
-
-  // Sort
-  if (bakeryViewMode === 'nearest' && userGeoCoords) {
-    bakeries = bakeries
-      .filter(b => b.lat && b.lng)
-      .sort((a, b) => distKmUser(a) - distKmUser(b));
-  } else {
-    bakeries = bakeries.sort((a, b) => {
-      const aAvg = a.totalScore / a.items.length;
-      const bAvg = b.totalScore / b.items.length;
-      return bAvg - aAvg;
-    });
-  }
-
-  if (!bakeries.length) {
-    const msg = bakeryViewMode === 'visited'
-      ? 'You haven\'t reviewed any bakeries yet'
-      : bakeryViewMode === 'nearest'
-        ? 'No bakeries with location data found nearby'
-        : 'No bakeries found';
-    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon">🏪</div><div class="empty-state-title">${msg}</div></div>`;
-    return;
-  }
-
-  const myBakeryNames = currentUser
-    ? new Set(allItems.filter(i => i.userId === currentUser.uid).map(i => i.bakeryName))
-    : new Set();
-
-  grid.innerHTML = bakeries.map(b => {
-    const avg = (b.totalScore / b.items.length).toFixed(1);
-    const myReviewCount = b.items.filter(i => i.userId === currentUser?.uid).length;
-    const distBadge = bakeryViewMode === 'nearest' && userGeoCoords && b.lat
-      ? `<span class="bakery-dist-badge">📍 ${distKmUser(b).toFixed(1)} km away</span>`
-      : '';
-    const visitedBadge = myBakeryNames.has(b.name)
-      ? `<span class="bakery-visited-badge">✓ ${myReviewCount} review${myReviewCount !== 1 ? 's' : ''} by you</span>`
-      : '';
-    const bookmarkBtnHTML = currentUser
-      ? `<button class="bookmark-btn${isBookmarked(b.name) ? ' saved' : ''}" data-onclick="toggleBookmark" data-args='${dataArgs([b.name, b.address || ''])}' title="Save bakery">🔖</button>`
-      : '';
-    return `
-      <div class="bakery-card" data-onclick="openBakeryProfile" data-args='${dataArgs([b.name])}'>
-        <div class="bakery-card-header">
-          <div style="flex:1;min-width:0;">
-            <div class="bakery-card-name">${b.name}</div>
-            ${b.address ? `<div class="bakery-card-address">📍 ${b.address}</div>` : ''}
-            ${distBadge || visitedBadge ? `<div style="margin-top:4px;">${distBadge}${visitedBadge}</div>` : ''}
-          </div>
-          <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-            ${bookmarkBtnHTML}
-            <div class="bakery-card-score">${avg}</div>
-          </div>
-        </div>
-        <div class="bakery-card-stats">
-          <div class="bakery-card-stat"><strong>${b.items.length}</strong> review${b.items.length !== 1 ? 's' : ''}</div>
-          <div class="bakery-card-stat"><strong>${avg}</strong> avg rating</div>
-          <div class="bakery-card-stat"><strong>${new Set(b.items.map(i=>i.category)).size}</strong> item type${new Set(b.items.map(i=>i.category)).size !== 1 ? 's' : ''}</div>
-        </div>
-        ${b.blurb ? `<div class="bakery-card-blurb">"${b.blurb}"</div>` : ''}
-      </div>`;
-  }).join('');
-}
 
 // ─── FILTER HELPERS ───────────────────────────────────────────────────────────
 // Now fully empty of code — the "splits three ways" grab-bag CLAUDE.md's own
@@ -3293,16 +3130,14 @@ registerActions({
 // src/components/adminPanel.js now (Phase 6 step 23).
 registerActions({ submitFeatureRequest });
 
-// Bakeries page. renderBakeries stays in WINDOW EXPORTS — the location
-// filter's onchange is converted, but renderBakeries is also called from
-// plenty of plain JS elsewhere. openBakeryProfile registers from
-// src/components/bakeryModal.js now (Phase 5 step 21) — this comment's
-// earlier "~25 call sites... stays in WINDOW EXPORTS" claim predates the
-// handler delegation migration's completion (every one of those call
-// sites is now a delegated data-onclick, not a raw handler, so the global
-// registry resolves it regardless of which file registers it). toggleBookmark
-// registers from src/components/profileModal.js now (Phase 5 step 22).
-registerActions({ setBakeryView, renderBakeries });
+// Bakeries page. setBakeryView/renderBakeries — the view-toggle buttons'
+// data-onclick and the location filter's data-onchange — register from
+// src/pages/bakeries.js itself now (Phase 7 step 26), along with
+// geocodeMissingBakeries/populateBakeryLocationFilter/distKmUser and the
+// bakeryViewMode/userGeoCoords state. buildBakeryIndex stays here (reads
+// exploreCache), registered above for getAction() lookups. openBakeryProfile
+// registers from src/components/bakeryModal.js (Phase 5 step 21);
+// toggleBookmark from src/components/profileModal.js (Phase 5 step 22).
 
 // People page view toggle + rankings/location-filter onchange handlers now
 // register from src/pages/people.js itself (Phase 3 step 15) — setPeopleView/
@@ -3440,11 +3275,9 @@ Object.assign(window, {
   closeProfileModal,
   deactivateExploreNearby,
   detectExploreLocation,
-  distKmUser,
   exploreMapLog,
   fetchGoogleBakeries,
   fetchGoogleBakeriesNearPoint,
-  geocodeMissingBakeries,
   getCrumbBakeriesNearCity,
   getCrumbBakeriesNearPoint,
   getLbFilters,
@@ -3455,7 +3288,6 @@ Object.assign(window, {
   initPreorderPage,
   openAddModal,
   openSettingsPage,
-  populateBakeryLocationFilter,
   populateExploreCityDropdown,
   populateExploreCountryDropdown,
   populateLbLocationFilter,
