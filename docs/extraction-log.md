@@ -7,6 +7,62 @@ standing rules). This file is the per-step history only: commit hashes,
 what moved, what was deferred and why, and every lesson found along the
 way. Most recent first. Add each new completed step's entry at the top.
 
+- **`src/pages/home.js` — step 28** (2026-08-28, commit `7b8db6c`). The
+  smallest move in the plan: two functions, `updateStats` (the three hero
+  stat counters) and `renderRecentGrid` (the recent-bakes grid, `allItems`
+  sliced to 9, rendered via `cardHTML`). Both sit in `legacy-app.js`'s
+  "DATA" section next to `loadData()`. Re-grepped `index.html` and
+  `tests/` for both names first (standing lesson 1–2 / unconditional
+  check): **no `data-onclick`/`data-onchange` markup, no `showPage('home')`
+  branch, no dedicated spec** — they render purely as a side effect of
+  `loadData()` (on auth) and `saveReview()` (after a write), both of which
+  stay in `legacy-app.js` (`loadData` deferred to step 29) and now import
+  them back one-way. `home.js` imports `cardHTML` one-way from
+  `components/reviewCard.js` (step 12); its only other dependency is
+  `allItems`. No `getAction()` needed — nothing here touches
+  `buildBakeryIndex`/`loadData`.
+  **Per the tightened workflow's "scale to risk"**: 16 lines, already
+  isolated, verbatim move — ran the checklist once, no elevated bar.
+  Written directly rather than `sed`-extracted (lesson 6 is for *sizeable*
+  clusters; this isn't one).
+  **The unconditional "grep every call site before trimming an import"
+  check paid off — three dead imports, not one.** Removing `renderRecentGrid`
+  left `cardHTML` with zero callers in `legacy-app.js`, so its import line
+  (`import { cardHTML, feedCardHTML } from './components/reviewCard.js'`)
+  went entirely — `feedCardHTML` had been dead there since step 13 (its
+  only caller, `renderFeed`, moved to `feed.js` then; the import was never
+  cleaned up). Same root cause made `buildReactionBarInner`/
+  `loadReactionsForItems` (imported from `reactions.js`) dead since step 13
+  too — `feedCardHTML` was their only caller — so that import went as well.
+  Two stale comments that had asserted "feedCardHTML, still in this file"
+  were corrected, and `reviewCard.js`'s own header comment (which still
+  said both `renderRecentGrid` *and* `renderFeed` were "still in
+  legacy-app.js") was fixed for both. None of this was forced by step 28
+  beyond the `cardHTML` line — caught by actually grepping the call sites
+  of everything on the import lines being touched, per step 22's lesson.
+  2 stale `WINDOW EXPORTS` entries removed (`renderRecentGrid`,
+  `updateStats` — no markup, no `tests/` refs). `saveReview`'s deferral
+  comment updated: after steps 27–28 its only remaining step-29 blocker is
+  `loadData()` itself (`renderLeaderboard`/`lbCurrentTab` from step 27,
+  `updateStats`/`renderRecentGrid` from step 28 are all importable now).
+  The `// ─── DATA ───`-adjacent home code is replaced with a 4-line
+  breadcrumb; the DATA section keeps `loadData` unchanged.
+  **Coverage**: `renderRecentGrid` is implicitly but genuinely covered —
+  every signed-in spec lands on `#page-home` and `tests/utils/preorders.js`
+  asserts `#recentGrid .card` as a load-gate proxy, so a throw there fails
+  a large fraction of the suite. `updateStats` (the counters) has no
+  assertion anywhere, so a throwaway debug spec covered both explicitly:
+  9 cards rendered, `#statItems`/`#statBakeries`/`#statRaters` populate to
+  integers (`130`/`83`/`4`), nav away to Bakeries and back to Discover
+  leaves the grid intact (no re-render on nav — confirmed no
+  `showPage('home')` branch), zero `pageerror`/console errors. Deleted
+  before commit.
+  Verified: `check:dead-refs` clean (37 targets, `home.js` passes all five
+  checks), `npm run build` succeeds (58 modules). Full `test:e2e`: **59
+  passed/12 skipped/0 failed** — no flake, skip count mid-range. Baseline
+  was skipped per the tightened workflow (step 27's closing run still
+  valid — only CLAUDE.md changed since, in commit `5a012ca`).
+
 - **`src/pages/leaderboard.js` — step 27** (2026-08-28, commit `4f01f3`).
   Re-grepped the "LEADERBOARD" section fresh (line numbers had shifted
   since step 26 landed) and confirmed by reading every function's own

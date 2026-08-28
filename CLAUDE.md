@@ -11,14 +11,16 @@ its own section below), and the **E2E test workflow** — all done on
 ## Carving src/legacy-app.js into src/pages/ and src/components/
 
 **Status as of 2026-08-28: Phases 0-6 complete, Phase 7 in progress**
-(steps 1-27 of 32 done — Phase 7 so far: `src/pages/bakeries.js` — ✅ done,
+(steps 1-28 of 32 done — Phase 7 so far: `src/pages/bakeries.js` — ✅ done,
 step 26 (commit `465522f`); `src/pages/leaderboard.js` — ✅ done, step 27
-(commit `4f01f3`). Both clean single-cluster page moves;
-`buildBakeryIndex()` stays behind on `exploreCache` in both and is reached
-via `getAction('buildBakeryIndex')()` (3rd/4th reuse of the pattern), and
-the documented `loadData()` race is carried forward unfixed. Both had
-confirmed-zero prior coverage, verified with throwaway debug specs. See
-their entries in `docs/extraction-log.md`.
+(commit `4f01f3`); `src/pages/home.js` — ✅ done, step 28 (commit
+`7b8db6c`), a tiny 2-function move (`updateStats`/`renderRecentGrid`), no
+markup wiring, that also swept up 3 stale `legacy-app.js` imports left
+dead since step 13. Steps 26/27 both keep `buildBakeryIndex()` behind on
+`exploreCache`, reached via `getAction('buildBakeryIndex')()`, and carry
+the documented `loadData()` race forward unfixed. After step 28,
+`saveReview()`'s only remaining step-29 blocker is `loadData()` itself.
+See their entries in `docs/extraction-log.md`.
 Earlier: steps 1-25 — Phase 4's `manageOfferingsModal.js` (the "does
 this scale" milestone) and `addReviewModal.js` (the modalNext/modalBack
 cluster — held to an explicitly elevated verification bar, see its own
@@ -280,7 +282,16 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   (they still also need `loadData()`, so no move yet). Removed a dead
   `openBakeryProfile` import from `legacy-app.js`. See its entry in
   `docs/extraction-log.md` ·
-  28. `src/pages/home.js` ·
+  28. `src/pages/home.js` — ✅ **done** (2026-08-28, commit `7b8db6c`).
+  Smallest move in the plan: `updateStats` + `renderRecentGrid` only, both
+  pure render helpers with no `data-onclick`/`data-onchange` and no
+  `showPage('home')` branch — reached only from `loadData()`/`saveReview()`
+  (both still in `legacy-app.js`). Also removed 3 imports dead in
+  `legacy-app.js` since step 13 (`cardHTML`/`feedCardHTML`,
+  `buildReactionBarInner`/`loadReactionsForItems`) while trimming the one
+  `cardHTML` genuinely forced this step. `renderRecentGrid` is implicitly
+  covered by every signed-in spec; `updateStats` verified with a throwaway
+  debug spec. See its entry in `docs/extraction-log.md` ·
   29. `src/pages/explore.js` (largest zero-coverage cluster, ~1,075 lines,
   but most self-contained of the zero-coverage group) ·
   30. `src/pages/preorders.js` (confirmed zero coverage via grep — see
