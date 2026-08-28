@@ -7,6 +7,84 @@ standing rules). This file is the per-step history only: commit hashes,
 what moved, what was deferred and why, and every lesson found along the
 way. Most recent first. Add each new completed step's entry at the top.
 
+- **`src/components/preordersSheet.js` — step 31** (2026-08-28, commit
+  `913d1d2`). The mobile burger-menu "🗓️ My pre-orders" bottom sheet —
+  ~135 lines, 5 functions (`loadMyPreorders` [async, reads the user's
+  pending `reservations`], `updatePreorderBadge`, `openMyPreordersSheet`
+  [builds the overlay + per-row mini QR codes], `closeMyPreordersSheet`,
+  `viewOrdersFromMyPreordersSheet`) + `myPendingPreorders` state.
+  **Third and last of the three similarly-named pre-order clusters** —
+  distinguished by reading, not the header: the *discovery* page
+  (`src/pages/preorders.js`, step 30) and the baker-side Manage pre-orders
+  modal (`src/components/manageOfferingsModal.js`, step 17).
+  **`loadMyPreorders` — exported, and the cycle it would cause if
+  imported the other way is real, not hypothetical.** It has three
+  callers: `legacy-app.js`'s `initFirebaseApp()` auth listener and
+  `cancelReservation()` (both call it directly → `legacy-app.js` imports
+  it back), and `bakeryModal.js`'s `reserveOffering` (step 21) which
+  reaches it via `getAction('loadMyPreorders')()`. That `getAction` stays
+  — `bakeryModal.js` importing `loadMyPreorders` directly would be
+  `bakeryModal → preordersSheet → profileModal → bakeryModal`
+  (`preordersSheet.js` imports `openProfileModal`/`switchProfileTab` from
+  `profileModal.js` for `viewOrdersFromMyPreordersSheet`, and
+  `profileModal.js` already imports `openBakeryProfile`/
+  `buildCategoryFilterBar` from `bakeryModal.js`). The registry lookup
+  sidesteps it; verified the forward chain (`preordersSheet → profileModal`,
+  `preordersSheet → authModal` for `openMyPreordersSheet`'s signed-out
+  guard) has no cycle before writing any imports.
+  **Standing lesson 1–2**: grepped `index.html` — `openMyPreordersSheet`
+  (`#mobilePreordersBtn`, `data-onclick="closeMobileMenu,openMyPreordersSheet"`),
+  `closeMyPreordersSheet` + `viewOrdersFromMyPreordersSheet` (the sheet's
+  own footer markup) all have real markup → all 4 (incl. `loadMyPreorders`
+  for the `getAction` lookup) register from `preordersSheet.js`'s own
+  combined `registerActions()` call. `openMyPreordersSheet` was pulled out
+  of `legacy-app.js`'s mobile-menu bulk `registerActions({
+  navigateFromMobileMenu, openMyProfileFromMobileMenu, openMyPreordersSheet,
+  openFeatureRequestModal })` — the other 3 stay (2 are the step-32
+  deferral, see below). One stale `WINDOW EXPORTS` entry removed
+  (`updatePreorderBadge` — module-internal, called only by
+  `loadMyPreorders`); `myPendingPreorders` has zero external readers
+  (grep-confirmed) — module-private.
+  **Standing lesson 4**: grepped every call site of the sheet's imports
+  (`openAuthModal`, `openProfileModal`, `switchProfileTab`, `dataArgs`,
+  `currentUser`, `fb`) before trimming — all still have many other callers
+  in `legacy-app.js`, so no import went dead there this step (unlike steps
+  26–30, which each orphaned 2–4).
+  **Phase 1 `showPage()` deferral — checked, still correctly assigned to
+  step 32, not this step.** `showPage`/`navigateFromMobileMenu`/
+  `openMyProfileFromMobileMenu` are deferred to step 32's ⚠️ callout (set
+  up at step 5); step 31 touches the same mobile-menu `registerActions`
+  block but only removes `openMyPreordersSheet` from it — the two step-32
+  functions stay, untouched. The sheet is not a `showPage` branch (it's a
+  burger-menu overlay), so it has no bearing on that deferral.
+  **Confirmed-zero prior coverage** (CLAUDE.md had this grep-verified;
+  `tests/utils/preorders.js` drives the Bakeries→profile→reserve path,
+  never the sheet). Throwaway debug spec
+  (`tests/_debug-preorders-sheet.spec.js`, deleted before commit) at a
+  390×844 mobile viewport (so the hamburger + mobile menu render): sign in
+  → wait for `loadMyPreorders`/`updatePreorderBadge` → hamburger →
+  `#mobileMenu` opens → `#mobilePreordersBtn` visible (badge logic un-hid
+  it) → click → `#myPreordersSheet` renders (empty-state branch — test
+  account has no pending reservations) with "My pre-orders" heading,
+  `#mobileMenu` closed (the `closeMobileMenu` half of the comma-chain
+  ran) → ✕ closes it → reopen → backdrop outside-click closes it → reopen
+  → "Browse pre-orders" closes it + navigates to `#page-preorders` →
+  `viewOrdersFromMyPreordersSheet` (triggered by injecting a
+  `data-onclick` button, since its footer button only shows with
+  reservations) opens `#profileModal` on the orders tab, exercising the
+  `openProfileModal().then(switchProfileTab)` cross-module chain
+  end-to-end. Zero console/page errors. The rows-branch with real mini QR
+  codes is data-dependent (needs a pending reservation) and wasn't forced
+  — verbatim move, and `openMyPreordersSheet`'s overlay build ran fully in
+  the empty case.
+  Verified: `check:dead-refs` clean (42 targets, incl. a check confirming
+  `preordersSheet.js` passes all five), `npm run build` succeeds (63
+  modules). Full `test:e2e`: **58 passed/13 skipped/0 failed** — one
+  closing run (medium risk: small cluster, the one cross-module call
+  exercised directly in the debug spec), no flake. Baseline skipped per
+  the tightened workflow (step 30's closing run still valid — only doc
+  commits since).
+
 - **`src/pages/preorders.js` — step 30** (2026-08-28, commit `048fcc3`).
   The Pre-order *discovery* page (`#page-preorders`) — ~210 lines, 7
   functions (`initPreorderPage`, `onPoCountryChange` [a documented no-op —

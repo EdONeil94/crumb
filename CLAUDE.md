@@ -11,16 +11,17 @@ its own section below), and the **E2E test workflow** — all done on
 ## Carving src/legacy-app.js into src/pages/ and src/components/
 
 **Status as of 2026-08-28: Phases 0-6 complete, Phase 7 in progress**
-(steps 1-30 of 32 done — Phase 7 so far: `src/pages/bakeries.js` (step 26,
+(steps 1-31 of 32 done — Phase 7 so far: `src/pages/bakeries.js` (step 26,
 `465522f`); `src/pages/leaderboard.js` (step 27, `4f01f3`);
 `src/pages/home.js` (step 28, `7b8db6c`); `src/pages/explore.js` (step 29,
 `3235a09`) — the largest cluster in the plan (~735 lines), which also
 spun off `src/data/exploreCities.js` (static city data) and
 `src/services/places.js` (`geocodeBakeryAddress`, now shared with
 `profileModal.js`); `src/pages/preorders.js` (step 30, `048fcc3`) — the
-Pre-order *discovery* page, a clean ~210-line move, distinct from the
-step-31 burger-menu sheet. Only steps 31 (`preordersSheet.js`) and 32
-(`settings.js`) remain. `exploreCache` now has an importable home, so the
+Pre-order *discovery* page; `src/components/preordersSheet.js` (step 31,
+`913d1d2`) — the burger-menu "My pre-orders" sheet (~135 lines). **Only
+step 32 (`src/pages/settings.js`) remains.** `exploreCache` now has an
+importable home, so the
 Phase 0 stage 3b deferred decisions (moving `loadData()`/
 `buildBakeryIndex()`/`loadProfiles()` into `appState.js`, and
 `saveEdit()`/`deleteReview()` into `editReviewModal.js`) are now
@@ -322,7 +323,15 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   unchanged). Removed 2 dead imports from `legacy-app.js` (`distKm`,
   `ALL_CITIES` — last consumers left with this page). Debug spec, one
   closing E2E run. See its entry in `docs/extraction-log.md` ·
-  31. `src/components/preordersSheet.js` (confirmed zero coverage) ·
+  31. `src/components/preordersSheet.js` — ✅ **done** (2026-08-28, commit
+  `913d1d2`). ~135-line move (5 functions, 1 state var). `loadMyPreorders`
+  exported back (auth listener + `cancelReservation` call it directly);
+  `bakeryModal.js`'s `getAction('loadMyPreorders')()` unchanged — a direct
+  import there would form a cycle (`bakeryModal → preordersSheet →
+  profileModal → bakeryModal`). `viewOrdersFromMyPreordersSheet` imports
+  `openProfileModal`/`switchProfileTab` one-way from `profileModal.js`.
+  Debug spec (mobile viewport), one closing E2E run. See its entry in
+  `docs/extraction-log.md` ·
   32. `src/pages/settings.js` (mostly composition of Phase 6's components
   by this point)
 
