@@ -9,7 +9,7 @@ import { lockScroll, unlockScroll, showToast, timeAgo } from './utils/dom.js';
 import { extractCity } from './utils/geo.js';
 import { escJS } from './utils/strings.js';
 import {
-  SUPER_ADMIN_UID, currentUser, fb, currentUserRole,
+  currentUser, fb,
   setCurrentUser, setFb, setCurrentUserRole,
   setCurrentUserBakery, isAdmin, isBusiness, ownsBakery, loadUserRole,
   loadBakeryProfiles,
@@ -44,7 +44,9 @@ import {
 import { exploreCache, initExplorePage } from './pages/explore.js';
 import { initPreorderPage } from './pages/preorders.js';
 import { loadMyPreorders } from './components/preordersSheet.js';
-import { EXPLORE_COUNTRIES } from './data/exploreCities.js';
+import {
+  openSettingsPage, handleSettingsPhoto, saveSettingsProfile, signOutFromSettings,
+} from './pages/settings.js';
 import {
   peopleViewMode, setPeopleView,
   populateRankingLocationFilter, renderRankings, renderPeople,
@@ -65,11 +67,9 @@ import {
   openProfileModal, closeProfileModal, switchProfileTab, refreshOpenProfile,
 } from './components/profileModal.js';
 import {
-  showAdminTab, closeManageBakeryModal, handleBakeryPhoto, saveBakeryProfile,
+  closeManageBakeryModal, handleBakeryPhoto, saveBakeryProfile,
 } from './components/adminPanel.js';
-import {
-  renderBusinessSection, closeBakeryEditModal,
-} from './components/businessBakeryManagement.js';
+import { closeBakeryEditModal } from './components/businessBakeryManagement.js';
 import { loadNotifications } from './components/notifications.js';
 // Side-effect only — PWA install/update-check/status-bar-fix/pull-to-refresh/
 // keyboard-scroll all self-execute on import, no exports needed here.
@@ -575,126 +575,27 @@ registerActions({ saveReview });
 
 
 // ─── SETTINGS PAGE ────────────────────────────────────────────────────────────
-let settingsPhotoFile = null;
-
-async function openSettingsPage() {
-  if (!currentUser) { openAuthModal(); return; }
-  // Re-check role in case it hasn't loaded yet
-  if (!currentUserRole && currentUser.uid !== SUPER_ADMIN_UID) {
-    await loadUserRole();
-  }
-
-  // Profile fields
-  const profile = allProfiles[currentUser.uid] || {};
-  document.getElementById('settingsName').value = profile.displayName || currentUser.displayName || '';
-  document.getElementById('settingsLocation').value = profile.location || '';
-  const countryEl = document.getElementById('settingsCountry');
-  if (countryEl) {
-    if (countryEl.options.length <= 1) {
-      Object.keys(EXPLORE_COUNTRIES).sort().forEach(c => {
-        countryEl.add(new Option(c, c));
-      });
-    }
-    countryEl.value = profile.country || '';
-  }
-  document.getElementById('settingsBio').value = profile.bio || '';
-  settingsPhotoFile = null;
-
-  // Avatar preview
-  const prev = document.getElementById('settingsAvatarPreview');
-  const photo = profile.photoURL || currentUser.photoURL;
-  if (photo) prev.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
-  else prev.textContent = (profile.displayName || currentUser.displayName || '?').charAt(0).toUpperCase();
-
-  // Fave category dropdown
-  const favSelect = document.getElementById('settingsFavCategory');
-  favSelect.innerHTML = '<option value="">Auto — based on my reviews</option>';
-  Object.entries(CATEGORY_TREE).forEach(([key, cat]) => {
-    const opt = document.createElement('option');
-    opt.value = key; opt.textContent = cat.emoji + ' ' + cat.label;
-    if (profile.favCategory === key) opt.selected = true;
-    favSelect.appendChild(opt);
-  });
-
-  // Show/hide business section
-  const bizCard = document.getElementById('settingsBusinessCard');
-  if (isBusiness()) {
-    bizCard.style.display = 'block';
-    renderBusinessSection();
-  } else {
-    bizCard.style.display = 'none';
-  }
-
-  // Show/hide admin section
-  const adminCard = document.getElementById('settingsAdminCard');
-  if (isAdmin()) {
-    adminCard.style.display = 'block';
-    showAdminTab('users');
-  } else {
-    adminCard.style.display = 'none';
-  }
-}
-
-function handleSettingsPhoto(input) {
-  if (!input.files[0]) return;
-  const file = input.files[0];
-  const reader = new FileReader();
-  reader.onload = e => {
-    document.getElementById('settingsAvatarPreview').innerHTML =
-      `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
-  };
-  reader.readAsDataURL(file);
-  compressImage(file, 400, 0.85).then(blob => { settingsPhotoFile = blob; });
-}
-
-async function saveSettingsProfile() {
-  if (!currentUser) return;
-  const btn = document.querySelector('#settingsProfileBody .btn-espresso');
-  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
-  try {
-    const { db, storage, doc, setDoc, updateProfile, ref, uploadBytes, getDownloadURL } = fb;
-    let photoURL = allProfiles[currentUser.uid]?.photoURL || currentUser.photoURL || null;
-    if (settingsPhotoFile) {
-      const storageRef = ref(storage, `avatars/${currentUser.uid}.jpg`);
-      const snap = await uploadBytes(storageRef, settingsPhotoFile, { contentType: 'image/jpeg' });
-      photoURL = await getDownloadURL(snap.ref);
-    }
-    const displayName = document.getElementById('settingsName').value.trim() || currentUser.displayName || 'Anonymous';
-    await updateProfile(currentUser, { displayName, ...(photoURL ? { photoURL } : {}) });
-    const profileData = {
-      displayName,
-      location: document.getElementById('settingsLocation').value.trim(),
-      country: document.getElementById('settingsCountry')?.value || '',
-      bio: document.getElementById('settingsBio').value.trim(),
-      favCategory: document.getElementById('settingsFavCategory').value || '',
-      photoURL, uid: currentUser.uid, updatedAt: new Date().toISOString()
-    };
-    await setDoc(doc(db, 'profiles', currentUser.uid), profileData, { merge: true });
-    allProfiles[currentUser.uid] = profileData;
-    updateNav();
-    showToast('Profile saved ✓');
-  } catch(e) { showToast('Could not save — try again'); console.error(e); }
-  finally { if (btn) { btn.disabled = false; btn.textContent = 'Save profile'; } }
-}
-
-function signOutFromSettings() {
-  if (confirm('Sign out of Crumbz?')) {
-    fb.signOut(fb.auth);
-    showPage('home');
-    showToast('Signed out');
-  }
-}
+// settingsPhotoFile + openSettingsPage/handleSettingsPhoto/
+// saveSettingsProfile/signOutFromSettings moved to src/pages/settings.js
+// (2026-08-28, Phase 7 step 32 — the last step of the 32-step plan).
+// All four are imported back above: openSettingsPage for showPage()'s
+// plain call, and handleSettingsPhoto/saveSettingsProfile/
+// signOutFromSettings additionally kept in WINDOW EXPORTS below because
+// #page-settings still has three RAW inline handlers in index.html
+// (never in scope for the handler-delegation migration). signOutFromSettings
+// reaches showPage() (staying here) via getAction('showPage')().
 
 // renderBusinessSection/editingBakeryName/bakeryEditPhotoFile/
 // openBakeryEditModal/handleBakeryEditPhoto/saveBakeryPage/
 // closeBakeryEditModal moved to
 // src/components/businessBakeryManagement.js (2026-08-26, Phase 6 step
 // 24) — genuinely one clean, self-contained feature, no split needed.
-// renderBusinessSection/closeBakeryEditModal imported below for this
-// file's own remaining callers (openSettingsPage's plain call, and the
-// #bakeryEditModal outside-click/keydown-Escape listeners). See that
-// file's own header comment for the full reasoning, including how this
-// differs from adminPanel.js's similarly-named MANAGE BAKERY cluster.
+// Only closeBakeryEditModal is imported below now (the #bakeryEditModal
+// outside-click/keydown-Escape listeners) — renderBusinessSection's last
+// caller was openSettingsPage, which moved to src/pages/settings.js at
+// Phase 7 step 32 and imports it directly from businessBakeryManagement.js.
+// See that file's own header comment for how this differs from
+// adminPanel.js's similarly-named MANAGE BAKERY cluster.
 
 // ─── REVIEW FLAGGING ──────────────────────────────────────────────────────────
 // Genuinely empty — no code under this header, confirmed while extracting
@@ -704,11 +605,13 @@ function signOutFromSettings() {
 // PANEL) and openManageBakeryModal/closeManageBakeryModal/handleBakeryPhoto/
 // saveBakeryProfile/managingBakeryName/bakeryPhotoFile (MANAGE BAKERY)
 // moved to src/components/adminPanel.js (2026-08-26, Phase 6 step 23) —
-// imported below. showAdminTab/closeManageBakeryModal/handleBakeryPhoto/
-// saveBakeryProfile imported back for this file's own remaining callers
-// (openSettingsPage's plain call, the #manageBakeryModal outside-click
-// listener, and the two raw handlers on that same modal — see
-// adminPanel.js's own header comment for the full reasoning, including a
+// imported below. closeManageBakeryModal/handleBakeryPhoto/saveBakeryProfile
+// imported back for this file's own remaining callers (the #manageBakeryModal
+// outside-click listener, and the two raw handlers on that same modal);
+// showAdminTab's last caller was openSettingsPage, which moved to
+// src/pages/settings.js at Phase 7 step 32 and imports it directly from
+// adminPanel.js. See adminPanel.js's own header comment for the full
+// reasoning, including a
 // pre-existing bug surfaced in removeReviewAndFlag's dependency on
 // loadData()). removeReviewAndFlag() calls loadData() (stays here, blocked
 // on Explore's exploreCache — Phase 0 step 3b / Phase 7 step 29's own note)
@@ -1661,9 +1564,14 @@ buildCategoryChips();
 Object.assign(window, {
   closeProfileModal,
   handleBakeryPhoto,
+  // handleSettingsPhoto/saveSettingsProfile/signOutFromSettings are in
+  // src/pages/settings.js (Phase 7 step 32) but MUST stay here — index.html's
+  // #page-settings still has raw onchange="handleSettingsPhoto(this)" /
+  // onclick="saveSettingsProfile()" / onclick="signOutFromSettings()"
+  // handlers (never in scope for the handler-delegation migration), and a
+  // raw handler can only resolve window[name]. Same as switchFeedTab below.
   handleSettingsPhoto,
   openAddModal,
-  openSettingsPage,
   processScannedReservation,
   refreshFollowButtons,
   renderManageShop,
