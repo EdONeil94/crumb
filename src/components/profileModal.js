@@ -72,8 +72,10 @@
 // Activity Calendar (renderActivityTab/renderCalendar/calNav/onCalDayClick/
 // closeCalDayModal + calViewYear/calViewMonth/calUid, module-private) and
 // Dining Map (renderDiningMapTab/switchDmTab/renderDmStats/renderDmStatRows/
-// geocodeBakeryAddress/buildBakeryCoords/loadLeafletThenMap +
-// diningMapInstance, module-private) were never named as their own steps in
+// buildBakeryCoords/loadLeafletThenMap + diningMapInstance, module-private;
+// geocodeBakeryAddress moved out to src/services/places.js at Phase 7
+// step 29, now shared with explore.js's map) were never named as their own
+// steps in
 // CLAUDE.md's 32-step list — confirmed by reading, not assumed from that
 // omission, that both are genuinely Profile-modal-tab-only: each cluster's
 // only caller anywhere in the codebase is switchProfileTab's own 'activity'/
@@ -112,7 +114,7 @@
 // so none of it needs a JS-level export, only a registerActions() entry.
 import { registerActions } from '../events/actions.js';
 import { dataArgs } from '../events/delegate.js';
-import { GOOGLE_MAPS_KEY } from '../config.js';
+import { geocodeBakeryAddress } from '../services/places.js';
 import { CATEGORY_TREE, CATEGORIES, getCategoryDisplay } from '../data/categories.js';
 import { lockScroll, unlockScroll, showToast } from '../utils/dom.js';
 import { extractCity, extractCountry } from '../utils/geo.js';
@@ -577,25 +579,6 @@ function renderDiningMapTab(container, uid) {
     loadLeafletThenMap(myItems);
     renderDmStats('bakes', container._dmData);
   });
-}
-
-async function geocodeBakeryAddress(name, address) {
-  if (!GOOGLE_MAPS_KEY || !address) return null;
-  try {
-    const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': GOOGLE_MAPS_KEY,
-        'X-Goog-FieldMask': 'places.location,places.id'
-      },
-      body: JSON.stringify({ textQuery: `${name} ${address}`, maxResultCount: 1 })
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    const loc = data.places?.[0]?.location;
-    return loc ? { lat: loc.latitude, lng: loc.longitude } : null;
-  } catch(e) { return null; }
 }
 
 async function buildBakeryCoords(myItems) {

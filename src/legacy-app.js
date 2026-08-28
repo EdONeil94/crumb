@@ -1,13 +1,12 @@
 import { registerActions } from './events/actions.js';
 import { initDelegatedEvents, dataArgs } from './events/delegate.js';
-import { GOOGLE_MAPS_KEY } from './config.js';
 import {
-  CATEGORY_TREE, CATEGORIES, SUB_TO_PARENT, SUB_LABEL, getCategoryDisplay,
+  CATEGORY_TREE, CATEGORIES, SUB_TO_PARENT, SUB_LABEL,
   TASTING_DIMS_UNIVERSAL, TASTING_DIM_5TH, DEFAULT_DIM_5TH, getTastingDims,
   TASTING_DIMS,
 } from './data/categories.js';
 import { lockScroll, unlockScroll, showToast, timeAgo } from './utils/dom.js';
-import { distKm, extractCity, extractCountry } from './utils/geo.js';
+import { distKm, extractCity } from './utils/geo.js';
 import { escJS } from './utils/strings.js';
 import {
   SUPER_ADMIN_UID, currentUser, fb, currentUserRole,
@@ -17,7 +16,7 @@ import {
   allItems, allBakeries, allProfiles, allItemRecords, setAllItems,
   setAllBakeries, loadItemRecords, ensureProfileExists,
   myFollowing, myFollowers, loadFollows, loadBookmarks,
-  isBookmarked, userSavedItems, loadSavedItems,
+  userSavedItems, loadSavedItems,
 } from './state/appState.js';
 import {
   updateNav, toggleMobileMenu, closeMobileMenu, toggleUserMenu,
@@ -42,6 +41,8 @@ import {
   lbCurrentTab, lbCurrentMode, populateLbLocationFilter,
   renderBakeryLeaderboard, renderLeaderboard,
 } from './pages/leaderboard.js';
+import { exploreCache, initExplorePage } from './pages/explore.js';
+import { EXPLORE_COUNTRIES, ALL_CITIES } from './data/exploreCities.js';
 import {
   peopleViewMode, setPeopleView,
   populateRankingLocationFilter, renderRankings, renderPeople,
@@ -74,7 +75,9 @@ import './app/lifecycle.js';
 
 // lockScroll/unlockScroll, showToast, timeAgo, escJS, distKm, extractCity,
 // extractCountry moved to src/utils/ (2026-08-24, pages/components carving
-// Phase 0 step 2) — imported above.
+// Phase 0 step 2). extractCountry is no longer imported here — its last
+// consumers left with the Explore page (Phase 7 step 29); distKm/extractCity
+// still are.
 
 // ─── ROLES ────────────────────────────────────────────────────────────────────
 // SUPER_ADMIN_UID/currentUserRole/currentUserBakery/allUserRoles/
@@ -139,12 +142,17 @@ async function loadProfiles() {
 // CATEGORY_TREE, CATEGORIES, SUB_TO_PARENT, SUB_LABEL, getCategoryDisplay,
 // TASTING_DIMS_UNIVERSAL, TASTING_DIM_5TH, DEFAULT_DIM_5TH, getTastingDims,
 // and TASTING_DIMS moved to src/data/categories.js (2026-08-24, first step
-// of the pages/components carving) — imported at the top of this file.
+// of the pages/components carving) — imported at the top of this file,
+// except getCategoryDisplay (last consumer left with the Explore page,
+// Phase 7 step 29).
 // allProfiles/allItems/allItemRecords/ensureProfileExists moved to
 // src/state/appState.js (2026-08-24, Phase 0 step 3b) — imported above.
 
 // GOOGLE_MAPS_KEY moved to src/config.js (2026-08-25, pages/components
-// carving Phase 4 step 18) — imported above.
+// carving Phase 4 step 18). No longer imported here — its last consumers
+// (fetchGoogleBakeries, renderExploreMap, …) left with the Explore page
+// (Phase 7 step 29). src/pages/explore.js and src/services/places.js
+// import it from config.js directly now.
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 // window._crumb is guaranteed to already exist by the time this module runs,
@@ -286,9 +294,12 @@ async function loadData() {
 
 // ─── BAKERIES ─────────────────────────────────────────────────────────────────
 // allBakeries moved to src/state/appState.js (2026-08-24, Phase 0 step
-// 3b), imported above; kept here since buildBakeryIndex() itself stays
-// (it reads exploreCache, owned by the not-yet-extracted Explore page —
-// see appState.js's own 3b note for why this function didn't move too).
+// 3b), imported above; buildBakeryIndex() still lives here — it reads
+// exploreCache (now imported from src/pages/explore.js, Phase 7 step 29)
+// and is called from loadData()/saveReview() (also still here). Whether
+// buildBakeryIndex()/loadData() can now move into appState.js alongside
+// allItems/allBakeries is a deliberate follow-up (CLAUDE.md Phase 7 step
+// 29 note), NOT done as part of step 29.
 // Registered below (not a click action — src/components/bakeryModal.js's
 // openBakeryProfile calls it via getAction('buildBakeryIndex')() instead of
 // a forbidden direct import, since openBakeryProfile itself had to move
@@ -735,1066 +746,22 @@ async function flagReview(itemId, bakeryName) {
 // same resolution as bakeryModal.js's openBakeryProfile at step 21).
 
 // ─── EXPLORE PAGE ─────────────────────────────────────────────────────────────
-// ─── EXPLORE: WORLD CITIES DATA ───────────────────────────────────────────────
-const EXPLORE_COUNTRIES = {
-  'United Kingdom': [
-    { name: 'London',        lat: 51.5074, lng: -0.1278 },
-    { name: 'Manchester',    lat: 53.4808, lng: -2.2426 },
-    { name: 'Birmingham',    lat: 52.4862, lng: -1.8904 },
-    { name: 'Edinburgh',     lat: 55.9533, lng: -3.1883 },
-    { name: 'Bristol',       lat: 51.4545, lng: -2.5879 },
-    { name: 'Leeds',         lat: 53.8008, lng: -1.5491 },
-    { name: 'Liverpool',     lat: 53.4084, lng: -2.9916 },
-    { name: 'Glasgow',       lat: 55.8642, lng: -4.2518 },
-    { name: 'Brighton',      lat: 50.8225, lng: -0.1372 },
-    { name: 'Oxford',        lat: 51.7520, lng: -1.2577 },
-    { name: 'Cambridge',     lat: 52.2053, lng: 0.1218  },
-    { name: 'Bath',          lat: 51.3781, lng: -2.3597 },
-    { name: 'York',          lat: 53.9600, lng: -1.0873 },
-    { name: 'Newcastle',     lat: 54.9783, lng: -1.6178 },
-    { name: 'Nottingham',    lat: 52.9548, lng: -1.1581 },
-    { name: 'Sheffield',     lat: 53.3811, lng: -1.4701 },
-    { name: 'Cardiff',       lat: 51.4816, lng: -3.1791 },
-    { name: 'Belfast',       lat: 54.5973, lng: -5.9301 },
-    { name: 'Norwich',       lat: 52.6309, lng: 1.2974  },
-    { name: 'Exeter',        lat: 50.7184, lng: -3.5339 },
-    { name: 'Chester',       lat: 53.1905, lng: -2.8910 },
-    { name: 'Cheltenham',    lat: 51.8994, lng: -2.0783 },
-    { name: 'Harrogate',     lat: 53.9921, lng: -1.5413 },
-    { name: 'Margate',       lat: 51.3813, lng: 1.3862  },
-    { name: 'Whitby',        lat: 54.4858, lng: -0.6206 },
-    { name: 'Salisbury',     lat: 51.0693, lng: -1.7942 },
-    { name: 'Inverness',     lat: 57.4778, lng: -4.2247 },
-    { name: 'Durham',        lat: 54.7753, lng: -1.5849 },
-    { name: 'Leicester',     lat: 52.6369, lng: -1.1398 },
-    { name: 'Southampton',   lat: 50.9097, lng: -1.4044 },
-    { name: 'Portsmouth',    lat: 50.8198, lng: -1.0880 },
-    { name: 'Reading',       lat: 51.4543, lng: -0.9781 },
-    { name: 'Coventry',      lat: 52.4068, lng: -1.5197 },
-    { name: 'Stoke-on-Trent',lat: 53.0027, lng: -2.1794 },
-    { name: 'Swansea',       lat: 51.6214, lng: -3.9436 },
-    { name: 'Aberdeen',      lat: 57.1497, lng: -2.0943 },
-    { name: 'Dundee',        lat: 56.4620, lng: -2.9707 },
-    { name: 'Perth',         lat: 56.3950, lng: -3.4310 },
-    { name: 'St Andrews',    lat: 56.3398, lng: -2.7967 },
-    { name: 'Stirling',      lat: 56.1165, lng: -3.9369 },
-    { name: 'Shrewsbury',    lat: 52.7078, lng: -2.7540 },
-    { name: 'Hereford',      lat: 52.0567, lng: -2.7160 },
-    { name: 'Worcester',     lat: 52.1920, lng: -2.2200 },
-    { name: 'Stratford-upon-Avon', lat: 52.1918, lng: -1.7083 },
-    { name: 'Ludlow',        lat: 52.3680, lng: -2.7166 },
-    { name: 'Padstow',       lat: 50.5387, lng: -4.9368 },
-    { name: 'St Ives',       lat: 50.2129, lng: -5.4804 },
-    { name: 'Whitstable',    lat: 51.3613, lng: 1.0261  },
-    { name: 'Rye',           lat: 50.9498, lng: 0.7312  },
-    { name: 'Ludlow',        lat: 52.3680, lng: -2.7166 },
-    { name: 'Hebden Bridge', lat: 53.7430, lng: -2.0118 },
-    { name: 'Totnes',        lat: 50.4319, lng: -3.6854 },
-    { name: 'Hay-on-Wye',    lat: 52.0726, lng: -3.1296 },
-    { name: 'Lewes',         lat: 50.8743, lng: 0.0116  },
-    { name: 'Frome',         lat: 51.2313, lng: -2.3248 },
-    { name: 'Bury St Edmunds',lat: 52.2467, lng: 0.7148 },
-    { name: 'Stamford',      lat: 52.6530, lng: -0.4810 },
-    { name: 'Ludlow',        lat: 52.3680, lng: -2.7166 },
-    { name: 'Skipton',       lat: 53.9620, lng: -2.0175 },
-    { name: 'Helmsley',      lat: 54.2468, lng: -1.0618 },
-    { name: 'Beverley',      lat: 53.8421, lng: -0.4310 },
-    { name: 'Ripon',         lat: 54.1386, lng: -1.5228 },
-    { name: 'Northallerton', lat: 54.3380, lng: -1.4340 },
-    { name: 'Malton',        lat: 54.1370, lng: -0.8020 },
-  ],
-  'France': [
-    { name: 'Paris',         lat: 48.8566, lng: 2.3522  },
-    { name: 'Lyon',          lat: 45.7640, lng: 4.8357  },
-    { name: 'Marseille',     lat: 43.2965, lng: 5.3698  },
-    { name: 'Bordeaux',      lat: 44.8378, lng: -0.5792 },
-    { name: 'Toulouse',      lat: 43.6047, lng: 1.4442  },
-    { name: 'Nice',          lat: 43.7102, lng: 7.2620  },
-    { name: 'Strasbourg',    lat: 48.5734, lng: 7.7521  },
-    { name: 'Nantes',        lat: 47.2184, lng: -1.5536 },
-    { name: 'Montpellier',   lat: 43.6108, lng: 3.8767  },
-    { name: 'Rennes',        lat: 48.1173, lng: -1.6778 },
-    { name: 'Lille',         lat: 50.6292, lng: 3.0573  },
-    { name: 'Grenoble',      lat: 45.1885, lng: 5.7245  },
-    { name: 'Dijon',         lat: 47.3220, lng: 5.0415  },
-    { name: 'Annecy',        lat: 45.8992, lng: 6.1294  },
-    { name: 'Brest',         lat: 48.3904, lng: -4.4861 },
-    { name: 'Rouen',         lat: 49.4432, lng: 1.0993  },
-    { name: 'Tours',         lat: 47.3941, lng: 0.6848  },
-    { name: 'Aix-en-Provence',lat: 43.5297, lng: 5.4474 },
-    { name: 'Cannes',        lat: 43.5528, lng: 7.0174  },
-    { name: 'Saint-Malo',    lat: 48.6493, lng: -2.0256 },
-    { name: 'Bayonne',       lat: 43.4929, lng: -1.4748 },
-    { name: 'Colmar',        lat: 48.0793, lng: 7.3585  },
-    { name: 'Périgueux',     lat: 45.1855, lng: 0.7203  },
-    { name: 'Épernay',       lat: 49.0400, lng: 3.9597  },
-    { name: 'Beaune',        lat: 47.0261, lng: 4.8384  },
-    { name: 'Cognac',        lat: 45.6956, lng: -0.3286 },
-  ],
-  'Spain': [
-    { name: 'Madrid',        lat: 40.4168, lng: -3.7038 },
-    { name: 'Barcelona',     lat: 41.3851, lng: 2.1734  },
-    { name: 'Seville',       lat: 37.3891, lng: -5.9845 },
-    { name: 'Valencia',      lat: 39.4699, lng: -0.3763 },
-    { name: 'Bilbao',        lat: 43.2627, lng: -2.9253 },
-    { name: 'Málaga',        lat: 36.7213, lng: -4.4214 },
-    { name: 'San Sebastián', lat: 43.3183, lng: -1.9812 },
-    { name: 'Granada',       lat: 37.1773, lng: -3.5986 },
-    { name: 'Salamanca',     lat: 40.9701, lng: -5.6635 },
-    { name: 'Palma',         lat: 39.5696, lng: 2.6502  },
-    { name: 'Zaragoza',      lat: 41.6561, lng: -0.8773 },
-    { name: 'Córdoba',       lat: 37.8882, lng: -4.7794 },
-    { name: 'Toledo',        lat: 39.8628, lng: -4.0273 },
-    { name: 'Pamplona',      lat: 42.8125, lng: -1.6458 },
-    { name: 'Alicante',      lat: 38.3452, lng: -0.4810 },
-    { name: 'Cádiz',         lat: 36.5271, lng: -6.2886 },
-    { name: 'Tarragona',     lat: 41.1189, lng: 1.2445  },
-    { name: 'Burgos',        lat: 42.3440, lng: -3.6970 },
-    { name: 'Segovia',       lat: 40.9429, lng: -4.1088 },
-    { name: 'Santiago de Compostela', lat: 42.8782, lng: -8.5448 },
-    { name: 'Estepona',      lat: 36.4271, lng: -5.1453 },
-    { name: 'Marbella',      lat: 36.5101, lng: -4.8825 },
-    { name: 'Ronda',         lat: 36.7468, lng: -5.1644 },
-  ],
-  'Italy': [
-    { name: 'Rome',          lat: 41.9028, lng: 12.4964 },
-    { name: 'Milan',         lat: 45.4642, lng: 9.1900  },
-    { name: 'Florence',      lat: 43.7696, lng: 11.2558 },
-    { name: 'Venice',        lat: 45.4408, lng: 12.3155 },
-    { name: 'Naples',        lat: 40.8518, lng: 14.2681 },
-    { name: 'Bologna',       lat: 44.4949, lng: 11.3426 },
-    { name: 'Turin',         lat: 45.0703, lng: 7.6869  },
-    { name: 'Palermo',       lat: 38.1157, lng: 13.3615 },
-    { name: 'Verona',        lat: 45.4384, lng: 10.9916 },
-    { name: 'Genoa',         lat: 44.4056, lng: 8.9463  },
-    { name: 'Siena',         lat: 43.3186, lng: 11.3307 },
-    { name: 'Pisa',          lat: 43.7228, lng: 10.4017 },
-    { name: 'Modena',        lat: 44.6471, lng: 10.9252 },
-    { name: 'Parma',         lat: 44.8015, lng: 10.3279 },
-    { name: 'Bari',          lat: 41.1171, lng: 16.8719 },
-    { name: 'Lecce',         lat: 40.3516, lng: 18.1750 },
-    { name: 'Amalfi',        lat: 40.6340, lng: 14.6027 },
-    { name: 'Catania',       lat: 37.5079, lng: 15.0830 },
-    { name: 'Trento',        lat: 46.0748, lng: 11.1217 },
-    { name: 'Trieste',       lat: 45.6495, lng: 13.7768 },
-    { name: 'Perugia',       lat: 43.1107, lng: 12.3908 },
-    { name: 'Lucca',         lat: 43.8430, lng: 10.5079 },
-    { name: 'Ravenna',       lat: 44.4184, lng: 12.2035 },
-    { name: 'Bergamo',       lat: 45.6983, lng: 9.6773  },
-    { name: 'Como',          lat: 45.8080, lng: 9.0852  },
-  ],
-  'Germany': [
-    { name: 'Berlin',        lat: 52.5200, lng: 13.4050 },
-    { name: 'Munich',        lat: 48.1351, lng: 11.5820 },
-    { name: 'Hamburg',       lat: 53.5753, lng: 10.0153 },
-    { name: 'Cologne',       lat: 50.9333, lng: 6.9500  },
-    { name: 'Frankfurt',     lat: 50.1109, lng: 8.6821  },
-    { name: 'Stuttgart',     lat: 48.7758, lng: 9.1829  },
-    { name: 'Düsseldorf',    lat: 51.2217, lng: 6.7762  },
-    { name: 'Leipzig',       lat: 51.3397, lng: 12.3731 },
-    { name: 'Dresden',       lat: 51.0504, lng: 13.7373 },
-    { name: 'Nuremberg',     lat: 49.4521, lng: 11.0767 },
-    { name: 'Bremen',        lat: 53.0793, lng: 8.8017  },
-    { name: 'Hanover',       lat: 52.3759, lng: 9.7320  },
-    { name: 'Freiburg',      lat: 47.9990, lng: 7.8421  },
-    { name: 'Heidelberg',    lat: 49.3988, lng: 8.6724  },
-    { name: 'Bonn',          lat: 50.7374, lng: 7.0982  },
-    { name: 'Münster',       lat: 51.9607, lng: 7.6261  },
-    { name: 'Regensburg',    lat: 49.0134, lng: 12.1016 },
-    { name: 'Bamberg',       lat: 49.8988, lng: 10.9028 },
-    { name: 'Lübeck',        lat: 53.8655, lng: 10.6866 },
-    { name: 'Erfurt',        lat: 50.9848, lng: 11.0299 },
-    { name: 'Weimar',        lat: 50.9795, lng: 11.3235 },
-    { name: 'Rothenburg ob der Tauber', lat: 49.3777, lng: 10.1794 },
-  ],
-  'Netherlands': [
-    { name: 'Amsterdam',     lat: 52.3676, lng: 4.9041  },
-    { name: 'Rotterdam',     lat: 51.9225, lng: 4.4792  },
-    { name: 'Utrecht',       lat: 52.0907, lng: 5.1214  },
-    { name: 'The Hague',     lat: 52.0705, lng: 4.3007  },
-    { name: 'Eindhoven',     lat: 51.4416, lng: 5.4697  },
-    { name: 'Groningen',     lat: 53.2194, lng: 6.5665  },
-    { name: 'Delft',         lat: 52.0116, lng: 4.3571  },
-    { name: 'Leiden',        lat: 52.1601, lng: 4.4970  },
-    { name: 'Haarlem',       lat: 52.3874, lng: 4.6462  },
-    { name: 'Maastricht',    lat: 50.8514, lng: 5.6910  },
-    { name: 'Nijmegen',      lat: 51.8426, lng: 5.8546  },
-    { name: 'Bruges',        lat: 51.2093, lng: 3.2247  },
-    { name: 'Middelburg',    lat: 51.4988, lng: 3.6136  },
-  ],
-  'Belgium': [
-    { name: 'Brussels',      lat: 50.8503, lng: 4.3517  },
-    { name: 'Bruges',        lat: 51.2093, lng: 3.2247  },
-    { name: 'Ghent',         lat: 51.0543, lng: 3.7174  },
-    { name: 'Antwerp',       lat: 51.2194, lng: 4.4025  },
-    { name: 'Liège',         lat: 50.6292, lng: 5.5797  },
-    { name: 'Leuven',        lat: 50.8798, lng: 4.7005  },
-    { name: 'Namur',         lat: 50.4669, lng: 4.8675  },
-    { name: 'Mons',          lat: 50.4542, lng: 3.9522  },
-    { name: 'Dinant',        lat: 50.2605, lng: 4.9121  },
-  ],
-  'Denmark': [
-    { name: 'Copenhagen',    lat: 55.6761, lng: 12.5683 },
-    { name: 'Aarhus',        lat: 56.1629, lng: 10.2039 },
-    { name: 'Odense',        lat: 55.4038, lng: 10.4024 },
-    { name: 'Aalborg',       lat: 57.0488, lng: 9.9217  },
-    { name: 'Esbjerg',       lat: 55.4764, lng: 8.4594  },
-    { name: 'Roskilde',      lat: 55.6415, lng: 12.0803 },
-    { name: 'Helsingør',     lat: 56.0361, lng: 12.6136 },
-  ],
-  'Sweden': [
-    { name: 'Stockholm',     lat: 59.3293, lng: 18.0686 },
-    { name: 'Gothenburg',    lat: 57.7089, lng: 11.9746 },
-    { name: 'Malmö',         lat: 55.6050, lng: 13.0038 },
-    { name: 'Uppsala',       lat: 59.8586, lng: 17.6389 },
-    { name: 'Lund',          lat: 55.7047, lng: 13.1910 },
-  ],
-  'Norway': [
-    { name: 'Oslo',          lat: 59.9139, lng: 10.7522 },
-    { name: 'Bergen',        lat: 60.3913, lng: 5.3221  },
-    { name: 'Trondheim',     lat: 63.4305, lng: 10.3951 },
-    { name: 'Stavanger',     lat: 58.9700, lng: 5.7331  },
-    { name: 'Tromsø',        lat: 69.6492, lng: 18.9553 },
-  ],
-  'Austria': [
-    { name: 'Vienna',        lat: 48.2082, lng: 16.3738 },
-    { name: 'Salzburg',      lat: 47.8095, lng: 13.0550 },
-    { name: 'Innsbruck',     lat: 47.2692, lng: 11.4041 },
-    { name: 'Graz',          lat: 47.0707, lng: 15.4395 },
-    { name: 'Hallstatt',     lat: 47.5622, lng: 13.6493 },
-  ],
-  'Switzerland': [
-    { name: 'Zurich',        lat: 47.3769, lng: 8.5417  },
-    { name: 'Geneva',        lat: 46.2044, lng: 6.1432  },
-    { name: 'Basel',         lat: 47.5596, lng: 7.5886  },
-    { name: 'Bern',          lat: 46.9481, lng: 7.4474  },
-    { name: 'Lucerne',       lat: 47.0502, lng: 8.3093  },
-    { name: 'Lausanne',      lat: 46.5197, lng: 6.6323  },
-    { name: 'Zermatt',       lat: 46.0207, lng: 7.7491  },
-  ],
-  'Portugal': [
-    { name: 'Lisbon',        lat: 38.7169, lng: -9.1395 },
-    { name: 'Porto',         lat: 41.1579, lng: -8.6291 },
-    { name: 'Braga',         lat: 41.5454, lng: -8.4265 },
-    { name: 'Coimbra',       lat: 40.2033, lng: -8.4103 },
-    { name: 'Évora',         lat: 38.5714, lng: -7.9130 },
-    { name: 'Sintra',        lat: 38.7978, lng: -9.3902 },
-    { name: 'Faro',          lat: 37.0194, lng: -7.9322 },
-    { name: 'Cascais',       lat: 38.6979, lng: -9.4215 },
-  ],
-  'Japan': [
-    { name: 'Tokyo',         lat: 35.6762, lng: 139.6503 },
-    { name: 'Osaka',         lat: 34.6937, lng: 135.5023 },
-    { name: 'Kyoto',         lat: 35.0116, lng: 135.7681 },
-    { name: 'Fukuoka',       lat: 33.5904, lng: 130.4017 },
-    { name: 'Sapporo',       lat: 43.0618, lng: 141.3545 },
-    { name: 'Nagoya',        lat: 35.1815, lng: 136.9066 },
-    { name: 'Hiroshima',     lat: 34.3853, lng: 132.4553 },
-    { name: 'Nara',          lat: 34.6851, lng: 135.8048 },
-    { name: 'Kamakura',      lat: 35.3197, lng: 139.5467 },
-  ],
-  'United States': [
-    { name: 'New York',      lat: 40.7128, lng: -74.0060 },
-    { name: 'Los Angeles',   lat: 34.0522, lng: -118.2437 },
-    { name: 'Chicago',       lat: 41.8781, lng: -87.6298 },
-    { name: 'San Francisco', lat: 37.7749, lng: -122.4194 },
-    { name: 'Portland',      lat: 45.5051, lng: -122.6750 },
-    { name: 'Seattle',       lat: 47.6062, lng: -122.3321 },
-    { name: 'Boston',        lat: 42.3601, lng: -71.0589 },
-    { name: 'Austin',        lat: 30.2672, lng: -97.7431 },
-    { name: 'Nashville',     lat: 36.1627, lng: -86.7816 },
-    { name: 'Denver',        lat: 39.7392, lng: -104.9903 },
-    { name: 'Miami',         lat: 25.7617, lng: -80.1918 },
-    { name: 'New Orleans',   lat: 29.9511, lng: -90.0715 },
-    { name: 'Washington DC', lat: 38.9072, lng: -77.0369 },
-    { name: 'Philadelphia',  lat: 39.9526, lng: -75.1652 },
-    { name: 'Atlanta',       lat: 33.7490, lng: -84.3880 },
-    { name: 'Minneapolis',   lat: 44.9778, lng: -93.2650 },
-    { name: 'Pittsburgh',    lat: 40.4406, lng: -79.9959 },
-    { name: 'Charleston',    lat: 32.7765, lng: -79.9311 },
-    { name: 'Savannah',      lat: 32.0835, lng: -81.0998 },
-    { name: 'San Diego',     lat: 32.7157, lng: -117.1611 },
-    { name: 'Phoenix',       lat: 33.4484, lng: -112.0740 },
-    { name: 'Houston',       lat: 29.7604, lng: -95.3698 },
-    { name: 'Detroit',       lat: 42.3314, lng: -83.0458 },
-    { name: 'Kansas City',   lat: 39.0997, lng: -94.5786 },
-    { name: 'Salt Lake City',lat: 40.7608, lng: -111.8910 },
-    { name: 'Burlington',    lat: 44.4759, lng: -73.2121 },
-  ],
-  'Canada': [
-    { name: 'Toronto',       lat: 43.6532, lng: -79.3832 },
-    { name: 'Vancouver',     lat: 49.2827, lng: -123.1207 },
-    { name: 'Montreal',      lat: 45.5017, lng: -73.5673 },
-    { name: 'Calgary',       lat: 51.0447, lng: -114.0719 },
-    { name: 'Ottawa',        lat: 45.4215, lng: -75.6972 },
-    { name: 'Quebec City',   lat: 46.8139, lng: -71.2080 },
-    { name: 'Halifax',       lat: 44.6488, lng: -63.5752 },
-    { name: 'Victoria',      lat: 48.4284, lng: -123.3656 },
-  ],
-  'Australia': [
-    { name: 'Melbourne',     lat: -37.8136, lng: 144.9631 },
-    { name: 'Sydney',        lat: -33.8688, lng: 151.2093 },
-    { name: 'Brisbane',      lat: -27.4698, lng: 153.0251 },
-    { name: 'Adelaide',      lat: -34.9285, lng: 138.6007 },
-    { name: 'Perth',         lat: -31.9505, lng: 115.8605 },
-    { name: 'Hobart',        lat: -42.8821, lng: 147.3272 },
-    { name: 'Canberra',      lat: -35.2809, lng: 149.1300 },
-    { name: 'Gold Coast',    lat: -28.0167, lng: 153.4000 },
-    { name: 'Byron Bay',     lat: -28.6474, lng: 153.6020 },
-    { name: 'Fremantle',     lat: -32.0569, lng: 115.7439 },
-  ],
-  'New Zealand': [
-    { name: 'Auckland',      lat: -36.8509, lng: 174.7645 },
-    { name: 'Wellington',    lat: -41.2865, lng: 174.7762 },
-    { name: 'Christchurch',  lat: -43.5321, lng: 172.6362 },
-    { name: 'Queenstown',    lat: -45.0312, lng: 168.6626 },
-    { name: 'Dunedin',       lat: -45.8788, lng: 170.5028 },
-  ],
-};
-
-// Flatten all cities for geo lookup
-const ALL_CITIES = Object.entries(EXPLORE_COUNTRIES).flatMap(([country, cities]) =>
-  cities.map(c => ({ ...c, country }))
-);
-
-// Legacy alias
-const UK_CITIES = EXPLORE_COUNTRIES['United Kingdom'];
-
-let exploreCache = {};
-let exploreActiveCity = null;
-let exploreActiveCountry = 'United Kingdom';
-let exploreSortMode = 'top';
-let exploreNearestCity = null;
-let exploreNearbyActive = false;
-let exploreNearbyRadiusMiles = 5;
-let exploreNearbyCoords = null;
-
-// ─── EXPLORE: MAP VIEW ─────────────────────────────────────────────────────────
-let exploreViewMode = 'list';
-let exploreLastResults = [];
-let exploreMapInstance = null;
-
-function setExploreViewMode(mode) {
-  exploreViewMode = mode;
-  document.getElementById('exploreViewListBtn').classList.toggle('active', mode === 'list');
-  document.getElementById('exploreViewMapBtn').classList.toggle('active', mode === 'map');
-  document.getElementById('exploreBakeryList').style.display = mode === 'list' ? 'flex' : 'none';
-  document.getElementById('exploreMapWrap').style.display = mode === 'map' ? 'block' : 'none';
-  if (mode === 'map') renderExploreMap(exploreLastResults);
-}
-
-// ─── EXPLORE MAP DIAGNOSTICS (temporary — remove once mobile bug is found) ────
-function exploreMapLog(msg) {
-  const panel = document.getElementById('exploreMapDebugLog');
-  if (!panel) return;
-  panel.style.display = 'block';
-  const line = document.createElement('div');
-  const t = new Date().toLocaleTimeString();
-  line.textContent = `[${t}] ${msg}`;
-  panel.appendChild(line);
-  panel.scrollTop = panel.scrollHeight;
-}
-
-async function renderExploreMap(bakeries) {
-  const debugPanel = document.getElementById('exploreMapDebugLog');
-  if (debugPanel) { debugPanel.innerHTML = ''; debugPanel.style.display = 'block'; }
-  exploreMapLog(`Start. ${bakeries.length} bakeries passed in. UA: ${navigator.userAgent.slice(0,60)}`);
-  exploreMapLog(`GOOGLE_MAPS_KEY present: ${!!GOOGLE_MAPS_KEY}. window.L present: ${!!window.L}. markerClusterGroup present: ${!!(window.L && window.L.markerClusterGroup)}`);
-
-  const el = document.getElementById('exploreMapEl');
-  const loader = document.getElementById('exploreMapLoading');
-  const loaderText = document.getElementById('exploreMapLoadingText');
-  if (!el) { exploreMapLog('FATAL: #exploreMapEl not found in DOM'); return; }
-  if (loader) loader.style.display = 'flex';
-  if (loaderText) loaderText.textContent = 'Loading map…';
-
-  // Many bakeries — especially older Crumbz reviews added before Places-based
-  // selection was the norm — never had lat/lng stored at all. Rather than
-  // silently dropping them from the map, geocode the ones that are missing it
-  // (same approach already used for the profile "My Map" and Bakeries→Nearest).
-  const withCoords = bakeries.filter(b => b.lat && b.lng);
-  const missingCoords = bakeries.filter(b => !b.lat || !b.lng);
-  exploreMapLog(`withCoords: ${withCoords.length}, missingCoords (need geocoding): ${missingCoords.length}`);
-
-  if (missingCoords.length && loaderText) {
-    loaderText.textContent = `Locating ${missingCoords.length} bakery${missingCoords.length !== 1 ? 'ies' : ''}…`;
-  }
-
-  let points;
-  try {
-    exploreMapLog('Starting geocode step…');
-    const geocoded = await Promise.all(missingCoords.map(async b => {
-      const coords = await geocodeBakeryAddress(b.name, b.address);
-      exploreMapLog(`  geocode "${b.name}": ${coords ? `OK (${coords.lat.toFixed(3)}, ${coords.lng.toFixed(3)})` : 'FAILED / no result'}`);
-      return coords ? { ...b, lat: coords.lat, lng: coords.lng } : null;
-    }));
-    points = [...withCoords, ...geocoded.filter(Boolean)];
-    exploreMapLog(`Geocode step complete. Total plottable points: ${points.length}`);
-  } catch(geoErr) {
-    exploreMapLog(`Geocode step THREW: ${geoErr.message || geoErr}`);
-    points = withCoords;
-  }
-
-  function setupMap() {
-    exploreMapLog('setupMap() called');
-    try {
-      if (loader) loader.style.display = 'none';
-      if (exploreMapInstance) { exploreMapInstance.remove(); exploreMapInstance = null; }
-
-      const L = window.L;
-      exploreMapInstance = L.map('exploreMapEl', { center: [54, -1], zoom: 6, zoomControl: true, scrollWheelZoom: false, tap: true, touchZoom: true, dragging: true });
-      exploreMapLog('L.map() created OK');
-
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-        attribution: '© OpenStreetMap © CARTO', subdomains: 'abcd', maxZoom: 19
-      }).addTo(exploreMapInstance);
-      exploreMapLog('Tile layer added OK');
-
-      // Two earlier approaches both failed: inline SVG in a divIcon silently
-      // failed to paint on iOS Safari (no error, just invisible), and
-      // circleMarker + a permanent Leaflet tooltip threw a hard "appendChild"
-      // crash on EVERY browser including desktop (confirmed — this was never
-      // iOS-specific, it was a genuine bug in that combination). Plain HTML/CSS
-      // inside a divIcon — no SVG, no Leaflet tooltip system — sidesteps both:
-      // it's just a styled <div> with text in it, the most basic possible
-      // rendering path.
-      function makeIcon(label, isCrumb) {
-        const fill = isCrumb ? '#2c1810' : '#8a8a8a';
-        const stroke = isCrumb ? '#d4a574' : '#cfcfcf';
-        const html = `<div style="width:30px;height:30px;border-radius:50%;background:${fill};border:2px solid ${stroke};display:flex;align-items:center;justify-content:center;font-family:sans-serif;font-size:9px;font-weight:700;color:${stroke};box-sizing:border-box;">${label}</div>`;
-        return L.divIcon({ html, className: '', iconSize: [30, 30], iconAnchor: [15, 15] });
-      }
-
-      const markerLayer = L.layerGroup();
-      exploreMapLog(`Using plain HTML divIcon rendering. About to add ${points.length} point(s)…`);
-
-      if (!points.length) {
-        exploreMapLog('points.length is 0 — showing "no mappable bakeries" message, nothing to plot');
-        el.insertAdjacentHTML('beforeend', `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:400;"><div style="background:rgba(250,246,240,0.92);border-radius:8px;padding:12px 20px;font-size:0.82rem;color:var(--text-muted);text-align:center;">📍 No mappable bakeries in this result set</div></div>`);
-      }
-
-      let markersAdded = 0;
-      points.forEach(b => {
-        try {
-          const isCrumb = b.source === 'crumb';
-          const scoreLabel = isCrumb ? (b.communityAvg || 0).toFixed(1) : (b.googleRating || '–');
-
-          const marker = L.marker([b.lat, b.lng], { icon: makeIcon(scoreLabel, isCrumb) });
-
-          const cardAction = isCrumb
-            ? `data-onclick="closeExploreMapPopup,openBakeryProfile" data-args='${dataArgs([b.name])}'`
-            : '';
-          const actionHtml = isCrumb
-            ? `<button data-onclick="closeExploreMapPopup,openBakeryProfile" data-args='${dataArgs([b.name])}' style="margin-top:6px;width:100%;background:#2c1810;color:#d4a574;border:none;border-radius:100px;padding:8px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;">View bakery →</button>`
-            : `<button data-onclick="closeExploreMapPopup,openAddModalForBakery" data-args='${dataArgs([b.name, b.address || '', b.placeId || '', b.lat || '', b.lng || ''])}' style="margin-top:6px;width:100%;background:#2c1810;color:#d4a574;border:none;border-radius:100px;padding:8px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;">+ Be first to review</button>`;
-
-          // For reviewed bakeries, the whole card is tappable (not just the small
-          // button) — much easier to hit accurately on a touchscreen. Google-only
-          // cards keep just the explicit "+ Be first to review" button, since
-          // that's a deliberate add action rather than a passive drill-through.
-          // Neither the card nor the button needs event.stopPropagation() any
-          // more: our delegated click handler resolves to the innermost
-          // data-onclick match only, so the button's action never also
-          // re-triggers the card's.
-          marker.bindPopup(`
-            <div style="font-family:sans-serif;min-width:170px;${isCrumb ? 'cursor:pointer;' : ''}" ${cardAction}>
-              <div style="font-weight:700;font-size:0.88rem;margin-bottom:3px;">${b.name}</div>
-              <div style="font-size:0.74rem;color:#888;margin-bottom:4px;">${b.address || ''}</div>
-              <div style="font-size:0.8rem;">${isCrumb ? `<strong>${b.reviewCount || 1}</strong> review${(b.reviewCount||1) !== 1 ? 's' : ''} &nbsp;·&nbsp; <strong style="color:#2c1810;">⭐ ${scoreLabel}</strong>` : `<strong style="color:#2c1810;">★ ${scoreLabel} Google</strong>${b.googleReviews ? ` &nbsp;·&nbsp; ${b.googleReviews.toLocaleString()} reviews` : ''}`}</div>
-              ${actionHtml}
-            </div>`, { maxWidth: 220 });
-          markerLayer.addLayer(marker);
-          markersAdded++;
-        } catch(markerErr) {
-          exploreMapLog(`Marker FAILED for "${b.name}": ${markerErr.message || markerErr}`);
-        }
-      });
-      exploreMapLog(`Marker loop done. ${markersAdded}/${points.length} added successfully.`);
-
-      exploreMapInstance.addLayer(markerLayer);
-      exploreMapLog('markerLayer added to map');
-
-      if (points.length) {
-        const group = L.featureGroup(points.map(b => L.marker([b.lat, b.lng])));
-        try {
-          exploreMapInstance.fitBounds(group.getBounds().pad(0.3), { maxZoom: 14 });
-          exploreMapLog('fitBounds OK');
-        } catch(fbErr) {
-          exploreMapLog(`fitBounds THREW: ${fbErr.message || fbErr}`);
-        }
-      }
-
-      // Leaflet measures its container's pixel size at the moment it initialises.
-      // Since #exploreMapWrap goes from display:none to visible right before this
-      // runs, the browser may not have finished laying it out yet — on slower
-      // mobile devices in particular, a fixed setTimeout delay isn't always long
-      // enough. A ResizeObserver is the robust fix: it fires whenever the
-      // container's actual rendered size changes, however long that takes.
-      if (window.ResizeObserver) {
-        const ro = new ResizeObserver(() => {
-          if (exploreMapInstance) exploreMapInstance.invalidateSize();
-        });
-        ro.observe(el);
-        // Stop observing once the map is torn down again
-        exploreMapInstance.on('unload', () => ro.disconnect());
-      } else {
-        // Fallback for older browsers without ResizeObserver support
-        setTimeout(() => { if (exploreMapInstance) exploreMapInstance.invalidateSize(); }, 100);
-        setTimeout(() => { if (exploreMapInstance) exploreMapInstance.invalidateSize(); }, 500);
-      }
-
-      if (markersAdded === 0 && points.length > 0) {
-        el.insertAdjacentHTML('beforeend', `<div style="position:absolute;top:8px;left:8px;right:8px;z-index:600;background:#c0392b;color:white;border-radius:8px;padding:10px 14px;font-size:0.78rem;">⚠️ Found ${points.length} location${points.length!==1?'s':''} but couldn't place any pins — please screenshot this and let Ed know.</div>`);
-      }
-      exploreMapLog('setupMap() completed successfully ✅');
-    } catch(fatalErr) {
-      exploreMapLog(`FATAL error in setupMap: ${fatalErr.message || fatalErr}`);
-      console.error('Explore map failed to render:', fatalErr);
-      if (loader) loader.style.display = 'none';
-      el.insertAdjacentHTML('beforeend', `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--parchment);z-index:600;padding:20px;text-align:center;"><div><div style="font-size:1.5rem;margin-bottom:8px;">⚠️</div><div style="font-size:0.85rem;color:var(--text-body);margin-bottom:6px;font-weight:600;">Map couldn't load</div><div style="font-size:0.72rem;color:var(--text-muted);word-break:break-word;">${(fatalErr && fatalErr.message) || 'Unknown error'}</div></div></div>`);
-    }
-  }
-
-  if (window.L) {
-    exploreMapLog('Branch: Leaflet already loaded — calling setupMap() directly');
-    setupMap();
-  } else {
-    exploreMapLog('Branch: Leaflet not loaded — loading leaflet.js…');
-    const s1 = document.createElement('script');
-    s1.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-    s1.onload = () => { exploreMapLog('leaflet.js onload fired'); setupMap(); };
-    s1.onerror = () => {
-      exploreMapLog('leaflet.js onerror fired — CORE LIBRARY FAILED TO LOAD');
-      if (loader) loader.style.display = 'none';
-      el.insertAdjacentHTML('beforeend', `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--parchment);z-index:600;padding:20px;text-align:center;"><div><div style="font-size:1.5rem;margin-bottom:8px;">⚠️</div><div style="font-size:0.85rem;color:var(--text-body);font-weight:600;">Couldn't load the map library</div><div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;">Check your connection and try again</div></div></div>`);
-    };
-    document.head.appendChild(s1);
-  }
-}
-
-// Leaflet popups render inside iframe-free DOM but outside Explore's own
-// click-handling context, so route "view" / "review" taps back through a
-// small registrable action that closes the popup first for a clean
-// transition — used as the "cleanup" half of the comma-list "cleanup, then
-// one parameterized action" shape.
-function closeExploreMapPopup() {
-  if (exploreMapInstance) exploreMapInstance.closePopup();
-}
-
-function hideExploreResults() {
-  document.getElementById('exploreResults').style.display = 'none';
-}
-
-// ─── EXPLORE: NEARBY MODE (radius-based, not tied to any city) ────────────────
-function toggleExploreNearby() {
-  exploreNearbyActive = !exploreNearbyActive;
-  const btn = document.getElementById('exploreNearbyBtn');
-  const radiusSel = document.getElementById('exploreNearbyRadius');
-
-  if (exploreNearbyActive) {
-    btn.classList.add('active');
-    btn.style.background = 'var(--honey)';
-    btn.style.color = 'var(--espresso)';
-    radiusSel.style.display = 'inline-block';
-    // Deselect any city — nearby and city selection are mutually exclusive
-    exploreActiveCity = null;
-    document.getElementById('exploreCitySelect').value = '';
-    runExploreNearbySearch();
-  } else {
-    btn.classList.remove('active');
-    btn.style.background = '';
-    btn.style.color = '';
-    radiusSel.style.display = 'none';
-    document.getElementById('exploreResults').style.display = 'none';
-  }
-}
-
-function onExploreRadiusChange() {
-  exploreNearbyRadiusMiles = parseInt(document.getElementById('exploreNearbyRadius').value);
-  if (exploreNearbyActive) runExploreNearbySearch();
-}
-
-async function runExploreNearbySearch() {
-  const resultsEl = document.getElementById('exploreResults');
-  const btn = document.getElementById('exploreNearbyBtn');
-  const originalLabel = '📍 Nearby';
-  btn.textContent = '📍 Locating…';
-
-  const coords = await new Promise(resolve => {
-    if (!navigator.geolocation) { resolve(null); return; }
-    navigator.geolocation.getCurrentPosition(
-      pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => resolve(null),
-      { timeout: 8000 }
-    );
-  });
-
-  btn.textContent = originalLabel;
-
-  if (!coords) {
-    showToast('Could not get your location');
-    resultsEl.style.display = 'block';
-    document.getElementById('exploreEyebrow').textContent = '📍 Nearby';
-    document.getElementById('exploreTitle').textContent = 'Location unavailable';
-    document.getElementById('exploreCrumbBanner').style.display = 'none';
-    document.getElementById('exploreBakeryList').innerHTML = `<div class="empty-state"><div class="empty-state-icon">📍</div><div class="empty-state-title">Couldn't get your location</div><div class="empty-state-text">Check your device's location permissions and try again.</div></div>`;
-    return;
-  }
-
-  exploreNearbyCoords = coords;
-  const radiusKm = exploreNearbyRadiusMiles * 1.60934;
-
-  resultsEl.style.display = 'block';
-  document.getElementById('exploreEyebrow').textContent = '📍 Nearby';
-  document.getElementById('exploreTitle').textContent = `Within ${exploreNearbyRadiusMiles} mile${exploreNearbyRadiusMiles !== 1 ? 's' : ''} of you`;
-  document.getElementById('exploreBakeryList').innerHTML = '<div style="text-align:center;padding:40px;"><div class="spinner" style="margin:0 auto;"></div></div>';
-  resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-  const crumbBakeries = getCrumbBakeriesNearPoint(coords.lat, coords.lng, radiusKm);
-
-  const crumbBanner = document.getElementById('exploreCrumbBanner');
-  const crumbBannerText = document.getElementById('exploreCrumbBannerText');
-  if (crumbBakeries.length > 0) {
-    crumbBanner.style.display = 'flex';
-    crumbBannerText.textContent = `${crumbBakeries.length} bakeries reviewed by the Crumbz community nearby`;
-  } else {
-    crumbBanner.style.display = 'none';
-  }
-
-  let googleResults = [];
-  try {
-    googleResults = await fetchGoogleBakeriesNearPoint(coords.lat, coords.lng, radiusKm);
-  } catch(e) {
-    console.warn('Google Places nearby error:', e);
-  }
-
-  renderExploreResults({ name: 'this area' }, crumbBakeries, googleResults, true);
-}
-
-function getCrumbBakeriesNearPoint(lat, lng, radiusKm) {
-  const results = {};
-  allItems.forEach(item => {
-    if (!item.bakeryName || !item.bakeryLat) return;
-    const dist = distKm(lat, lng, item.bakeryLat, item.bakeryLng);
-    if (dist > radiusKm) return;
-    const key = item.bakeryName;
-    if (!results[key]) results[key] = { name: key, address: item.bakeryAddress || '', lat: item.bakeryLat, lng: item.bakeryLng, items: [], totalScore: 0, dist };
-    results[key].items.push(item);
-    results[key].totalScore += (item.communityAvg || item.overallRating || 0);
-  });
-  return Object.values(results)
-    .map(b => ({ ...b, communityAvg: b.items.length ? b.totalScore / b.items.length : 0, topItem: [...b.items].sort((a,b) => (b.communityAvg||b.overallRating||0) - (a.communityAvg||a.overallRating||0))[0] }))
-    .sort((a, b) => b.communityAvg - a.communityAvg)
-    .slice(0, 20);
-}
-
-async function fetchGoogleBakeriesNearPoint(lat, lng, radiusKm) {
-  if (!GOOGLE_MAPS_KEY) return [];
-  const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Goog-Api-Key': GOOGLE_MAPS_KEY,
-      'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.location,places.websiteUri,places.regularOpeningHours'
-    },
-    body: JSON.stringify({
-      textQuery: 'bakery cafe patisserie',
-      locationBias: {
-        circle: { center: { latitude: lat, longitude: lng }, radius: Math.min(radiusKm * 1000, 50000) }
-      },
-      maxResultCount: 20
-    })
-  });
-  const data = await res.json();
-  return (data.places || [])
-    .filter(p => p.rating && p.rating >= 3.5)
-    // locationBias is only a soft preference for the Places API — it does NOT
-    // exclude results outside the radius, so enforce the actual distance ourselves.
-    .filter(p => {
-      if (!p.location?.latitude || !p.location?.longitude) return false;
-      return distKm(lat, lng, p.location.latitude, p.location.longitude) <= radiusKm;
-    })
-    .sort((a, b) => {
-      const scoreA = (a.rating || 0) * Math.log10((a.userRatingCount || 1) + 1);
-      const scoreB = (b.rating || 0) * Math.log10((b.userRatingCount || 1) + 1);
-      return scoreB - scoreA;
-    })
-    .slice(0, 20);
-}
-
-// ─── EXPLORE: DROPDOWNS ───────────────────────────────────────────────────────
-function populateExploreCountryDropdown(selectedCountry) {
-  const sel = document.getElementById('exploreCountrySelect');
-  if (!sel) return;
-  sel.innerHTML = Object.keys(EXPLORE_COUNTRIES).sort().map(c =>
-    `<option value="${c}" ${c === selectedCountry ? 'selected' : ''}>${c}</option>`
-  ).join('');
-}
-
-function populateExploreCityDropdown(country, selectedCity) {
-  const sel = document.getElementById('exploreCitySelect');
-  if (!sel) return;
-  const cities = (EXPLORE_COUNTRIES[country] || []).slice().sort((a,b) => a.name.localeCompare(b.name));
-  const nearestName = exploreNearestCity?.country === country ? exploreNearestCity?.name : null;
-  sel.innerHTML = `<option value="">Select a city…</option>` +
-    cities.map(c => {
-      const label = c.name === nearestName ? `📍 ${c.name} (nearest)` : c.name;
-      return `<option value="${c.name}" ${c.name === selectedCity ? 'selected' : ''}>${label}</option>`;
-    }).join('');
-}
-
-function onExploreCountryChange() {
-  deactivateExploreNearby();
-  exploreActiveCountry = document.getElementById('exploreCountrySelect').value;
-  exploreActiveCity = null;
-  document.getElementById('exploreResults').style.display = 'none';
-  populateExploreCityDropdown(exploreActiveCountry, null);
-}
-
-function onExploreCityChange() {
-  const city = document.getElementById('exploreCitySelect').value;
-  if (city) {
-    deactivateExploreNearby();
-    selectExploreCity(city);
-  }
-}
-
-function deactivateExploreNearby() {
-  if (!exploreNearbyActive) return;
-  exploreNearbyActive = false;
-  const btn = document.getElementById('exploreNearbyBtn');
-  const radiusSel = document.getElementById('exploreNearbyRadius');
-  if (btn) { btn.classList.remove('active'); btn.style.background = ''; btn.style.color = ''; }
-  if (radiusSel) radiusSel.style.display = 'none';
-}
-
-function onExploreSortChange() {
-  exploreSortMode = document.getElementById('exploreSortSelect').value;
-  if (exploreActiveCity) selectExploreCity(exploreActiveCity);
-}
-
-// ─── EXPLORE: GEO DETECTION ───────────────────────────────────────────────────
-async function detectExploreLocation() {
-  populateExploreCountryDropdown('United Kingdom');
-  populateExploreCityDropdown('United Kingdom', null);
-
-  if (!navigator.geolocation) return;
-
-  document.getElementById('exploreCountrySelect').innerHTML = '<option>🌍 Detecting location…</option>';
-
-  navigator.geolocation.getCurrentPosition(pos => {
-    const { latitude, longitude } = pos.coords;
-
-    let nearest = null, nearestDist = Infinity;
-    ALL_CITIES.forEach(city => {
-      const d = distKm(latitude, longitude, city.lat, city.lng);
-      if (d < nearestDist) { nearestDist = d; nearest = city; }
-    });
-
-    exploreNearestCity = nearest;
-    exploreActiveCountry = nearest?.country || 'United Kingdom';
-
-    populateExploreCountryDropdown(exploreActiveCountry);
-    populateExploreCityDropdown(exploreActiveCountry, nearest?.name);
-
-    if (nearest) {
-      document.getElementById('exploreCitySelect').value = nearest.name;
-      selectExploreCity(nearest.name, true);
-    }
-  }, () => {
-    populateExploreCountryDropdown('United Kingdom');
-    populateExploreCityDropdown('United Kingdom', null);
-  }, { timeout: 6000 });
-}
-
-function renderExploreCityGrid() {
-  // No-op — city grid replaced by dropdown; kept for compatibility
-}
-
-function initExplorePage() {
-  populateExploreCountryDropdown(exploreActiveCountry);
-  populateExploreCityDropdown(exploreActiveCountry, exploreActiveCity);
-  if (exploreActiveCity) {
-    document.getElementById('exploreCitySelect').value = exploreActiveCity;
-    document.getElementById('exploreResults').style.display = 'block';
-  }
-  detectExploreLocation();
-}
-
-// ─── EXPLORE: TRENDING LOGIC ──────────────────────────────────────────────────
-function getTrendingBakeriesNearCity(city) {
-  const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const results = {};
-
-  allItems.forEach(item => {
-    const ts = item.createdAt?.toDate ? item.createdAt.toDate() : (item.createdAt ? new Date(item.createdAt) : null);
-    if (!ts || ts < cutoff) return;
-
-    let nearCity = false;
-    if (item.bakeryLat) {
-      nearCity = distKm(city.lat, city.lng, item.bakeryLat, item.bakeryLng) <= 20;
-    } else {
-      nearCity = (item.bakeryAddress || '').toLowerCase().includes(city.name.toLowerCase());
-    }
-    if (!nearCity) return;
-
-    const key = item.bakeryName || 'Unknown';
-    if (!results[key]) results[key] = { name: key, address: item.bakeryAddress || '', lat: item.bakeryLat, lng: item.bakeryLng, items: [], totalScore: 0, recentCount: 0 };
-    results[key].items.push(item);
-    results[key].totalScore += (item.communityAvg || item.overallRating || 0);
-    results[key].recentCount++;
-  });
-
-  return Object.values(results)
-    .map(b => ({
-      ...b,
-      communityAvg: b.items.length ? b.totalScore / b.items.length : 0,
-      topItem: [...b.items].sort((a,b) => (b.communityAvg||b.overallRating||0) - (a.communityAvg||a.overallRating||0))[0]
-    }))
-    .sort((a, b) => b.recentCount - a.recentCount || b.communityAvg - a.communityAvg);
-}
-
-function getCrumbBakeriesNearCity(city) {
-  const results = {};
-  allItems.forEach(item => {
-    if (!item.bakeryName) return;
-    let nearCity = false;
-    if (item.bakeryLat) {
-      nearCity = distKm(city.lat, city.lng, item.bakeryLat, item.bakeryLng) <= 20;
-    } else {
-      nearCity = (item.bakeryAddress || '').toLowerCase().includes(city.name.toLowerCase());
-    }
-    if (!nearCity) return;
-    const key = item.bakeryName;
-    if (!results[key]) results[key] = { name: key, address: item.bakeryAddress || '', lat: item.bakeryLat, lng: item.bakeryLng, items: [], totalScore: 0, dist: item.bakeryLat ? distKm(city.lat, city.lng, item.bakeryLat, item.bakeryLng) : 0 };
-    results[key].items.push(item);
-    results[key].totalScore += (item.communityAvg || item.overallRating || 0);
-  });
-  return Object.values(results)
-    .map(b => ({ ...b, communityAvg: b.items.length ? b.totalScore / b.items.length : 0, topItem: [...b.items].sort((a,b) => (b.communityAvg||b.overallRating||0) - (a.communityAvg||a.overallRating||0))[0] }))
-    .sort((a,b) => b.communityAvg - a.communityAvg);
-}
-
-async function selectExploreCity(cityName, isAutoDetected = false) {
-  exploreActiveCity = cityName;
-
-  // Look up city across all countries (active country first)
-  const countryCities = EXPLORE_COUNTRIES[exploreActiveCountry] || [];
-  const city = countryCities.find(c => c.name === cityName) || ALL_CITIES.find(c => c.name === cityName);
-  if (!city) return;
-
-  // Update chips
-  document.querySelectorAll('.city-chip').forEach(c => {
-    const chipName = c.textContent.replace('📍 ','').replace(' 🥐','').trim();
-    c.classList.toggle('active', chipName === cityName);
-  });
-
-  const resultsEl = document.getElementById('exploreResults');
-  resultsEl.style.display = 'block';
-
-  const eyebrow = exploreSortMode === 'trending' ? '🔥 Trending bakeries in' : '⭐ Top bakeries in';
-  const nearestLabel = isAutoDetected ? ' (nearest to you)' : '';
-  document.getElementById('exploreEyebrow').textContent = eyebrow;
-  document.getElementById('exploreTitle').textContent = cityName + nearestLabel;
-  document.getElementById('exploreBakeryList').innerHTML = '<div style="text-align:center;padding:40px;"><div class="spinner" style="margin:0 auto;"></div></div>';
-  resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-  // Get Crumbz data
-  const crumbBakeries = exploreSortMode === 'trending'
-    ? getTrendingBakeriesNearCity(city)
-    : getCrumbBakeriesNearCity(city);
-
-  const crumbBanner = document.getElementById('exploreCrumbBanner');
-  const crumbBannerText = document.getElementById('exploreCrumbBannerText');
-  if (crumbBakeries.length > 0) {
-    crumbBanner.style.display = 'flex';
-    crumbBannerText.textContent = exploreSortMode === 'trending'
-      ? `${crumbBakeries.length} bakeries active in ${cityName} in the last 30 days`
-      : `${crumbBakeries.length} bakeries reviewed by the Crumbz community in ${cityName}`;
-  } else {
-    crumbBanner.style.display = 'none';
-  }
-
-  // Google Places (only for top rated; trending shows Crumbz-only)
-  let googleResults = [];
-  let googleFailed = false;
-  if (exploreSortMode === 'top') {
-    const cacheKey = cityName;
-    if (exploreCache[cacheKey]) {
-      googleResults = exploreCache[cacheKey];
-    } else {
-      try {
-        googleResults = await fetchGoogleBakeries(city);
-        exploreCache[cacheKey] = googleResults;
-      } catch(e) {
-        console.warn('Google Places error:', e);
-        googleFailed = true;
-      }
-    }
-  }
-
-  renderExploreResults(city, crumbBakeries, googleResults, googleFailed);
-}
-
-async function fetchGoogleBakeries(city) {
-  if (!GOOGLE_MAPS_KEY) return [];
-  const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Goog-Api-Key': GOOGLE_MAPS_KEY,
-      'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.location,places.websiteUri,places.regularOpeningHours'
-    },
-    body: JSON.stringify({
-      textQuery: `bakery cafe patisserie in ${city.name} ${city.country || ''}`,
-      locationBias: {
-        circle: { center: { latitude: city.lat, longitude: city.lng }, radius: 8000 }
-      },
-      maxResultCount: 20
-    })
-  });
-  const data = await res.json();
-  return (data.places || [])
-    .filter(p => p.rating && p.rating >= 3.5)
-    .sort((a, b) => {
-      // Score = rating * log(reviews) to balance quality and popularity
-      const scoreA = (a.rating || 0) * Math.log10((a.userRatingCount || 1) + 1);
-      const scoreB = (b.rating || 0) * Math.log10((b.userRatingCount || 1) + 1);
-      return scoreB - scoreA;
-    })
-    .slice(0, 20);
-}
-
-function renderExploreResults(city, crumbBakeries, googleResults, isNearby) {
-  const list = document.getElementById('exploreBakeryList');
-
-  // Merge: Crumbz bakeries take priority, then Google fills the rest
-  const combined = [];
-  const crumbNames = new Set(crumbBakeries.map(b => b.name.toLowerCase()));
-
-  // Add Crumbz bakeries first
-  crumbBakeries.forEach(b => combined.push({ ...b, source: 'crumb' }));
-
-  // Add Google results that aren't already in Crumbz
-  googleResults.forEach(p => {
-    const pName = (p.displayName?.text || '').toLowerCase();
-    const alreadyInCrumb = [...crumbNames].some(cn => pName.includes(cn) || cn.includes(pName));
-    if (!alreadyInCrumb) {
-      combined.push({
-        source: 'google',
-        name: p.displayName?.text || 'Unknown',
-        address: p.formattedAddress || '',
-        googleRating: p.rating,
-        googleReviews: p.userRatingCount,
-        website: p.websiteUri || null,
-        placeId: p.id,
-        lat: p.location?.latitude,
-        lng: p.location?.longitude,
-      });
-    }
-  });
-
-  if (!combined.length) {
-    const nearbyHint = isNearby ? ' Try a wider radius to see more options.' : '';
-    list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🏪</div><div class="empty-state-title">No bakeries found ${isNearby ? 'within this radius' : 'yet'}</div><div class="empty-state-text">Be the first to review a bakery in ${city.name} on Crumbz!${nearbyHint}</div></div>`;
-    const countEl = document.getElementById('exploreResultCount');
-    if (countEl) countEl.textContent = '';
-    exploreLastResults = [];
-    if (exploreViewMode === 'map') renderExploreMap([]);
-    return;
-  }
-
-  const countEl = document.getElementById('exploreResultCount');
-  if (countEl) {
-    countEl.textContent = isNearby
-      ? `${combined.length} bakeries found within this radius`
-      : '';
-  }
-
-  // Stash the latest result set so the Map view (and re-toggling into it) can
-  // use it without needing to re-fetch anything.
-  exploreLastResults = combined;
-  if (exploreViewMode === 'map') renderExploreMap(combined);
-
-  list.innerHTML = combined.slice(0, 20).map((b, i) => {
-    const rank = i + 1;
-    const rankClass = rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : '';
-
-    if (b.source === 'crumb') {
-      // Crumbz-reviewed bakery
-      const avg = b.communityAvg.toFixed(1);
-      const topItem = b.topItem;
-      const topItemHTML = topItem ? `
-        <div class="explore-top-item" data-onclick="closeMobileMenu,openBakeryProfile" data-args='${dataArgs([b.name])}'>
-          ${topItem.photoURL ? `<img src="${topItem.photoURL}" style="width:36px;height:36px;border-radius:6px;object-fit:cover;flex-shrink:0;" alt="">` : `<span style="font-size:1.2rem;">${getCategoryDisplay(topItem).emoji}</span>`}
-          <div>
-            <div class="explore-top-item-label">Best rated item</div>
-            <div class="explore-top-item-name">${topItem.name || 'Unknown'}</div>
-          </div>
-          <div class="explore-top-item-score">${(topItem.communityAvg || topItem.overallRating || 0).toFixed(1)}</div>
-        </div>` : '';
-      return `
-        <div class="explore-bakery-card">
-          <div class="explore-bakery-header">
-            <div class="explore-rank ${rankClass}">${rank}</div>
-            <div class="explore-bakery-info">
-              <div class="explore-bakery-name">${b.name}</div>
-              <div class="explore-bakery-address">📍 ${b.address}</div>
-              <div class="explore-bakery-meta">
-                <span class="explore-score-badge crumb">🥐 ${avg} Crumbz</span>
-                <span style="font-size:0.75rem;color:var(--text-muted);">${b.items.length} review${b.items.length !== 1 ? 's' : ''}</span>
-              </div>
-            </div>
-            <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
-              ${currentUser ? `<button class="bookmark-btn${isBookmarked(b.name) ? ' saved' : ''}" data-onclick="toggleBookmark" data-args='${dataArgs([b.name, b.address || ''])}' title="Save bakery">🔖</button>` : ''}
-              <button class="admin-btn primary" data-onclick="openBakeryProfile" data-args='${dataArgs([b.name])}' style="font-size:0.78rem;">View →</button>
-            </div>
-          </div>
-          ${topItemHTML}
-        </div>`;
-    } else {
-      // Google-sourced bakery — not yet reviewed on Crumbz
-      const stars = '★'.repeat(Math.round(b.googleRating || 0));
-      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(b.name + ' ' + (b.address || ''))}&query_place_id=${b.placeId}`;
-      // Matches the old hand-built onclick="...openBakeryProfile(name,'',{...})"
-      // JS-object-literal source field-for-field: address/placeId always a
-      // string (placeId defaults to '', not null — openBakeryProfile's own
-      // `googleData.placeId || null` normalizes that further downstream, so
-      // either default behaves identically once it gets there), lat/lng/
-      // googleRating/googleReviews all number-or-null.
-      const googleData = {
-        address: b.address || '',
-        placeId: b.placeId || '',
-        lat: b.lat || null,
-        lng: b.lng || null,
-        googleRating: b.googleRating || null,
-        googleReviews: b.googleReviews || null,
-      };
-      return `
-        <div class="explore-bakery-card">
-          <div class="explore-bakery-header">
-            <div class="explore-rank ${rankClass}">${rank}</div>
-            <div class="explore-bakery-info">
-              <div class="explore-bakery-name">${b.name}</div>
-              <div class="explore-bakery-address">📍 ${b.address}</div>
-              <div class="explore-bakery-meta">
-                <span class="explore-score-badge google">★ ${b.googleRating} Google</span>
-                <span style="font-size:0.75rem;color:var(--text-muted);">${b.googleReviews?.toLocaleString() || '?'} reviews</span>
-              </div>
-            </div>
-            <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
-              ${currentUser ? `<button class="bookmark-btn${isBookmarked(b.name) ? ' saved' : ''}" data-onclick="toggleBookmark" data-args='${dataArgs([b.name, b.address || ''])}' title="Save bakery">🔖</button>` : ''}
-              <button class="admin-btn primary" data-onclick="openBakeryProfile" data-args='${dataArgs([b.name, '', googleData])}' style="font-size:0.78rem;">View →</button>
-            </div>
-          </div>
-          <div class="explore-no-crumb">
-            <span>Not yet reviewed on Crumbz</span>
-            <button class="admin-btn primary" style="font-size:0.75rem;" data-onclick="openAddModalForBakery" data-args='${dataArgs([b.name, b.address, b.placeId || '', b.lat || '', b.lng || ''])}'>+ Be first to review</button>
-          </div>
-        </div>`;
-    }
-  }).join('');
-}
+// The whole Explore cluster (~735 lines: exploreCache + explore* state,
+// setExploreViewMode, the Leaflet map view + its diagnostics panel,
+// Nearby-radius mode, country/city dropdowns, geo detection,
+// initExplorePage, and the trending-bakeries logic) moved to
+// src/pages/explore.js (2026-08-28, Phase 7 step 29). exploreCache and
+// initExplorePage are imported back above — buildBakeryIndex() reads
+// exploreCache, showPage() calls initExplorePage(). The static city data
+// (EXPLORE_COUNTRIES/ALL_CITIES/UK_CITIES) moved to
+// src/data/exploreCities.js, also imported above for the Settings admin
+// panel and the Pre-order discovery page below. The 8 delegated explore
+// actions register from explore.js itself now.
+//
+// Deferred follow-up now unblocked-in-principle (CLAUDE.md Phase 7 step 29
+// note): whether loadData()/buildBakeryIndex()/loadProfiles() can move
+// into appState.js now that exploreCache has an importable home. NOT done
+// in this step — a deliberate, separate decision.
 
 // openAddModalForBakery moved to src/components/addReviewModal.js
 // (2026-08-25, Phase 4 step 18) — registers from there now; no import
@@ -2320,10 +1287,11 @@ document.getElementById('featureRequestModal').addEventListener('click', e => {
 
 // ─── BOOKMARKS ────────────────────────────────────────────────────────────────
 // userBookmarks/loadBookmarks moved to src/state/appState.js (2026-08-24,
-// Phase 0 step 3c) — imported above. isBookmarked moved there too
-// (2026-08-25, Phase 5 step 21) — a trivial derived-state helper, same
-// treatment as isAdmin/isBusiness/ownsBakery; see appState.js's own
-// comment for why it went there instead of bakeryModal.js. toggleBookmark
+// Phase 0 step 3c) — imported above. isBookmarked moved to appState.js too
+// (2026-08-25, Phase 5 step 21) — no longer imported into this file, its
+// last consumer (renderBakeries) left at step 26 and the Explore results
+// at step 29; explore.js/bakeries.js import it from appState.js directly.
+// toggleBookmark
 // itself moved to src/components/profileModal.js (2026-08-26, Phase 5 step
 // 22) — a fresh grep found its only real (non-markup) caller was
 // removeBookmarkAndRefreshSaved, also moving that step; its other two
@@ -2958,19 +1926,13 @@ registerActions({ cancelReservation });
 // registerActions() calls below/above that mix several other
 // not-yet-extracted clusters' own open/close-modal functions.
 
-// Explore page. closeExploreMapPopup is new — replaces passing a closure
-// through data-args, which can't serialize a function, with the same
-// comma-list "cleanup step, then one parameterized action" shape used
-// everywhere else.
-// hideExploreResults is a new one-line wrapper for a handler that was
-// previously raw inline JS with no named function at all. The temporary
-// EXPLORE MAP DIAGNOSTICS debug panel (exploreMapLog) isn't handler-driven —
-// it's a plain internal function, unrelated to this migration.
-registerActions({
-  onExploreCountryChange, onExploreCityChange, onExploreSortChange,
-  toggleExploreNearby, onExploreRadiusChange, hideExploreResults,
-  setExploreViewMode, closeExploreMapPopup,
-});
+// Explore page. onExploreCountryChange/onExploreCityChange/
+// onExploreSortChange/toggleExploreNearby/onExploreRadiusChange/
+// hideExploreResults/setExploreViewMode/closeExploreMapPopup register from
+// src/pages/explore.js itself now (Phase 7 step 29) — the country/city/sort
+// <select>s' data-onchange, the Nearby button + radius select, the "← All
+// cities" button, and the List/Map view toggle, all resolve via the global
+// registry regardless of which file calls registerActions().
 
 // Leaderboard. switchLbMode/switchLbTab/closeLbAndOpenBakery/onLbFilterChange
 // register from src/pages/leaderboard.js itself now (Phase 7 step 27) —
@@ -3027,33 +1989,17 @@ buildCategoryChips();
 // reachable from onclick attributes in the original file either.
 Object.assign(window, {
   closeProfileModal,
-  deactivateExploreNearby,
-  detectExploreLocation,
-  exploreMapLog,
-  fetchGoogleBakeries,
-  fetchGoogleBakeriesNearPoint,
-  getCrumbBakeriesNearCity,
-  getCrumbBakeriesNearPoint,
-  getTrendingBakeriesNearCity,
   handleBakeryPhoto,
   handleSettingsPhoto,
-  initExplorePage,
   initPreorderPage,
   openAddModal,
   openSettingsPage,
-  populateExploreCityDropdown,
-  populateExploreCountryDropdown,
   populatePoCityDropdown,
   processScannedReservation,
   refreshFollowButtons,
-  renderExploreCityGrid,
-  renderExploreMap,
-  renderExploreResults,
   renderManageShop,
-  runExploreNearbySearch,
   saveBakeryProfile,
   saveSettingsProfile,
-  selectExploreCity,
   selectManualBakery,
   showKnownBakeries,
   showPage,
