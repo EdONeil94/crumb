@@ -42,6 +42,10 @@ import { cardHTML, feedCardHTML } from './components/reviewCard.js';
 import { switchFeedTab, renderFeed } from './pages/feed.js';
 import { setBakeryViewMode, renderBakeries } from './pages/bakeries.js';
 import {
+  lbCurrentTab, lbCurrentMode, populateLbLocationFilter,
+  renderBakeryLeaderboard, renderLeaderboard,
+} from './pages/leaderboard.js';
+import {
   peopleViewMode, setPeopleView,
   populateRankingLocationFilter, renderRankings, renderPeople,
 } from './pages/people.js';
@@ -56,7 +60,7 @@ import {
 } from './components/addReviewModal.js';
 import { openDetail, closeDetailModal } from './components/itemDetailModal.js';
 import { closeShareReviewModal } from './components/shareReviewModal.js';
-import { openBakeryProfile, closeBakeryModal } from './components/bakeryModal.js';
+import { closeBakeryModal } from './components/bakeryModal.js';
 import {
   openProfileModal, closeProfileModal, switchProfileTab, refreshOpenProfile,
 } from './components/profileModal.js';
@@ -135,8 +139,6 @@ async function loadProfiles() {
 // Phase 4 step 18) — selectedCategory/selectedBakery/photoFile imported
 // above (read-only, needed by saveReview below); currentStep/totalSteps/
 // photoDataURL stayed fully private to that file, no import needed.
-let lbCurrentTab = 'all';
-
 // CATEGORY_TREE, CATEGORIES, SUB_TO_PARENT, SUB_LABEL, getCategoryDisplay,
 // TASTING_DIMS_UNIVERSAL, TASTING_DIM_5TH, DEFAULT_DIM_5TH, getTastingDims,
 // and TASTING_DIMS moved to src/data/categories.js (2026-08-24, first step
@@ -381,249 +383,16 @@ registerActions({ buildBakeryIndex });
 // bakeryModal.js instead of via this file.
 
 // ─── LEADERBOARD ──────────────────────────────────────────────────────────────
-let lbCurrentMode = 'items';
-
-function switchLbMode(mode) {
-  lbCurrentMode = mode;
-  document.getElementById('lbModeItems').classList.toggle('active', mode === 'items');
-  document.getElementById('lbModeItems').classList.toggle('active', mode === 'items');
-  document.getElementById('lbModeBakeries').classList.toggle('active', mode === 'bakeries');
-  document.getElementById('lbItemTabs').style.display = mode === 'items' ? 'flex' : 'none';
-  populateLbLocationFilter();
-  if (mode === 'bakeries') {
-    renderBakeryLeaderboard();
-  } else {
-    renderLeaderboard(lbCurrentTab);
-  }
-}
-
-function populateLbLocationFilter() {
-  const sel = document.getElementById('lbLocationFilter');
-  if (!sel) return;
-  const cities = [...new Set(
-    allItems.map(i => extractCity(i.bakeryAddress || '')).filter(Boolean)
-  )].sort();
-  const current = sel.value;
-  sel.innerHTML = '<option value="">📍 All locations</option>' +
-    cities.map(c => `<option value="${c}" ${c === current ? 'selected' : ''}>${c}</option>`).join('');
-}
-
-function onLbFilterChange() {
-  if (lbCurrentMode === 'bakeries') renderBakeryLeaderboard();
-  else renderLeaderboard(lbCurrentTab);
-}
-
-function getLbFilters() {
-  return {
-    location: document.getElementById('lbLocationFilter')?.value || '',
-    minRating: parseFloat(document.getElementById('lbRatingFilter')?.value || '0') || 0
-  };
-}
-
-function switchLbTab(tab, btn) {
-  document.querySelectorAll('#lbItemTabs .lb-tab').forEach(t => t.classList.remove('active'));
-  btn.classList.add('active');
-  lbCurrentTab = tab;
-  renderLeaderboard(tab);
-}
-
-function renderBakeryLeaderboard() {
-  buildBakeryIndex();
-  const list = document.getElementById('lbList');
-  const { location, minRating } = getLbFilters();
-
-  let bakeries = Object.values(allBakeries)
-    .filter(b => b.items.length > 0)
-    .map(b => ({
-      ...b,
-      avg: b.totalScore / b.items.length,
-      reviewCount: b.items.length,
-      topItem: [...b.items].sort((x,y) => (y.communityAvg||y.overallRating||0)-(x.communityAvg||x.overallRating||0))[0]
-    }));
-
-  // Apply location filter (by city)
-  if (location) bakeries = bakeries.filter(b => extractCity(b.address || '') === location);
-  // Apply min rating filter
-  if (minRating) bakeries = bakeries.filter(b => b.avg >= minRating);
-
-  bakeries = bakeries.sort((a, b) => b.avg - a.avg).slice(0, 20);
-
-  // Update subtitle
-  const subtitle = document.getElementById('lbSubtitle');
-  if (subtitle) {
-    const parts = [];
-    if (location) parts.push(location);
-    if (minRating) parts.push(`${minRating}+ rated`);
-    subtitle.textContent = parts.length
-      ? `Top bakeries — ${parts.join(', ')}`
-      : 'Top bakeries, ranked by community average';
-  }
-
-  if (!bakeries.length) {
-    list.innerHTML = `<div class="empty-state" style="color:var(--honey-light)"><div class="empty-state-icon">🏪</div><div class="empty-state-title" style="color:var(--honey)">No bakeries match</div><div class="empty-state-text">Try adjusting your filters.</div></div>`;
-    return;
-  }
-
-  list.innerHTML = bakeries.map((b, i) => {
-    const rank = i + 1;
-    const rankClass = rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : '';
-    const emoji = b.topItem ? (CATEGORY_TREE[b.topItem.category]?.emoji || '🥐') : '🏪';
-    const thumb = b.topItem?.photoURL
-      ? `<img src="${b.topItem.photoURL}" style="width:42px;height:42px;border-radius:6px;object-fit:cover;flex-shrink:0;" alt="">`
-      : `<div class="lb-image">${emoji}</div>`;
-
-    return `
-      <div class="lb-item" data-onclick="closeLbAndOpenBakery" data-args='${dataArgs([b.name])}'>
-        <div class="lb-rank ${rankClass}">${rank}</div>
-        ${thumb}
-        <div class="lb-info">
-          <div class="lb-name">${b.name}</div>
-          <div class="lb-bakery">📍 ${b.address || ''}</div>
-          <div class="lb-reviews-line">${b.reviewCount} review${b.reviewCount !== 1 ? 's' : ''}</div>
-        </div>
-        <div class="lb-right">
-          <div class="lb-score">${b.avg.toFixed(1)}</div>
-        </div>
-      </div>`;
-  }).join('');
-}
-
-function closeLbAndOpenBakery(name) {
-  openBakeryProfile(name);
-}
-
-function renderLeaderboard(tab) {
-  // If in bakery mode, delegate
-  if (lbCurrentMode === 'bakeries') { renderBakeryLeaderboard(); return; }
-
-  // Merge itemRecords with any orphaned allItems that have no itemRecord
-  // This ensures reviews created before itemRecords existed still appear
-  const byKey = {};
-
-  // First pass — dedupe allItems by name+bakery
-  allItems.forEach(item => {
-    const key = (item.name || '').toLowerCase() + '||' + (item.bakeryName || '').toLowerCase();
-    if (!byKey[key]) {
-      byKey[key] = { ...item, _scores: [item.overallRating || 0], _count: 1 };
-    } else {
-      byKey[key]._scores.push(item.overallRating || 0);
-      byKey[key]._count++;
-      if (!byKey[key].photoURL && item.photoURL) byKey[key].photoURL = item.photoURL;
-    }
-  });
-
-  const orphanedRecords = Object.values(byKey)
-    .filter(r => {
-      // Only include if there's no matching itemRecord
-      const key = (r.name || '').toLowerCase() + '||' + (r.bakeryName || '').toLowerCase();
-      return !allItemRecords.some(ir =>
-        (ir.name || '').toLowerCase() === (r.name || '').toLowerCase() &&
-        (ir.bakeryName || '').toLowerCase() === (r.bakeryName || '').toLowerCase()
-      );
-    })
-    .map(r => ({
-      ...r,
-      communityAvg: r._scores.reduce((a,b) => a+b, 0) / r._scores.length,
-      reviewCount: r._count
-    }));
-
-  // Combine itemRecords + orphaned reviews
-  let records = [...allItemRecords, ...orphanedRecords];
-
-  // Bayesian weighted score — items with few reviews are pulled toward global avg
-  // until they have enough reviews to be trusted
-  const MINIMUM_REVIEWS = 3; // reviews needed for full confidence
-  const globalAvg = records.length
-    ? records.reduce((s, r) => s + (r.communityAvg || 0), 0) / records.length
-    : 3.0;
-
-  function weightedScore(r) {
-    const avg = r.communityAvg || r.overallRating || 0;
-    const n = r.reviewCount || r.ratingCount || 1;
-    return (n / (n + MINIMUM_REVIEWS)) * avg + (MINIMUM_REVIEWS / (n + MINIMUM_REVIEWS)) * globalAvg;
-  }
-
-  // Apply tab filter
-  const { location: lbLoc, minRating: lbMinRating } = getLbFilters();
-  let filtered = [...records];
-
-  // Location filter (by city)
-  if (lbLoc) filtered = filtered.filter(r => extractCity(r.bakeryAddress || '') === lbLoc);
-
-  if (tab === 'value') {
-    filtered = filtered.filter(r => r.avgPrice && r.communityAvg).sort((a, b) => {
-      const aVal = weightedScore(a) / parseFloat(a.avgPrice);
-      const bVal = weightedScore(b) / parseFloat(b.avgPrice);
-      return bVal - aVal;
-    });
-  } else if (tab !== 'all') {
-    filtered = filtered.filter(r => r.category === tab);
-    filtered.sort((a, b) => weightedScore(b) - weightedScore(a));
-  } else {
-    filtered.sort((a, b) => weightedScore(b) - weightedScore(a));
-  }
-
-  // Min rating filter
-  if (lbMinRating) filtered = filtered.filter(r => (r.communityAvg || r.overallRating || 0) >= lbMinRating);
-
-  // Update subtitle
-  const subtitle2 = document.getElementById('lbSubtitle');
-  if (subtitle2) {
-    const parts = [];
-    if (lbLoc) parts.push(lbLoc);
-    if (lbMinRating) parts.push(`${lbMinRating}+ rated`);
-    if (tab !== 'all' && tab !== 'value') parts.push(CATEGORY_TREE[tab]?.label || tab);
-    if (tab === 'value') parts.push('best value');
-    subtitle2.textContent = parts.length
-      ? `Top items — ${parts.join(', ')}`
-      : "Community's highest-rated bakes, ranked by average score";
-  }
-
-  filtered = filtered.slice(0, 20);
-
-  const list = document.getElementById('lbList');
-  if (!filtered.length) {
-    list.innerHTML = `<div class="empty-state" style="color:var(--honey-light)"><div class="empty-state-icon">🥐</div><div class="empty-state-title" style="color:var(--honey)">No rankings yet</div><div class="empty-state-text">Start logging pastries to build the leaderboard.</div></div>`;
-    return;
-  }
-
-  list.innerHTML = filtered.map((record, i) => {
-    const rank = i + 1;
-    const rankClass = rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : '';
-    const catDisp = getCategoryDisplay(record);
-    const rawAvg = record.communityAvg || record.overallRating || 0;
-    const reviewCount2 = record.reviewCount || record.ratingCount || 1;
-    const wScore = reviewCount2 >= MINIMUM_REVIEWS
-      ? rawAvg
-      : ((reviewCount2 / (reviewCount2 + MINIMUM_REVIEWS)) * rawAvg + (MINIMUM_REVIEWS / (reviewCount2 + MINIMUM_REVIEWS)) * globalAvg);
-    const score = rawAvg ? wScore.toFixed(1) : '–';
-    const isLowConfidence = reviewCount2 < MINIMUM_REVIEWS;
-    const reviewCount = record.reviewCount || record.ratingCount || 1;
-    const ratingCount = reviewCount; // alias for template
-    const avgPStr = record.avgPrice ? ' · £' + parseFloat(record.avgPrice).toFixed(2) + ' avg' : '';
-    const imageContent = record.photoURL
-      ? `<img src="${record.photoURL}" style="width:42px;height:42px;border-radius:6px;object-fit:cover;flex-shrink:0;" alt="">`
-      : `<div class="lb-image">${catDisp.emoji}</div>`;
-    // Click opens the first matching review for this record
-    const matchingItem = allItems.find(it => it.itemRecordId === record.id) || allItems.find(it => (it.name||'').toLowerCase() === (record.name||'').toLowerCase() && (it.bakeryName||'').toLowerCase() === (record.bakeryName||'').toLowerCase());
-    const rowAction = matchingItem
-      ? `data-onclick="openDetail" data-args='${dataArgs([matchingItem.id])}'`
-      : `data-onclick="openBakeryProfile" data-args='${dataArgs([record.bakeryName || ''])}'`;
-    return `
-      <div class="lb-item" ${rowAction}>
-        <div class="lb-rank ${rankClass}">${rank}</div>
-        ${imageContent}
-        <div class="lb-info">
-          <div class="lb-name">${record.name || 'Unknown bake'}</div>
-          <div class="lb-bakery">📍 ${record.bakeryName || 'Unknown'}${avgPStr}</div>
-          <div class="lb-reviews-line">${reviewCount} review${reviewCount !== 1 ? 's' : ''}${isLowConfidence ? ' · <span style="opacity:0.6;">building confidence</span>' : ''}</div>
-        </div>
-        <div class="lb-right">
-          <div class="lb-score">${score}</div>
-        </div>
-      </div>`;
-  }).join('');
-}
+// lbCurrentMode/lbCurrentTab (state) + switchLbMode/populateLbLocationFilter/
+// onLbFilterChange/getLbFilters/switchLbTab/renderBakeryLeaderboard/
+// closeLbAndOpenBakery/renderLeaderboard moved to src/pages/leaderboard.js
+// (2026-08-28, Phase 7 step 27). lbCurrentTab was declared up in the STATE
+// section, not here — it moved too. lbCurrentMode/lbCurrentTab/
+// populateLbLocationFilter/renderBakeryLeaderboard/renderLeaderboard are
+// imported back above (showPage() reads the state and renders on nav;
+// saveReview()/deleteReview() re-render after a write). buildBakeryIndex()
+// stays here (reads exploreCache) — renderBakeryLeaderboard reaches it via
+// getAction('buildBakeryIndex')().
 
 // ─── ITEM DETAIL ──────────────────────────────────────────────────────────────
 // openDetail/closeDetailModal/isSavedItem moved to
@@ -3214,15 +2983,11 @@ registerActions({
   setExploreViewMode, closeExploreMapPopup,
 });
 
-// Leaderboard. switchLbTab's signature was reordered (tab, btn) — it had no
-// call sites other than its own onclick="switchLbTab(this,'x')" attributes,
-// so its parameter order could just follow the trailing-element convention
-// instead of needing a wrapper. The two filter <select>s' onchange are now
-// converted too (see onchange/oninput delegation, below).
-// openDetail registers from src/components/itemDetailModal.js now (Phase 5
-// step 19) instead of here, so the leaderboard row's conditional action
-// still resolves via the delegated data-onclick registry.
-registerActions({ switchLbMode, switchLbTab, closeLbAndOpenBakery, onLbFilterChange });
+// Leaderboard. switchLbMode/switchLbTab/closeLbAndOpenBakery/onLbFilterChange
+// register from src/pages/leaderboard.js itself now (Phase 7 step 27) —
+// the two mode buttons' and 8 tab buttons' data-onclick, and the two filter
+// <select>s' data-onchange, all resolve via the global registry regardless
+// of which file calls registerActions().
 
 // Item detail modal (markup itself now lives in itemDetailModal.js).
 // None of these have any call site left outside their own data-onclick
@@ -3280,7 +3045,6 @@ Object.assign(window, {
   fetchGoogleBakeriesNearPoint,
   getCrumbBakeriesNearCity,
   getCrumbBakeriesNearPoint,
-  getLbFilters,
   getTrendingBakeriesNearCity,
   handleBakeryPhoto,
   handleSettingsPhoto,
@@ -3290,15 +3054,12 @@ Object.assign(window, {
   openSettingsPage,
   populateExploreCityDropdown,
   populateExploreCountryDropdown,
-  populateLbLocationFilter,
   populatePoCityDropdown,
   processScannedReservation,
   refreshFollowButtons,
-  renderBakeryLeaderboard,
   renderExploreCityGrid,
   renderExploreMap,
   renderExploreResults,
-  renderLeaderboard,
   renderManageShop,
   renderRecentGrid,
   runExploreNearbySearch,
@@ -3315,7 +3076,6 @@ Object.assign(window, {
   // scope for the handler-delegation migration, so this is genuinely
   // unavoidable rather than staleness.
   switchFeedTab,
-  switchLbTab,
   updateOverallRating,
   updatePreorderBadge,
   updateStats,
