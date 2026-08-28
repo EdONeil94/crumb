@@ -1,9 +1,9 @@
 // ─── REVIEW CARD ────────────────────────────────────────────────────────────
 // Shared review-card renderers (pages/components carving, Phase 3 step 12 —
 // see CLAUDE.md). cardHTML is the plain card used by the Home page's recent
-// grid (renderRecentGrid, still in src/legacy-app.js — Phase 7 step 28);
-// feedCardHTML is the Feed page's variant (renderFeed, still in
-// src/legacy-app.js — Phase 3 step 13), adding a reaction bar and a
+// grid (renderRecentGrid, src/pages/home.js — Phase 7 step 28);
+// feedCardHTML is the Feed page's variant (renderFeed, src/pages/feed.js —
+// Phase 3 step 13), adding a reaction bar and a
 // "Following" badge on top of the same rating/price/image logic. Both are
 // self-contained: every dependency (getCategoryDisplay, allItems/
 // allItemRecords, timeAgo, dataArgs) was already extracted in Phase 0.

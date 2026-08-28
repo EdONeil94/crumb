@@ -29,18 +29,15 @@ import {
   signUpEmail, showAuthError, friendlyAuthError,
 } from './components/authModal.js';
 import {
-  buildReactionBarInner, loadReactionsForItems,
-} from './components/reactions.js';
-import {
   closeEditModal, editingItemId, editPhotoFile, editPhotoDataURL,
 } from './components/editReviewModal.js';
 import { processScannedReservation } from './components/qrCode.js';
 import {
   allProducts, loadProducts, renderShopPage, productCardHTML,
 } from './pages/shop.js';
-import { cardHTML, feedCardHTML } from './components/reviewCard.js';
 import { switchFeedTab, renderFeed } from './pages/feed.js';
 import { setBakeryViewMode, renderBakeries } from './pages/bakeries.js';
+import { renderRecentGrid, updateStats } from './pages/home.js';
 import {
   lbCurrentTab, lbCurrentMode, populateLbLocationFilter,
   renderBakeryLeaderboard, renderLeaderboard,
@@ -269,22 +266,10 @@ async function loadData() {
   }
 }
 
-function updateStats() {
-  document.getElementById('statItems').textContent = allItems.length;
-  const bakeries = new Set(allItems.map(i => i.bakeryName).filter(Boolean));
-  document.getElementById('statBakeries').textContent = bakeries.size;
-  const raters = new Set(allItems.map(i => i.userId).filter(Boolean));
-  document.getElementById('statRaters').textContent = raters.size;
-}
-
-function renderRecentGrid() {
-  const grid = document.getElementById('recentGrid');
-  if (!allItems.length) {
-    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon">🥐</div><div class="empty-state-title">Nothing here yet</div><div class="empty-state-text">Be the first to log a pastry and start the community.</div></div>`;
-    return;
-  }
-  grid.innerHTML = allItems.slice(0, 9).map(item => cardHTML(item)).join('');
-}
+// ─── HOME PAGE ────────────────────────────────────────────────────────────────
+// updateStats/renderRecentGrid moved to src/pages/home.js (2026-08-28,
+// Phase 7 step 28) — imported back above, since loadData() (deferred to
+// step 29) and saveReview() both call them after populating allItems.
 
 // feedCurrentTab/switchFeedTab/renderFeed moved to src/pages/feed.js
 // (2026-08-24, Phase 3 step 13) — imported above. switchFeedTab is
@@ -404,12 +389,13 @@ registerActions({ buildBakeryIndex });
 
 // ADD ITEM MODAL/IMAGE COMPRESSION/BAKERY SEARCH/RATING/MODAL STEPS/ITEM
 // MATCHING moved to src/components/addReviewModal.js (2026-08-25, Phase 4
-// step 18) — imported above. saveReview stays here — it depends on
-// updateStats/renderRecentGrid/renderLeaderboard/lbCurrentTab/loadData,
-// none extracted yet (Phase 7). modalNext (addReviewModal.js) reaches it
-// via getAction('saveReview') instead of a direct import — see that
-// file's own header comment for why. Registered below so that lookup
-// resolves.
+// step 18) — imported above. saveReview stays here — it still depends on
+// loadData() (deferred to Phase 7 step 29); its other former blockers are
+// now imported: updateStats/renderRecentGrid from src/pages/home.js
+// (step 28), renderLeaderboard/lbCurrentTab from src/pages/leaderboard.js
+// (step 27). modalNext (addReviewModal.js) reaches saveReview via
+// getAction('saveReview') instead of a direct import — see that file's own
+// header comment for why. Registered below so that lookup resolves.
 // ─── SAVE ─────────────────────────────────────────────────────────────────────
 async function saveReview() {
   if (!currentUser) { openAuthModal(); return; }
@@ -2046,9 +2032,12 @@ async function runCategoryMigration() {
 
 // toggleReaction/refreshReactionBar/buildReactionBarInner/
 // toggleReactionPicker/toggleReactionFromPicker/loadReactionsForItems
-// moved to src/components/reactions.js (2026-08-24, Phase 2 step 8) —
-// buildReactionBarInner/loadReactionsForItems imported above (called from
-// feedCardHTML, still in this file).
+// moved to src/components/reactions.js (2026-08-24, Phase 2 step 8).
+// buildReactionBarInner/loadReactionsForItems are no longer imported here
+// either — their only caller was feedCardHTML, which moved to
+// src/components/reviewCard.js (step 12) and is now called from
+// src/pages/feed.js (step 13), not this file. Stale import removed
+// 2026-08-28 (Phase 7 step 28).
 
 // ─── FOLLOWS ──────────────────────────────────────────────────────────────────
 // myFollowing/myFollowers/loadFollows moved to src/state/appState.js
@@ -3061,7 +3050,6 @@ Object.assign(window, {
   renderExploreMap,
   renderExploreResults,
   renderManageShop,
-  renderRecentGrid,
   runExploreNearbySearch,
   saveBakeryProfile,
   saveSettingsProfile,
@@ -3078,5 +3066,4 @@ Object.assign(window, {
   switchFeedTab,
   updateOverallRating,
   updatePreorderBadge,
-  updateStats,
 });
