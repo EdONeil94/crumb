@@ -11,13 +11,16 @@ its own section below), and the **E2E test workflow** — all done on
 ## Carving src/legacy-app.js into src/pages/ and src/components/
 
 **Status as of 2026-08-28: Phases 0-6 complete, Phase 7 in progress**
-(steps 1-29 of 32 done — Phase 7 so far: `src/pages/bakeries.js` (step 26,
+(steps 1-30 of 32 done — Phase 7 so far: `src/pages/bakeries.js` (step 26,
 `465522f`); `src/pages/leaderboard.js` (step 27, `4f01f3`);
 `src/pages/home.js` (step 28, `7b8db6c`); `src/pages/explore.js` (step 29,
 `3235a09`) — the largest cluster in the plan (~735 lines), which also
 spun off `src/data/exploreCities.js` (static city data) and
 `src/services/places.js` (`geocodeBakeryAddress`, now shared with
-`profileModal.js`). `exploreCache` now has an importable home, so the
+`profileModal.js`); `src/pages/preorders.js` (step 30, `048fcc3`) — the
+Pre-order *discovery* page, a clean ~210-line move, distinct from the
+step-31 burger-menu sheet. Only steps 31 (`preordersSheet.js`) and 32
+(`settings.js`) remain. `exploreCache` now has an importable home, so the
 Phase 0 stage 3b deferred decisions (moving `loadData()`/
 `buildBakeryIndex()`/`loadProfiles()` into `appState.js`, and
 `saveEdit()`/`deleteReview()` into `editReviewModal.js`) are now
@@ -312,8 +315,14 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   E2E runs given the size. The two ⚠️ deferred decisions below are now
   unblocked — NOT acted on here. See its entry in
   `docs/extraction-log.md` ·
-  30. `src/pages/preorders.js` (confirmed zero coverage via grep — see
-  below) · 31. `src/components/preordersSheet.js` (confirmed zero coverage) ·
+  30. `src/pages/preorders.js` — ✅ **done** (2026-08-28, commit `048fcc3`).
+  Clean ~210-line move (7 functions, 4 module-private state vars, no
+  `getAction` needed — `bakeryModal.js`'s existing
+  `getAction('renderPreorderPage')()` resolves via the registry
+  unchanged). Removed 2 dead imports from `legacy-app.js` (`distKm`,
+  `ALL_CITIES` — last consumers left with this page). Debug spec, one
+  closing E2E run. See its entry in `docs/extraction-log.md` ·
+  31. `src/components/preordersSheet.js` (confirmed zero coverage) ·
   32. `src/pages/settings.js` (mostly composition of Phase 6's components
   by this point)
 

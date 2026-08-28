@@ -7,6 +7,78 @@ standing rules). This file is the per-step history only: commit hashes,
 what moved, what was deferred and why, and every lesson found along the
 way. Most recent first. Add each new completed step's entry at the top.
 
+- **`src/pages/preorders.js` — step 30** (2026-08-28, commit `048fcc3`).
+  The Pre-order *discovery* page (`#page-preorders`) — ~210 lines, 7
+  functions (`initPreorderPage`, `onPoCountryChange` [a documented no-op —
+  country is locked to the user's home country], `onPoCityChange`,
+  `populatePoCityDropdown`, `poDetectNearest`, `renderPreorderPage`,
+  `closeBakeryModalIfOpen`) + 4 state vars
+  (`poActiveCountry`/`poActiveCity`/`poUserCoords`/`poNearestCity`).
+  Re-grepped the section fresh; a clean single cluster, no split.
+  **Explicitly distinguished from the two similarly-named clusters** by
+  reading, not the header: the "My Pre-orders" burger-menu sheet
+  (`loadMyPreorders`/`openMyPreordersSheet`/… — Phase 7 step 31, stays in
+  `legacy-app.js`, its own `registerActions({ loadMyPreorders })` at
+  legacy-app.js:1412 untouched) and the baker-side "Manage pre-orders"
+  modal (`src/components/manageOfferingsModal.js`, step 17). The grep loop
+  for every `po*` state var and moved function name across
+  `legacy-app.js` outside the cut range confirmed the 4 state vars have
+  **no reader anywhere else** (incl. the step-31 sheet range) — all
+  module-private, no exports.
+  **No `getAction` needed** — a first among the Phase 7 page moves that
+  touch the pre-order/bakery area. `renderPreorderPage` is reached from
+  `bakeryModal.js`'s `reserveOffering` via
+  `getAction('renderPreorderPage')()` (added step 21); that lookup
+  resolves through the global registry regardless of which module calls
+  `registerActions`, so moving the registration into `preorders.js`
+  needed zero change on the `bakeryModal.js` side. Every `open*` action in
+  `renderPreorderPage`'s row markup (`openBakeryProfile` via
+  `closeBakeryModalIfOpen,openBakeryProfile`; `openReserveModal`;
+  `openAuthModal`) is a `data-onclick` string — registry-resolved, no
+  imports.
+  **Standing lesson 1–2**: grepped `index.html` — the 5 delegated
+  discovery actions (`onPoCountryChange`/`onPoCityChange` on the
+  country/city `<select>`s, `poDetectNearest` on `#poNearestBtn`,
+  `renderPreorderPage` on both `#poBakeryFilter` *and* `#poSortFilter`
+  `data-onchange`) all have real static markup → all register from
+  `preorders.js` (`closeBakeryModalIfOpen` too, markup-only from the row
+  template). `initPreorderPage` + `populatePoCityDropdown` were the only
+  two `WINDOW EXPORTS` entries — both stale (no raw handlers, no `tests/`
+  refs); `initPreorderPage` is exported the ES way for `showPage()`,
+  `populatePoCityDropdown` has no external caller at all → removed both.
+  **Standing lesson 4 — grep every call site before trimming an import —
+  found 2 more dead `legacy-app.js` imports**: `distKm`'s last consumer
+  there was `poDetectNearest` (moving), and `ALL_CITIES`'s was
+  `renderPreorderPage`/`poDetectNearest` (moving) — both now dead, removed
+  (`distKm` from the `utils/geo.js` import, `ALL_CITIES` from the
+  `data/exploreCities.js` import). `extractCity` (still used by
+  `buildBakeryIndex`) and `EXPLORE_COUNTRIES` (still used by the Settings
+  admin panel's country picker, `openSettingsPage`) stay. 2 breadcrumb
+  comments updated.
+  **Confirmed-zero prior coverage** (CLAUDE.md already had this
+  grep-verified; re-confirmed). Throwaway debug spec
+  (`tests/_debug-preorders.spec.js`, deleted before commit) with
+  `pageerror`/console-error listeners: nav to Pre-order → `#poCountrySelect`
+  is `disabled` and shows "United Kingdom" → `#poCitySelect` populates (65
+  UK options) → select a city → `#preorderPageResults` renders
+  (empty-state branch for Aberdeen — no active offerings there, which is
+  the expected data-dependent outcome and still exercises
+  `renderPreorderPage` end to end) → `#poSortFilter` "bakery" then
+  "price_asc" both re-render cleanly → `#poNearestBtn` with geolocation
+  granted (London) → `poDetectNearest` sets the city to "London". Zero
+  console/page errors. The card-rendering branch of `renderPreorderPage`
+  is data-dependent (needs a live offering in the picked city) so the
+  debug spec couldn't force it, but it's a verbatim move and
+  `reservations.spec.js` exercises `reserveOffering` →
+  `getAction('renderPreorderPage')()` in the full suite.
+  Verified: `check:dead-refs` clean (41 targets, incl. a check confirming
+  `preorders.js` passes all five), `npm run build` succeeds (62 modules).
+  Full `test:e2e`: **58 passed/13 skipped/0 failed** — one closing run
+  (medium risk: clean single cluster, no cross-module coupling beyond the
+  already-registry-mediated `getAction`), no flake, skip count in the
+  documented 10–14 band. Baseline skipped per the tightened workflow
+  (step 29's second closing run still valid — only doc commits since).
+
 - **`src/pages/explore.js` — step 29** (2026-08-28, commit `3235a09`). The
   largest cluster in the plan — ~735 lines: `exploreCache` + 10 `explore*`
   state vars, `setExploreViewMode`, the Leaflet map view + its ~180-line
