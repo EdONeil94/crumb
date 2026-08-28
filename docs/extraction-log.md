@@ -7,6 +7,94 @@ standing rules). This file is the per-step history only: commit hashes,
 what moved, what was deferred and why, and every lesson found along the
 way. Most recent first. Add each new completed step's entry at the top.
 
+- **`src/pages/settings.js` — step 32** (2026-08-28, commit `69704e0`).
+  **The final step of the 32-step carving plan.** `#page-settings`:
+  `settingsPhotoFile` (compression buffer, module-private — not exported),
+  `openSettingsPage` (fills the profile form: name/location/bio, the
+  country `<select>` from `EXPLORE_COUNTRIES`, the fave-category `<select>`
+  from `CATEGORY_TREE`, avatar preview, and the show/hide of the business
+  + admin sub-cards via `isBusiness()`/`isAdmin()` → `renderBusinessSection()`
+  / `showAdminTab('users')`), `handleSettingsPhoto`, `saveSettingsProfile`
+  (writes `profiles/{uid}` + `updateNav()`), `signOutFromSettings`.
+  **This cluster was never in scope for the handler-delegation migration**
+  — `index.html`'s `#page-settings` still has three RAW inline handlers:
+  `onchange="handleSettingsPhoto(this)"` (`:877`),
+  `onclick="saveSettingsProfile()"` (`:881`),
+  `onclick="signOutFromSettings()"` (`:936`). A raw handler can only
+  resolve `window[name]`, so those three functions **stay in `WINDOW
+  EXPORTS`** (re-imported from `settings.js`), with a new comment block in
+  that section explaining why — the same call the `switchFeedTab` note
+  (step 13) makes, and the exact class of bug that shipped broken at steps
+  9 and 13. `openSettingsPage` has **no** raw site of its own (reached only
+  via `showPage('settings')`'s plain call — the avatar dropdown's
+  `data-onclick="closeAvatarDropdown,showPage"` and the profile modal's
+  raw `onclick="…showPage('settings')"` both go through `showPage`), so its
+  stale `WINDOW EXPORTS` entry was removed and it's an ordinary export
+  imported back for `showPage`.
+  **`signOutFromSettings` calls `showPage('home')`** — and `showPage()`
+  itself stays in `legacy-app.js` (its own Phase 1 step 5 deferral, now a
+  documented post-plan residual). Resolved via `getAction('showPage')('home')`
+  — the **5th reuse** of the registry-lookup pattern (`saveReview` step 18,
+  the `buildBakeryIndex` cluster step 21, `loadData` step 23,
+  `renderPreorderPage`/`loadMyPreorders` steps 30/31). `showPage` is
+  already `registerActions({ showPage })`'d in `legacy-app.js` (`:1504`) —
+  no new registration needed.
+  **No cycle**: `settings.js` → `adminPanel.js` (`showAdminTab`),
+  `businessBakeryManagement.js` (`renderBusinessSection`),
+  `addReviewModal.js` (`compressImage`), `nav.js` (`updateNav`),
+  `authModal.js` (`openAuthModal`) — checked each; none imports back from
+  `settings.js` (only their header comments *mention* `openSettingsPage`,
+  describing the old `legacy-app.js` caller).
+  **Standing lesson 4 — grep every call site before trimming imports —
+  found 5 dead `legacy-app.js` imports** (the most of any step):
+  `openSettingsPage` was the *last* `legacy-app.js` consumer of
+  `EXPLORE_COUNTRIES` (whole `import … from './data/exploreCities.js'` line
+  removed — `legacy-app.js` no longer touches that module at all),
+  `renderBusinessSection` (last caller was `openSettingsPage`),
+  `showAdminTab` (same), `SUPER_ADMIN_UID` and `currentUserRole` (both
+  read only by `openSettingsPage`'s role re-check). All five removed from
+  their import lists; `closeBakeryEditModal`/`closeManageBakeryModal`/
+  `handleBakeryPhoto`/`saveBakeryProfile` kept (other real callers).
+  `setCurrentUserRole`/`loadUserRole`/`updateNav`/`compressImage`/
+  `compressToDataURL`/`CATEGORY_TREE` all still used elsewhere — kept.
+  4 breadcrumb comments updated.
+  **Confirmed-zero prior coverage.** Throwaway debug spec
+  (`tests/_debug-settings.spec.js`, deleted before commit), given the raw
+  handlers, **verified window-reachability at runtime** first:
+  `typeof window.handleSettingsPhoto/saveSettingsProfile/signOutFromSettings
+  === 'function'` and `typeof window.openSettingsPage === 'undefined'`
+  (correct — it's plain-import only). Then the full flow: `#navAvatar`
+  dropdown → "⚙️ Settings" → `#page-settings` active → `openSettingsPage`
+  populated the form (name "Test Account", **19** country options from
+  `EXPLORE_COUNTRIES`, **13** fave-category options from `CATEGORY_TREE`,
+  avatar preview visible, business + admin cards both `display:block` for
+  this admin/business account — `renderBusinessSection`/`showAdminTab` ran
+  clean) → `#settingsPhotoInput` set to a 1×1 PNG fires
+  `handleSettingsPhoto(this)` → preview `<img>` appears + `compressImage`
+  (cross-module into `addReviewModal.js`) settles → `saveSettingsProfile()`
+  (real self-write of the account's own pre-filled values, benign) →
+  "Profile saved ✓" toast → `signOutFromSettings()` → confirm accepted →
+  **`getAction('showPage')('home')` landed on `#page-home`**. Zero
+  console/page errors within the test. (A post-sign-out `[WebServer]`
+  Firestore `permission-denied` from now-unauthorised `onSnapshot`
+  listeners appeared *after* the test finished — expected consequence of
+  the debug spec choosing to actually sign out, not a regression; the real
+  app does the same.)
+  Verified: `check:dead-refs` clean (43 targets — +1: `settings.js` — incl.
+  a check confirming it passes all five, and the
+  bare-variables-in-raw-handlers check for `#page-settings`), `npm run
+  build` succeeds (64 modules). Full `test:e2e` **twice** (final step of
+  the plan + `WINDOW EXPORTS` touched + 5 import trims across
+  widely-imported modules): **58 passed/13 skipped/0 failed**, then
+  **60 passed/11 skipped/0 failed** — both clean, skip variance in the
+  documented 10–14 band, no flake. Baseline skipped per the tightened
+  workflow (step 31's closing run still valid — only doc commits since).
+  **`src/legacy-app.js` is now ~1,574 lines** (9,412 / 296 functions at the
+  start of the plan). See CLAUDE.md's status block for the three
+  post-plan residuals (the `showPage()`→`nav.js` move, the
+  `loadData()`/`buildBakeryIndex()`→`appState.js` move, and the
+  `loadData()` reconcile race).
+
 - **`src/components/preordersSheet.js` — step 31** (2026-08-28, commit
   `913d1d2`). The mobile burger-menu "🗓️ My pre-orders" bottom sheet —
   ~135 lines, 5 functions (`loadMyPreorders` [async, reads the user's

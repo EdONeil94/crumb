@@ -10,24 +10,36 @@ its own section below), and the **E2E test workflow** — all done on
 
 ## Carving src/legacy-app.js into src/pages/ and src/components/
 
-**Status as of 2026-08-28: Phases 0-6 complete, Phase 7 in progress**
-(steps 1-31 of 32 done — Phase 7 so far: `src/pages/bakeries.js` (step 26,
+**Status as of 2026-08-28: the 32-step carving plan is COMPLETE.**
+All 32 steps landed (Phase 7's last five: `src/pages/bakeries.js` (step 26,
 `465522f`); `src/pages/leaderboard.js` (step 27, `4f01f3`);
 `src/pages/home.js` (step 28, `7b8db6c`); `src/pages/explore.js` (step 29,
-`3235a09`) — the largest cluster in the plan (~735 lines), which also
-spun off `src/data/exploreCities.js` (static city data) and
-`src/services/places.js` (`geocodeBakeryAddress`, now shared with
-`profileModal.js`); `src/pages/preorders.js` (step 30, `048fcc3`) — the
-Pre-order *discovery* page; `src/components/preordersSheet.js` (step 31,
-`913d1d2`) — the burger-menu "My pre-orders" sheet (~135 lines). **Only
-step 32 (`src/pages/settings.js`) remains.** `exploreCache` now has an
-importable home, so the
-Phase 0 stage 3b deferred decisions (moving `loadData()`/
-`buildBakeryIndex()`/`loadProfiles()` into `appState.js`, and
-`saveEdit()`/`deleteReview()` into `editReviewModal.js`) are now
-**unblocked and pending** — see the ⚠️ callouts below; NOT acted on as
-part of step 29. The `loadData()` reconcile race is still carried forward
-unfixed. See their entries in `docs/extraction-log.md`.
+`3235a09`) — the largest cluster (~735 lines), which also spun off
+`src/data/exploreCities.js` + `src/services/places.js`;
+`src/pages/preorders.js` (step 30, `048fcc3`);
+`src/components/preordersSheet.js` (step 31, `913d1d2`);
+`src/pages/settings.js` (step 32, `69704e0`) — the final step).
+`src/legacy-app.js` went from 9,412 lines / 296 functions at the start of
+the plan to ~1,574 lines (bootstrap + `showPage()`/its 2 mobile-menu
+dependents + a handful of still-blocked functions).
+
+**Three documented residuals remain — all deliberately deferred decisions,
+NOT plan steps, to be picked up (or not) as separate follow-ups:**
+1. **`showPage()` / `navigateFromMobileMenu()` /
+   `openMyProfileFromMobileMenu()` → `nav.js`** — the Phase 1 step 5
+   deferral. Now that step 32 landed, every one of `showPage()`'s
+   cross-page calls resolves as a real import, so this is finally
+   *possible*. See the ⚠️ callout under the Extraction order list below.
+2. **`loadData()` / `buildBakeryIndex()` / `loadProfiles()` →
+   `appState.js`** (and, tied to it, **`saveEdit()` / `deleteReview()` →
+   `editReviewModal.js`**) — the Phase 0 stage 3b deferrals, unblocked
+   once step 29 gave `exploreCache` an importable home. See the ⚠️
+   callouts below.
+3. **The `loadData()` reconcile race** (in "Known pre-existing issues") —
+   an app-robustness bug, carried through the whole plan unfixed by
+   design.
+
+See `docs/extraction-log.md` for every step's write-up.
 Earlier: steps 1-25 — Phase 4's `manageOfferingsModal.js` (the "does
 this scale" milestone) and `addReviewModal.js` (the modalNext/modalBack
 cluster — held to an explicitly elevated verification bar, see its own
@@ -332,8 +344,19 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   `openProfileModal`/`switchProfileTab` one-way from `profileModal.js`.
   Debug spec (mobile viewport), one closing E2E run. See its entry in
   `docs/extraction-log.md` ·
-  32. `src/pages/settings.js` (mostly composition of Phase 6's components
-  by this point)
+  32. `src/pages/settings.js` — ✅ **done** (2026-08-28, commit `69704e0`).
+  **The final step of the plan.** `openSettingsPage`/`handleSettingsPhoto`/
+  `saveSettingsProfile`/`signOutFromSettings` + `settingsPhotoFile`. The
+  cluster never had its raw inline handlers delegated, so
+  `handleSettingsPhoto`/`saveSettingsProfile`/`signOutFromSettings` stay in
+  `WINDOW EXPORTS` (re-imported), like `switchFeedTab` (step 13);
+  `signOutFromSettings` reaches the still-`legacy-app.js` `showPage()` via
+  `getAction('showPage')()` (5th reuse of that pattern). Removed 5 dead
+  `legacy-app.js` imports (`EXPLORE_COUNTRIES` whole line,
+  `renderBusinessSection`, `showAdminTab`, `SUPER_ADMIN_UID`,
+  `currentUserRole`). Runtime-verified window-reachability + full flow in a
+  debug spec; two closing E2E runs. See its entry in
+  `docs/extraction-log.md`.
 
   **⚠️ Deferred follow-up — NOW UNBLOCKED AND PENDING (step 29 landed
   2026-08-28), set up in Phase 0 stage 3b.** `loadData()` and
@@ -361,19 +384,32 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   `loadData()` decision, though still two separate calls. NOT done as part
   of step 29.
 
-  **⚠️ Deferred follow-up tied to this step (32, `settings.js`, the last
-  page) — set up in Phase 1 step 5, don't lose track of it.**
+  **⚠️ Deferred follow-up — NOW UNBLOCKED (step 32 landed 2026-08-28),
+  set up in Phase 1 step 5. This is residual #1 in the status block at the
+  top of this section.**
   `showPage()`/`navigateFromMobileMenu()`/`openMyProfileFromMobileMenu()`
   stayed in `legacy-app.js` during step 5 because `showPage()` alone
-  directly calls 12 functions spread across all 9 pages (`leaderboard.js`,
+  directly calls ~12 functions spread across all 9 pages (`leaderboard.js`,
   `feed.js`, `bakeries.js`, `explore.js`, `preorders.js`, `shop.js`,
-  `people.js`, `settings.js`) and `openMyProfileFromMobileMenu()` calls
-  `openProfileModal()` (`profileModal.js`, step 22). Unlike 3b's
-  single-dependency deferral, this one needs *every* page extracted
-  before it can move cleanly — step 32 landing is the actual point all
-  of `showPage()`'s dependencies finally exist as real imports. **Once
-  step 32 lands, revisit whether these 3 functions can move into
-  `nav.js`.** Deliberate, separate decision at that point, same as above.
+  `home.js`, `people.js`, `settings.js`) and `openMyProfileFromMobileMenu()`
+  calls `openProfileModal()` (`profileModal.js`, step 22). It needed *every*
+  page extracted before it could move cleanly — **as of step 32 that's
+  true**: every one of `showPage()`'s branch targets now exists as a real
+  import into `legacy-app.js`.
+  **The pending decision — pursue now, or leave as a documented residual:**
+  move `showPage()` + its 2 mobile-menu dependents into `src/components/nav.js`
+  (where `updateNav`/`toggleMobileMenu`/etc. already live). Mechanically it
+  would be: `nav.js` imports the ~12 page renderers/initters + `openProfileModal`
+  the normal way, `legacy-app.js` imports `showPage`/`navigateFromMobileMenu`/
+  `openMyProfileFromMobileMenu` back for its own remaining plain-JS call
+  sites (`initFirebaseApp`, the `#page-*` routing) and keeps `showPage` in
+  `WINDOW EXPORTS` + `registerActions` (its raw `onclick=` at
+  `index.html:824` and its many `data-onclick` nav buttons). No new cycle —
+  `nav.js` is already a leaf every page module is willing to import from.
+  This is a **post-plan cleanup**, not one of the 32 steps; the plan
+  delivered "possible", not "done". Run it under the same tightened
+  workflow (targeted spec covering nav across all 9 pages + the mobile
+  menu, one closing E2E) if pursued.
 
 **Coverage verified, not assumed, for the two originally-"unclear" items**:
 grepped `tests/` for every DOM id/function name tied to `#page-preorders`
