@@ -7,6 +7,119 @@ standing rules). This file is the per-step history only: commit hashes,
 what moved, what was deferred and why, and every lesson found along the
 way. Most recent first. Add each new completed step's entry at the top.
 
+- **`src/pages/explore.js` — step 29** (2026-08-28, commit `3235a09`). The
+  largest cluster in the plan — ~735 lines: `exploreCache` + 10 `explore*`
+  state vars, `setExploreViewMode`, the Leaflet map view + its ~180-line
+  temporary iOS-debug diagnostics panel, Nearby-radius mode
+  (`toggleExploreNearby`/`runExploreNearbySearch`/`getCrumbBakeriesNearPoint`/
+  `fetchGoogleBakeriesNearPoint`), the country/city dropdowns, geo
+  detection, `initExplorePage`, and the trending-bakeries logic
+  (`getTrendingBakeriesNearCity`/`getCrumbBakeriesNearCity`/
+  `selectExploreCity`/`fetchGoogleBakeries`/`renderExploreResults`) — 29
+  functions total. Run at the elevated bar per the tightened workflow's
+  "scale to risk" (heavy coupling + zero coverage + a regression-prone
+  neighbourhood): wide debug spec, full read of every call site, **two**
+  full `test:e2e` runs.
+  **Two support modules, both forced by the move** (same "necessary side
+  effect" shape as `config.js` at step 18, decided by reading not
+  assumed):
+  - **`src/data/exploreCities.js`** — `EXPLORE_COUNTRIES` (317 lines of
+    static city data, 18 countries / 277 cities), `ALL_CITIES`,
+    `UK_CITIES`. Grepped every consumer first: Explore (moving), the
+    Settings admin panel (`openSettingsPage`, still in `legacy-app.js`
+    until step 32), and the Pre-order discovery page (`poDetectNearest`
+    etc., still in `legacy-app.js` until step 30). A page module can't own
+    data three clusters need, so it went to `src/data/` — exactly the
+    `categories.js` (step 1) precedent. `legacy-app.js` imports
+    `EXPLORE_COUNTRIES`/`ALL_CITIES` back for the two staying consumers.
+  - **`src/services/places.js`** — `geocodeBakeryAddress`, which was
+    module-private in `profileModal.js` (its Dining Map tab, since step
+    22). `renderExploreMap` needs the same Places text-search helper.
+    Options weighed: export it from `profileModal.js` (makes `explore.js`
+    depend on that whole heavy module — rejected), duplicate it (rejected,
+    step 11 lesson), or a shared home. Read the function first: pure
+    network helper, only dep `GOOGLE_MAPS_KEY`, no `profileModal` state —
+    so a `src/services/` module (dir already exists for `firebase.js`) is
+    clean. `profileModal.js` imports it back and drops its now-unused
+    `GOOGLE_MAPS_KEY` import; its header comment updated.
+  **What explore.js imports**: `exploreCities` (data), `appState`
+  (`allItems`/`currentUser`/`isBookmarked`), `geo` (`distKm`), `dom`
+  (`showToast`), `categories` (`getCategoryDisplay`), `config`
+  (`GOOGLE_MAPS_KEY`), `services/places` (`geocodeBakeryAddress`),
+  `actions` (`registerActions`), `delegate` (`dataArgs`). **No
+  `getAction`, no `openBakeryProfile`, no `buildBakeryIndex`** — every one
+  of the 7 `openBakeryProfile` references in explore markup is a
+  `data-onclick` string, resolved via the global registry (confirmed by
+  reading all 7), so unlike steps 21/23/26/27 this leaf needed no
+  action-registry workaround at all. The Leaflet map still loads
+  `leaflet@1.9.4` from unpkg on demand inside `renderExploreMap`'s own
+  loader — moved verbatim.
+  **`exploreCache` exported** (`export let`) — `legacy-app.js`'s
+  `buildBakeryIndex()` reads it via `Object.values(exploreCache || {})`.
+  Confirmed via grep it's only ever `exploreCache[key] = ...`
+  (property-mutation), never reassigned, so the live binding works for the
+  importer. This is the state whose absence of a home forced the Phase 0
+  stage 3b deferral of `loadData()`/`buildBakeryIndex()` — that decision
+  is **now unblocked but deliberately NOT acted on here** (CLAUDE.md's
+  step-29 ⚠️ callouts updated to "unblocked and pending"). The
+  `loadData()` reconcile race is likewise carried forward untouched, per
+  the resume instruction.
+  **Standing lesson 1–2 (unconditional)**: grepped `index.html` for all 8
+  delegated explore names — `onExploreCountryChange`/`onExploreCityChange`/
+  `onExploreSortChange` (three `<select>` `data-onchange`),
+  `toggleExploreNearby` + `onExploreRadiusChange` (Nearby button + radius
+  select), `hideExploreResults` (← All cities), `setExploreViewMode`
+  (List/Map toggle, `data-args`) — all real static markup, all now
+  register from `explore.js`'s own `registerActions()` call
+  (`closeExploreMapPopup` too, markup-only from the map popup template).
+  16 `WINDOW EXPORTS` entries were stale (zero raw handlers, zero `tests/`
+  refs — checked): `deactivateExploreNearby`, `detectExploreLocation`,
+  `exploreMapLog`, `fetchGoogleBakeries`, `fetchGoogleBakeriesNearPoint`,
+  `getCrumbBakeriesNearCity`, `getCrumbBakeriesNearPoint`,
+  `getTrendingBakeriesNearCity`, `initExplorePage`,
+  `populateExploreCityDropdown`, `populateExploreCountryDropdown`,
+  `renderExploreCityGrid`, `renderExploreMap`, `renderExploreResults`,
+  `runExploreNearbySearch`, `selectExploreCity` — all removed.
+  **Standing lesson 4 (unconditional) — grep every call site before
+  trimming imports — found 4 now-dead `legacy-app.js` imports**, not one:
+  removing the explore code left `GOOGLE_MAPS_KEY` with **zero** consumers
+  in `legacy-app.js` (every use was explore's Google fetches / map) — the
+  whole `import { GOOGLE_MAPS_KEY } from './config.js'` line went;
+  `getCategoryDisplay` (last use was `renderExploreResults`) and
+  `isBookmarked` (last use was an explore result row; `renderBakeries`
+  had already taken the other at step 26) removed from their import
+  lists; `extractCountry` was **already** dead pre-step-29 (stale since an
+  earlier step) and removed while there. `distKm`/`extractCity` kept
+  (still used by `buildBakeryIndex` and `poDetectNearest`). 4 breadcrumb
+  comments updated to match.
+  **Confirmed-zero prior coverage** — grepped `tests/` for `explore`
+  (case-insensitive) and every explore identifier: zero hits. Throwaway
+  debug spec (`tests/_debug-explore.spec.js`, deleted before commit) with
+  `pageerror`/console-error listeners drove the full flow: nav to Explore
+  → country picker populates (18 options) → pick United Kingdom → city
+  picker repopulates (65 options) → pick London → `#exploreResults` shows,
+  `#exploreTitle` leaves "Loading…", `#exploreBakeryList` renders 20 rows
+  → sort → "trending" and back → List/Map toggle: **the Leaflet map
+  actually rendered** (`mapErrored=false`), exercising both the unpkg
+  loader and `geocodeBakeryAddress` via `src/services/places.js`
+  end-to-end → "← All cities" hides results → Nearby button reveals the
+  radius select. Zero console/page errors. (`console.warn` from Google
+  Places network hiccups and the `console.error` in `renderExploreMap`'s
+  fatal-catch are both tolerated by design — the spec filtered only the
+  latter, and it never fired.)
+  **Did NOT touch**: the diagnostics panel ("temporary — remove once
+  mobile bug is found") moved verbatim — deleting flagged-temporary code
+  isn't this extraction's job.
+  Verified: `check:dead-refs` clean (40 targets — +3 this step:
+  `explore.js`, `exploreCities.js`, `places.js` — including a check
+  confirming `explore.js` passes all five), `npm run build` succeeds (61
+  modules). `legacy-app.js` dropped from 3066 → ~2009 lines. Full
+  `test:e2e` **twice** given the size: **59 passed/12 skipped/0 failed**,
+  then **60 passed/11 skipped/0 failed** — both clean, skip variance in
+  the documented 10–14 band, no flake. `activity-calendar.spec.js`
+  (`profileModal.js`'s Dining Map, the file the `geocodeBakeryAddress`
+  move touched) passed in both.
+
 - **`src/pages/home.js` — step 28** (2026-08-28, commit `7b8db6c`). The
   smallest move in the plan: two functions, `updateStats` (the three hero
   stat counters) and `renderRecentGrid` (the recent-bakes grid, `allItems`

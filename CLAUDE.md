@@ -11,16 +11,19 @@ its own section below), and the **E2E test workflow** — all done on
 ## Carving src/legacy-app.js into src/pages/ and src/components/
 
 **Status as of 2026-08-28: Phases 0-6 complete, Phase 7 in progress**
-(steps 1-28 of 32 done — Phase 7 so far: `src/pages/bakeries.js` — ✅ done,
-step 26 (commit `465522f`); `src/pages/leaderboard.js` — ✅ done, step 27
-(commit `4f01f3`); `src/pages/home.js` — ✅ done, step 28 (commit
-`7b8db6c`), a tiny 2-function move (`updateStats`/`renderRecentGrid`), no
-markup wiring, that also swept up 3 stale `legacy-app.js` imports left
-dead since step 13. Steps 26/27 both keep `buildBakeryIndex()` behind on
-`exploreCache`, reached via `getAction('buildBakeryIndex')()`, and carry
-the documented `loadData()` race forward unfixed. After step 28,
-`saveReview()`'s only remaining step-29 blocker is `loadData()` itself.
-See their entries in `docs/extraction-log.md`.
+(steps 1-29 of 32 done — Phase 7 so far: `src/pages/bakeries.js` (step 26,
+`465522f`); `src/pages/leaderboard.js` (step 27, `4f01f3`);
+`src/pages/home.js` (step 28, `7b8db6c`); `src/pages/explore.js` (step 29,
+`3235a09`) — the largest cluster in the plan (~735 lines), which also
+spun off `src/data/exploreCities.js` (static city data) and
+`src/services/places.js` (`geocodeBakeryAddress`, now shared with
+`profileModal.js`). `exploreCache` now has an importable home, so the
+Phase 0 stage 3b deferred decisions (moving `loadData()`/
+`buildBakeryIndex()`/`loadProfiles()` into `appState.js`, and
+`saveEdit()`/`deleteReview()` into `editReviewModal.js`) are now
+**unblocked and pending** — see the ⚠️ callouts below; NOT acted on as
+part of step 29. The `loadData()` reconcile race is still carried forward
+unfixed. See their entries in `docs/extraction-log.md`.
 Earlier: steps 1-25 — Phase 4's `manageOfferingsModal.js` (the "does
 this scale" milestone) and `addReviewModal.js` (the modalNext/modalBack
 cluster — held to an explicitly elevated verification bar, see its own
@@ -64,6 +67,11 @@ front-loaded early rather than discovered cluster by cluster.
 src/
   state/appState.js     — shared mutable state + its loader functions
   data/categories.js     — CATEGORY_TREE and friends: static, read-only, zero risk
+  data/exploreCities.js  — EXPLORE_COUNTRIES/ALL_CITIES/UK_CITIES: static, read-only
+                            (added step 29 — same rationale as categories.js)
+  services/places.js     — geocodeBakeryAddress: Google Places text-search helper
+                            (added step 29 — shared by explore.js + profileModal.js)
+  config.js              — GOOGLE_MAPS_KEY (added step 18)
   utils/                 — showToast, timeAgo, escJS, lockScroll/unlockScroll, distKm,
                             extractCity, extractCountry — pure functions, zero shared state
   app/lifecycle.js       — PWA install, update check, mobile status bar fix,
@@ -292,37 +300,48 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   `cardHTML` genuinely forced this step. `renderRecentGrid` is implicitly
   covered by every signed-in spec; `updateStats` verified with a throwaway
   debug spec. See its entry in `docs/extraction-log.md` ·
-  29. `src/pages/explore.js` (largest zero-coverage cluster, ~1,075 lines,
-  but most self-contained of the zero-coverage group) ·
+  29. `src/pages/explore.js` — ✅ **done** (2026-08-28, commit `3235a09`).
+  Largest cluster in the plan (~735 lines). Spun off two support modules
+  (necessary side effects): `src/data/exploreCities.js` (static
+  `EXPLORE_COUNTRIES`/`ALL_CITIES`/`UK_CITIES`, also used by Settings +
+  Pre-order discovery) and `src/services/places.js` (`geocodeBakeryAddress`,
+  moved out of `profileModal.js` so both it and explore can share it).
+  `exploreCache` + `initExplorePage` exported back to `legacy-app.js`. 16
+  stale WINDOW EXPORTS entries + 4 now-dead imports (`GOOGLE_MAPS_KEY`,
+  `getCategoryDisplay`, `isBookmarked`, `extractCountry`) removed. Two full
+  E2E runs given the size. The two ⚠️ deferred decisions below are now
+  unblocked — NOT acted on here. See its entry in
+  `docs/extraction-log.md` ·
   30. `src/pages/preorders.js` (confirmed zero coverage via grep — see
   below) · 31. `src/components/preordersSheet.js` (confirmed zero coverage) ·
   32. `src/pages/settings.js` (mostly composition of Phase 6's components
   by this point)
 
-  **⚠️ Deferred follow-up tied to this step (29, `explore.js`) — set up in
-  Phase 0 stage 3b, don't lose track of it by the time we're here.**
-  `loadData()` and `buildBakeryIndex()` stayed in `legacy-app.js` during 3b
-  specifically because `buildBakeryIndex()` reads `exploreCache`, owned by
-  Explore's still-unextracted state. **Once step 29 lands and Explore's
-  state (including `exploreCache`) has a real importable home, revisit
-  whether `loadData()`/`buildBakeryIndex()` (and `loadProfiles()`, deferred
-  for a different reason — see 3b's extraction log entry) can now move into
-  `appState.js` alongside `allItems`/`allBakeries`, completing what 3b left
-  half-done.** This is a deliberate, separate decision to make at that
-  point — not an automatic consequence of step 29 landing.
+  **⚠️ Deferred follow-up — NOW UNBLOCKED AND PENDING (step 29 landed
+  2026-08-28), set up in Phase 0 stage 3b.** `loadData()` and
+  `buildBakeryIndex()` stayed in `legacy-app.js` during 3b specifically
+  because `buildBakeryIndex()` reads `exploreCache`, which as of step 29
+  now has a real importable home (`src/pages/explore.js` exports it).
+  **The pending decision: whether `loadData()`/`buildBakeryIndex()` (and
+  `loadProfiles()`, deferred for a different reason — see 3b's extraction
+  log entry) can now move into `appState.js` alongside `allItems`/
+  `allBakeries`, completing what 3b left half-done.** Still a deliberate,
+  separate decision — not an automatic consequence — and explicitly NOT
+  done as part of step 29. Note: `buildBakeryIndex()` currently has ~5
+  `getAction('buildBakeryIndex')()` call sites across leaf modules
+  (`bakeryModal.js`, `adminPanel.js`, `bakeries.js`, `leaderboard.js`);
+  moving it to `appState.js` would let those become ordinary imports.
 
-  **⚠️ Second deferred follow-up also tied to this step — set up in Phase 2
-  step 9.** `saveEdit()`/`deleteReview()` (`editReviewModal.js`) stayed in
-  `legacy-app.js` because both call `loadData()` (itself deferred to this
-  same step, per the callout above); `deleteReview()` additionally calls
-  `renderLeaderboard()` and reads `lbCurrentTab`, both now in
-  `src/pages/leaderboard.js` (step 27, landed 2026-08-28) and importable —
-  so that half of the blocker is already gone; `loadData()` is the only
-  remaining one. **Once step 29 lands, revisit whether
-  `saveEdit()`/`deleteReview()` can move into `editReviewModal.js`,
-  alongside the `loadData()`/`buildBakeryIndex()` decision above** — a
-  natural point to make both calls together, though still two separate
-  decisions.
+  **⚠️ Second deferred follow-up — NOW UNBLOCKED AND PENDING, set up in
+  Phase 2 step 9.** `saveEdit()`/`deleteReview()` (`editReviewModal.js`)
+  stayed in `legacy-app.js` because both call `loadData()`;
+  `deleteReview()` additionally calls `renderLeaderboard()` / reads
+  `lbCurrentTab` (both importable since step 27). With step 29 landed,
+  `loadData()` is the last blocker, and its own move is the decision
+  above. **Pending: whether `saveEdit()`/`deleteReview()` can move into
+  `editReviewModal.js`** — a natural point to make together with the
+  `loadData()` decision, though still two separate calls. NOT done as part
+  of step 29.
 
   **⚠️ Deferred follow-up tied to this step (32, `settings.js`, the last
   page) — set up in Phase 1 step 5, don't lose track of it.**
