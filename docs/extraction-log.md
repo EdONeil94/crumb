@@ -7,6 +7,96 @@ standing rules). This file is the per-step history only: commit hashes,
 what moved, what was deferred and why, and every lesson found along the
 way. Most recent first. Add each new completed step's entry at the top.
 
+- **`src/pages/leaderboard.js` — step 27** (2026-08-28, commit `4f01f3`).
+  Re-grepped the "LEADERBOARD" section fresh (line numbers had shifted
+  since step 26 landed) and confirmed by reading every function's own
+  dependencies that this is one clean cluster — matching steps 24/25/26's
+  finding, not steps 19-23's "splits" pattern. Moved: `lbCurrentMode`
+  (module state), `switchLbMode`, `populateLbLocationFilter`,
+  `onLbFilterChange`, `getLbFilters`, `switchLbTab`,
+  `renderBakeryLeaderboard`, `closeLbAndOpenBakery`, `renderLeaderboard`.
+  **`lbCurrentTab` moved too, from a different place**: it was declared
+  up in the file's "STATE" section (line 138), not in "LEADERBOARD" — the
+  same "position vs. topic" split this plan keeps finding (cf. step 19's
+  `isSavedItem` under "SAVED ITEMS", step 23's ROLES-section functions).
+  Confirmed via grep that its only real reassignment site is
+  `switchLbTab` (moving), and every read is either inside a moving
+  function or `showPage`/`saveReview`/`deleteReview` passing it as an arg
+  to `renderLeaderboard()` — so it's genuinely leaderboard state, moved
+  with the code that owns it.
+  **`buildBakeryIndex()` did not move** — unchanged from steps 21/23/26:
+  reads `exploreCache`, owned by the not-yet-extracted Explore page
+  (Phase 7 step 29). `renderBakeryLeaderboard` reaches it via
+  `getAction('buildBakeryIndex')()` — standing lesson #5, 4th reuse
+  (steps 18, 21, 23, 26 before this).
+  **`lbCurrentMode`/`lbCurrentTab` exported as plain live `let` bindings,
+  no setter** — a fresh grep confirmed neither is ever reassigned outside
+  this file (only `switchLbMode`/`switchLbTab`, both moving, write them;
+  `showPage` line 214, `saveReview` and `deleteReview` only *read* them).
+  Same convention as `people.js`'s `peopleViewMode` (step 15) — and unlike
+  step 26's `bakeries.js`, which needed the `setBakeryViewMode` setter
+  precisely because `showPage` there *wrote* `bakeryViewMode`. Preserved
+  exact prior behavior throughout, deliberately: `switchLbMode`'s
+  pre-existing duplicate `document.getElementById('lbModeItems').classList
+  .toggle('active', mode === 'items')` line (appears twice, verbatim) and
+  `renderLeaderboard`'s unused `const ratingCount = reviewCount` alias
+  were both carried across unchanged — not "cleaned up" mid-extraction.
+  **Standing lesson #1 + #2 applied**: grepped `index.html` for every
+  moved name first. `switchLbMode` (2 mode buttons), `switchLbTab` (8
+  category-tab buttons), and `onLbFilterChange` (the location + rating
+  filter `<select>`s' `data-onchange`) all have real static delegated
+  markup — all three (plus `closeLbAndOpenBakery`, markup-only from
+  `renderBakeryLeaderboard`'s own row template) register from
+  `leaderboard.js`'s own `registerActions()` call, verified against that
+  markup. `renderLeaderboard`/`renderBakeryLeaderboard`/
+  `populateLbLocationFilter`/`getLbFilters`/`switchLbTab` all had **stale**
+  `WINDOW EXPORTS` entries (zero raw handlers, zero `tests/` refs, checked
+  via grep) — all 5 removed.
+  **Standing lesson #2 caught a real dead import**: `legacy-app.js`
+  imported `openBakeryProfile` from `bakeryModal.js`, but after
+  `closeLbAndOpenBakery` (its *only* remaining plain-JS caller in that
+  file) moved out, a fresh grep for `openBakeryProfile(` found nothing but
+  a comment — every other reference is `data-onclick="…openBakeryProfile"`
+  markup, resolved via the registry. Removed `openBakeryProfile` from that
+  import (kept `closeBakeryModal`, still used by two real listeners).
+  `leaderboard.js` now imports `openBakeryProfile` one-way from
+  `bakeryModal.js` for `closeLbAndOpenBakery` — verified `bakeryModal.js`
+  imports nothing from here, no cycle.
+  **Partial resolution of the step-29 second deferred follow-up** (Phase 2
+  step 9): `deleteReview()`/`saveEdit()` (`editReviewModal.js`) stayed in
+  `legacy-app.js` partly because `deleteReview` calls `renderLeaderboard()`
+  and reads `lbCurrentTab` — both now live in an importable module. That
+  half of the blocker is gone; they still call `loadData()` (deferred to
+  step 29), so no move happens now — CLAUDE.md's callout updated to note
+  it.
+  The `// ─── LEADERBOARD ───` section in `legacy-app.js` is replaced with
+  an 11-line breadcrumb comment (same convention as FILTER HELPERS / ITEM
+  DETAIL); `showPage`'s bakeries-style `renderLeaderboard(lbCurrentTab)`
+  call and the `saveReview`/`deleteReview` re-render calls are untouched,
+  now resolving via the new import.
+  **Confirmed-zero prior coverage** — grepped `tests/` for every
+  leaderboard identifier (`lbList`, `lbSubtitle`, `switchLbMode`,
+  `switchLbTab`, `renderLeaderboard`, `lbCurrentTab`, `lbLocationFilter`,
+  etc.): zero hits anywhere. Verified with a throwaway debug spec
+  (`tests/_debug-leaderboard.spec.js`, deleted before commit) with
+  `pageerror`/console-error listeners: nav to Top Picks → 20 item rows →
+  category tabs (Cake → 3 rows + "Top items — Cake" subtitle, Best value →
+  20 + "best value", All → back) → location filter (`All locations` →
+  `York`) → rating filter (`4.5+`) → click an item row (opens
+  `#detailModal`) → switch to Top Bakeries (`#lbItemTabs` hides, 20 bakery
+  rows, subtitle changes) → click a bakery row (opens `#bakeryModal`,
+  exercising `closeLbAndOpenBakery` → `openBakeryProfile` →
+  `getAction('buildBakeryIndex')()` end-to-end) → back to Top Items. Zero
+  console/page errors. (First debug-spec run failed only because the nav
+  button is labelled "Top Picks", not "Leaderboard" — fixed the selector,
+  not a code issue.)
+  Verified: `check:dead-refs` clean (36 targets, including a check
+  specifically confirming `leaderboard.js` passes all five checks),
+  `npm run build` succeeds (57 modules). Full `test:e2e`: **57 passed/14
+  skipped/0 failed**, identical to the pre-change baseline taken at the
+  start of this step (no flake this time — the skip count of 14 is
+  data-dependent run-to-run variance, matching the baseline exactly).
+
 - **`src/pages/bakeries.js` — step 26** (2026-08-28, commit `465522f`).
   **Opens Phase 7** (the zero/unconfirmed-coverage pages). Re-grepped the
   "BAKERIES" section fresh (line numbers had shifted since the plan was
