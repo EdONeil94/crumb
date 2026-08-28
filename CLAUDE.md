@@ -10,8 +10,14 @@ its own section below), and the **E2E test workflow** — all done on
 
 ## Carving src/legacy-app.js into src/pages/ and src/components/
 
-**Status as of 2026-08-26: Phases 0-5 complete, Phase 6 complete**
-(steps 1-25 of 32 done — Phase 4's `manageOfferingsModal.js` (the "does
+**Status as of 2026-08-28: Phases 0-6 complete, Phase 7 in progress**
+(steps 1-26 of 32 done — Phase 7 opened with `src/pages/bakeries.js` — ✅
+done, step 26 (2026-08-28, commit `465522f`), a clean single-cluster page
+move; `buildBakeryIndex()` stayed behind on `exploreCache` and is reached
+via `getAction('buildBakeryIndex')()`, and the documented `loadData()`
+race is carried forward unfixed. See its entry in
+`docs/extraction-log.md`.
+Earlier: steps 1-25 — Phase 4's `manageOfferingsModal.js` (the "does
 this scale" milestone) and `addReviewModal.js` (the modalNext/modalBack
 cluster — held to an explicitly elevated verification bar, see its own
 entry in `docs/extraction-log.md`). Phase 5 (composite modals: `itemDetailModal.js` —
@@ -254,8 +260,15 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
 - **Phase 7 — last, zero/confirmed-zero direct test coverage, budget extra
   manual QA, write/extend specs at extraction time rather than leaving the
   gap open:**
-  26. `src/pages/bakeries.js` (also carries the documented `loadData()`
-  race) · 27. `src/pages/leaderboard.js` · 28. `src/pages/home.js` ·
+  26. `src/pages/bakeries.js` — ✅ **done** (2026-08-28, commit `465522f`)
+  — **opens Phase 7**. Clean single-cluster move; `buildBakeryIndex()`
+  stays behind (reads `exploreCache`) and is reached via
+  `getAction('buildBakeryIndex')()`. The documented `loadData()` race is
+  carried forward unfixed (it's the still-`legacy-app.js` `loadData()` and
+  the once-only `renderBakeries()` call from `showPage()` — neither moved
+  or changed). Zero prior coverage confirmed; verified with a throwaway
+  debug spec. See its entry in `docs/extraction-log.md` ·
+  27. `src/pages/leaderboard.js` · 28. `src/pages/home.js` ·
   29. `src/pages/explore.js` (largest zero-coverage cluster, ~1,075 lines,
   but most self-contained of the zero-coverage group) ·
   30. `src/pages/preorders.js` (confirmed zero coverage via grep — see

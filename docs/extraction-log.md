@@ -7,6 +7,100 @@ standing rules). This file is the per-step history only: commit hashes,
 what moved, what was deferred and why, and every lesson found along the
 way. Most recent first. Add each new completed step's entry at the top.
 
+- **`src/pages/bakeries.js` — step 26** (2026-08-28, commit `465522f`).
+  **Opens Phase 7** (the zero/unconfirmed-coverage pages). Re-grepped the
+  "BAKERIES" section fresh (line numbers had shifted since the plan was
+  drafted) and confirmed by reading every function's own dependencies
+  that this is genuinely one clean cluster — matching steps 24/25's
+  finding, not steps 19-23's "splits" pattern. Moved: `bakeryViewMode`/
+  `userGeoCoords` (module state), `geocodeMissingBakeries`, `setBakeryView`,
+  `populateBakeryLocationFilter`, `distKmUser`, `renderBakeries`.
+  **`buildBakeryIndex()` did not move** — unchanged from every prior step
+  that touched it (`bakeryModal.js` step 21, `adminPanel.js` step 23): it
+  reads `exploreCache`, owned by the not-yet-extracted Explore page
+  (Phase 7 step 29). It stays in `legacy-app.js`, still registered there
+  via the pre-existing `registerActions({ buildBakeryIndex })` call, and
+  `setBakeryView`/`renderBakeries` reach it via
+  `getAction('buildBakeryIndex')()` — standing lesson #5, third reuse of
+  the pattern. The Phase 0 stage 3b deferred follow-up (revisit whether
+  `loadData()`/`buildBakeryIndex()` can move into `appState.js` once
+  `exploreCache` has a real home) is **unaffected** — that decision still
+  belongs to step 29, not this one.
+  **`distKm` now imported one-way from `utils/geo.js`** — the Phase 0
+  step 2 note predicted exactly this: `distKmUser` reads `userGeoCoords`
+  (this page's own local state), so it and its `distKm` dependency were
+  deliberately left in `legacy-app.js` then to move here now. `legacy-app.js`
+  still imports `distKm` from `geo.js` for its own Explore-page uses
+  (confirmed via grep — 8 remaining call sites), so that import line was
+  not trimmed.
+  **`showPage()`'s bakeries branch** (`legacy-app.js`, Phase 7 step 32)
+  was `bakeryViewMode = 'all'; renderBakeries();` — a direct write to
+  what is now module-private state. Rather than change behavior, added a
+  minimal exported setter `setBakeryViewMode(mode)` and rewrote the branch
+  as `setBakeryViewMode('all'); renderBakeries();`. **Exact prior behavior
+  preserved, deliberately**: the old inline reset never toggled the
+  view-toggle buttons' `.active` classes, and `setBakeryViewMode` doesn't
+  either — only `setBakeryView` (reached solely from markup) does. Using
+  `setBakeryView('all')` there would have been a (minor, arguably correct)
+  behavior change — left for a future dedicated fix, not folded into an
+  extraction, matching this plan's "surface bugs, don't fix them while
+  moving" stance. `renderBakeries` and `setBakeryViewMode` are the only
+  two exports; `setBakeryView` registers via `registerActions()` but is
+  never imported by name (minimal-export policy, `bakeryModal.js`
+  precedent).
+  **Standing lesson #1 + #2 applied**: grepped `index.html` for every
+  moved name first. `setBakeryView` (3 view-toggle buttons, `#bakeryViewAll`
+  /`#bakeryViewNearest`/`#bakeryViewVisited`) and `renderBakeries` (the
+  `#bakeryLocationFilter` `data-onchange`) both have real static
+  `data-onclick`/`data-onchange` markup — both correctly included in
+  `bakeries.js`'s own `registerActions({ setBakeryView, renderBakeries })`
+  call from the first pass, verified against that markup rather than
+  assumed. The old `registerActions({ setBakeryView, renderBakeries })` in
+  `legacy-app.js` was removed (its comment block rewritten to point here).
+  3 stale `WINDOW EXPORTS` entries removed (`distKmUser`,
+  `geocodeMissingBakeries`, `populateBakeryLocationFilter`) — zero raw
+  handlers in `index.html`, zero `tests/` references, confirmed via grep.
+  **Refreshed 5 now-stale "legacy-app.js's still-not-yet-extracted
+  `renderBakeries`" comments** in `appState.js` (the `isBookmarked`
+  co-location rationale), `bakeryModal.js` (same), and `profileModal.js`
+  (×2, the `toggleBookmark` markup-resolution note) — each comment's
+  substantive conclusion still holds (`isBookmarked` still has two
+  importers; `toggleBookmark` still resolves via the registry from
+  `renderBakeries`'s card markup with no import needed), only the file the
+  function lives in changed. `nav.js`'s `showPage`-deferral comment
+  listing `renderBakeries` among `showPage`'s deps was left as-is — still
+  accurate (it *is* a `showPage` dependency, now via a real import).
+  **Zero prior test coverage confirmed** — grepped `tests/` for every
+  Bakeries-page identifier (`bakeriesGrid`, `bakeryView*`,
+  `bakeryLocationFilter`, `setBakeryView`, `renderBakeries`, `distKmUser`,
+  etc.): the only hits are `tests/utils/preorders.js`'s
+  `openFirstBakeryProfile` helper, which navigates *through* the Bakeries
+  page to reach a bakery profile modal but never exercises the view
+  toggles or location filter. Verified manually with a throwaway debug
+  spec (`tests/_debug-bakeries.spec.js`, deleted before the commit) with
+  `pageerror`/console-error listeners attached throughout: nav to Bakeries
+  → 77 cards render → location filter (`All locations` → `York` → 9 cards
+  → back to 77) → "My visited" toggle (button `.active` flips, grid
+  re-renders) → back to All → "📍 Nearest" with geolocation **denied**
+  (falls back to All + shows the "Location access denied" toast) → "📍
+  Nearest" with geolocation **granted** (London coords — geocodes missing
+  bakeries, sorts to 8 with location data) → bookmark button toggles its
+  `saved` class and back → click a card opens `#bakeryModal`, exercising
+  `openBakeryProfile` → `getAction('buildBakeryIndex')()` end-to-end.
+  Zero console/page errors across the whole path.
+  Verified: `check:dead-refs` clean (35 targets, including a check
+  specifically confirming `bakeries.js` passes all five checks),
+  `npm run build` succeeds (56 modules). Full `test:e2e`: the **first**
+  run showed 1 failure (`share-and-saved.spec.js:47`, the Share-modal
+  following-status test) + 2 extra data-dependent skips — the failing
+  test passed cleanly in an isolated re-run (`5 passed/1 skipped`), and a
+  second full run came back **59 passed/12 skipped/0 failed**, identical
+  to the pre-change baseline. Same flake-confirmation pattern as steps 1
+  and 5 (isolated rerun + one clean full rerun gates the commit); the
+  failing test touches only `openShareReviewModal`/`renderShareCandidateRows`
+  and the mutable follow-graph (which `people-filters.spec.js` modifies
+  earlier in the sequential run), nothing this step went near.
+
 - **`src/components/notifications.js` — step 25** (2026-08-26, commit
   `0be56ae`). **Closes out Phase 6.** Re-grepped the "NOTIFICATIONS"
   section fresh and confirmed, by reading every function's own
