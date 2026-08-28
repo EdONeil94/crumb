@@ -342,30 +342,78 @@ untested, not just unclear — no reordering needed, Phase 7 stands.
 ### Commit strategy
 
 **One commit per module (32 steps → at least 32 commits), never fewer.**
-Each commit lands only after its own full `test:e2e` run is green —
-extractions are never stacked ungated before running the suite, so a
-regression always bisects to exactly one module's change. Phase 0 stage 3
+Each commit lands only after its own single closing full `test:e2e` run is
+green (the per-extraction workflow below covers when a fresh *baseline* run
+is also needed — usually it isn't). Extractions are never stacked ungated
+before running the suite, so a regression always bisects to exactly one
+module's change. Phase 0 stage 3
 (`appState.js`) is finer-grained than the module-level norm (3 commits, one
 per state group) given its elevated risk. Phase boundaries are not commit
 boundaries — commits happen at the module/stage level throughout.
 
 ### Per-extraction workflow (mirrors the delegation migration's proven process)
 
-1. Before moving: re-verify the function/state list for that module — line
-   numbers shift as earlier steps land; re-grep at extraction time.
-2. Move the code; rewrite shared-state reads/writes to import from
-   `appState.js` instead of relying on same-file scope.
-3. Wire the new module in; remove moved functions from `legacy-app.js` and
-   from `WINDOW EXPORTS` if still listed (worth checking even if the plan
-   didn't flag it — e.g. `getCategoryDisplay`/`getTastingDims` turned out to
-   be stale `WINDOW EXPORTS` entries, same class as the Item detail modal
-   fix from the delegation migration).
-4. `npm run check:dead-refs` (once extended per the prerequisite above).
-5. `npm run build`.
-6. Run the **full** `npm run test:e2e`, not just the spec(s) matching that
-   module.
-7. Commit (see commit strategy above).
-8. Update this section: check off the step, note anything found.
+Run these per step, in order. **Scale the ceremony to the risk** (see the
+note after the list) — but the four unconditional checks and the single
+closing full-suite gate are never dropped.
+
+1. **Baseline — only if stale.** Run a fresh full `npm run test:e2e` at the
+   start of a step *only* if the previous step's closing run is no longer
+   known-clean — something has touched the repo since (a commit landed, a
+   rebase, a dependency bump, a manual edit, an unknown gap). If the last
+   step ended green and nothing has changed since, that run *is* this
+   step's baseline — don't re-run it.
+2. **Re-verify the target list.** Re-grep the module's function/state
+   list — line numbers shift as earlier steps land.
+3. **Move the code.** Rewrite shared-state reads/writes to import from
+   `appState.js` instead of relying on same-file scope. Use `sed` to lift
+   exact source ranges for anything sizeable (lesson 6).
+4. **Wire in and clean up.** Remove moved functions from `legacy-app.js`
+   and any now-stale `WINDOW EXPORTS` entry; register the new module's
+   delegated actions from the module itself.
+5. **`npm run check:dead-refs`, then `npm run build`.**
+6. **Targeted spec first — always.** Run the spec(s) covering the affected
+   cluster before the full suite. This is the cheap, fast check that has
+   caught real regressions first: step 9's unregistered modal actions (via
+   `auth.setup.js`), step 22's dropped `renderOrdersTab` import (via
+   `reservations.spec.js`) — both past a clean `check:dead-refs` + build.
+   On a failure here, confirm it's real (isolated rerun, or `git stash`
+   vs. the pre-change commit) before debugging — don't assume, don't wave
+   it off.
+7. **Debug spec — only for uncovered clusters.** If `tests/` has zero
+   coverage for the cluster (grep to confirm), write a throwaway spec
+   driving its real user flows with `pageerror`/console-error listeners,
+   run it, and delete it before committing (as for `bakeries.js`,
+   step 26). Clusters that already have spec coverage don't get one.
+8. **Full `npm run test:e2e` once — the closing gate.** After the targeted
+   (and debug, if any) specs pass, run the full suite one time as final
+   confirmation, then commit. No second "to be sure" run unless the
+   baseline was stale (step 1) or a genuine flake needs a clean rerun to
+   gate the commit. Normal skipped-test count is data-dependent,
+   historically 10–14.
+9. **Commit, then log.** One green full run per step, per commit. Step
+   write-up goes in `docs/extraction-log.md`; CLAUDE.md gets only the
+   status-line + phase-checklist update.
+
+**Scaling to risk.** A small, already-isolated, single-cluster move
+(`bakeries.js` step 26, `leaderboard.js` step 27) runs the list above once
+and no more. Reserve the extra weight — a wider targeted-spec net, a
+throwaway debug spec even next to existing coverage, a second full run, an
+extra pass over every call site — for steps with heavy cross-file coupling,
+zero prior coverage, or a regression history. **Anything touching modal
+action registration takes the elevated bar regardless of size** — that's
+the exact class that shipped broken three times (lesson 1).
+
+**Never skipped, never scaled down:**
+- Grep `index.html` for every moved name's delegated markup before
+  assuming its registration moved correctly (lessons 1–2).
+- Grep every real call site before trimming an import from `legacy-app.js`
+  — a staying function can still call a leaving one (lesson 4).
+- Never edit source while a full `test:e2e` run is live against the dev
+  server — Vite HMR serves the half-edited state mid-suite (lesson 3).
+- Triage a full-suite failure against known flake patterns via isolated
+  rerun before calling it a regression — and don't call a deterministic
+  isolated failure a flake (lesson 8).
 
 ### Standing lessons from completed steps
 
@@ -415,9 +463,20 @@ for the full context.
    Verify line and export counts against the original before writing to
    `src/`.
 7. **A clean `check:dead-refs` + `npm run build` is necessary but not
-   sufficient** — the full `npm run test:e2e` run (not just the spec
-   matching the module) is what actually proves an extraction. The normal
-   skipped-test count is data-dependent, historically 10–13.
+   sufficient** — real regressions pass both (step 9's unregistered modal
+   actions, step 22's dropped import). The **targeted spec** is the fast
+   catch; a **single closing `npm run test:e2e`** is the proof. Run the
+   full suite once per step, not twice (see the per-extraction workflow
+   above). Normal skipped-test count is data-dependent, historically
+   10–14.
+8. **A full-suite failure isn't automatically a regression; an isolated
+   failure isn't automatically a flake.** Re-run a failing full-suite test
+   in isolation and check it against the known flake patterns (the mutable
+   follow-graph flake in `share-and-saved`/`people-filters`, seen
+   green-on-rerun in steps 1, 5, 26) before reacting. Conversely, a test
+   that fails *deterministically* in isolation is real — confirm against
+   the pre-change commit with `git stash` rather than dismissing it
+   (step 22).
 
 ### Extraction log
 
@@ -1022,6 +1081,11 @@ Bakery-profile-modal internals, BUSINESS — BAKERY PAGE MANAGEMENT, ACTIVITY
 CALENDAR, DINING MAP, QR SCANNER (baker side), ADD ITEM MODAL, MODAL STEPS,
 ITEM MATCHING, ADMIN PANEL, SHOP MANAGEMENT (business users), and BAKERY
 SEARCH — the last cluster in the migration.
+
+**Normal skipped-test count: 10–14**, data-dependent and run-to-run (which
+throwaway records exist, whether a location has 2+ bakeries, etc.). Treat
+anything in that band with 0 failed as a clean run, not a regression —
+same figure the per-extraction workflow and standing lesson #7 use.
 
 Getting to green — and staying there as REACTIONS landed and exercised the
 suite under slightly different conditions — took three rounds of fixes, all
