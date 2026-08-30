@@ -1,12 +1,18 @@
 import { test as teardown } from '@playwright/test';
 
 // Runs once after all specs finish (wired via the "chromium" project's
-// `teardown: 'cleanup'` in playwright.config.js) and removes everything
-// tests/utils/preorders.js creates in Firestore. See that file's module
-// comment for the full picture; in short, each addOffering() call creates a
-// preorderOfferings doc + a bakeryCatalogue doc (saveToCatalogue runs on
-// every save), and each reserveFromBakeryProfile() call creates a
-// reservations doc.
+// `teardown: 'cleanup'` in playwright.config.js) and removes the Firestore
+// data the suite creates:
+//   - preorderOfferings + bakeryCatalogue + reservations — from
+//     tests/utils/preorders.js (addOffering / reserveFromBakeryProfile).
+//   - items + itemRecords — from tests/utils/reviews.js's createReview
+//     fixture. That fixture ALSO deletes each review it created on its own
+//     teardown (per test, incl. mid-test skips); this is the second backstop
+//     for the case the fixture itself can't run — page crashed, or the whole
+//     Playwright process was killed before this teardown got to run either.
+//     (Before both existed, one mid-test skip in share-and-saved.spec.js was
+//     leaking ~80 "E2E Share Wiring" reviews into the live Recent Reviews
+//     feed.)
 //
 // Scoped tightly by design: every test-created name is generated as
 // `E2E <label> <timestamp>` (see E2E_PREFIX below). This only ever
@@ -53,7 +59,11 @@ teardown('remove E2E-prefixed test data', async ({ page }) => {
     const upperBound = prefix + '';
     const result = {};
 
-    for (const col of ['preorderOfferings', 'bakeryCatalogue']) {
+    // items/itemRecords use `name` too. deleteReview() in the app deletes an
+    // item + its itemRecord, so the E2E (super-admin) account's rules permit
+    // this; sweeping itemRecords by name independently also catches any left
+    // orphaned (e.g. an item deleted mid-test but its record not).
+    for (const col of ['preorderOfferings', 'bakeryCatalogue', 'items', 'itemRecords']) {
       const snap = await getDocs(query(
         collection(db, col),
         where('name', '>=', prefix),

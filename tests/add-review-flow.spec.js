@@ -1,5 +1,4 @@
-import { test, expect } from '@playwright/test';
-import { addReview } from './utils/reviews.js';
+import { test, expect } from './utils/reviews.js';
 
 // Backfills the manually-verified checklists for the "Rate a Bake!" review
 // creation modal's remaining raw-handler clusters:
@@ -8,9 +7,10 @@ import { addReview } from './utils/reviews.js';
 //   sliders -> updateDimDisplay)
 // - ITEM MATCHING (searchExistingItems/selectItemMatch/createNewItem/
 //   clearItemMatch)
-// tests/utils/reviews.js's addReview() already drives this modal end-to-end
-// for other specs' setup needs, but doesn't exercise photo upload, step
-// validation, Back navigation, or item matching — this spec covers those.
+// tests/utils/reviews.js's createReview fixture already drives this modal
+// end-to-end for other specs' setup needs, but doesn't exercise photo
+// upload, step validation, Back navigation, or item matching — this spec
+// covers those (and only its item-matching test actually submits a review).
 
 async function deleteViaEdit(page, card) {
   await card.locator('.card-image').click();
@@ -109,10 +109,10 @@ test('choosing a photo shows a preview, and a per-dimension rating slider update
   await page.locator('[data-onclick="closeAddModal"]').click();
 });
 
-test('typing a name that matches an existing item shows it, selecting it pre-fills the form, and "New item" clears the match', async ({ page }) => {
+test('typing a name that matches an existing item shows it, selecting it pre-fills the form, and "New item" clears the match', async ({ page, createReview }) => {
   const name = `E2E Flow Match ${Date.now()}`;
   const bakeryName = `E2E Flow Match Bakery ${Date.now()}`;
-  const { card } = await addReview(page, { name, bakeryName, category: 'Bread' });
+  const { card } = await createReview({ name, bakeryName, category: 'Bread' });
 
   await page.locator('#addBtn').click();
   await page.locator('#bakerySearch').fill(bakeryName);
