@@ -86,6 +86,16 @@ Normal result: ~60 passed, 10–14 skipped (data-dependent), 0 failed.
 
 ## What's next (not started)
 
+- **Move the E2E suite onto the Firebase Emulator Suite** — it currently
+  runs against the live Firebase project. See
+  `docs/tier2-emulator-scope.md`.
+- **Account management — no password change or reset.** Confirmed missing:
+  the Settings page has only profile fields (name / location / country /
+  bio / favourite category / avatar) + "Sign out"; the auth modal has no
+  "Forgot password?" link; there are no `updatePassword` /
+  `sendPasswordResetEmail` calls anywhere. An email/password user who wants
+  to change their password, or has forgotten it, has no in-app path.
+  (Google-sign-in users are unaffected — Google manages that credential.)
 - Backend / Cloud Functions (currently all client-side against Firestore)
 - React (optional — the modular structure is the groundwork for it)
 - Native app wrapper
