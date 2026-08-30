@@ -1,0 +1,64 @@
+name: Deploy to GitHub Pages
+
+# Builds the Vite app and publishes dist/ to GitHub Pages.
+#
+# Requires: repo Settings → Pages → Source = "GitHub Actions".
+# (Before this workflow existed the site was served straight from the `main`
+# branch root — that only worked because `main` used to be one static
+# index.html. A Vite app has to be built first, hence this.)
+#
+# Triggers on every push to `main`, and can be run by hand from the Actions
+# tab (workflow_dispatch) against any branch — useful for a dry run before
+# the first merge to main.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Least privilege: read the repo, write a Pages deployment, mint the OIDC
+# token actions/deploy-pages needs.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never run two Pages deploys at once; let an in-progress one finish rather
+# than cancelling it (a half-cancelled deploy can leave the site in a bad
+# state).
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
