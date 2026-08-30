@@ -7,6 +7,99 @@ standing rules). This file is the per-step history only: commit hashes,
 what moved, what was deferred and why, and every lesson found along the
 way. Most recent first. Add each new completed step's entry at the top.
 
+- **`loadData()` / `loadProfiles()` / `buildBakeryIndex()` (+ `exploreCache`)
+  → `src/state/appState.js` — Phase 1 residual #2** (2026-08-30, commit
+  `2c7ef8c`). Post-plan cleanup — the Phase 0 stage 3b deferral, finally
+  closed. 3b moved `allItems`/`allBakeries` (+ setters) here but left their
+  three loaders in `legacy-app.js`: `loadData`/`loadProfiles` call UI
+  render functions, `buildBakeryIndex` reads `exploreCache` (owned by the
+  then-unextracted Explore page). Moving them then would have meant
+  `appState.js` importing back from a file that imports it. Steps 27-29
+  gave every dependency a real home.
+  **What moved.** All three loaders, verbatim, into `appState.js`'s 3b
+  section, plus `exploreCache` (`export let` — `buildBakeryIndex` is its
+  only cross-module reader besides `explore.js` itself, which now
+  `import`s it back one-way; still only ever property-mutated, never
+  reassigned). `setAllItems`/`setAllBakeries` **deleted** — with the
+  loaders co-located, every reassignment site is inside `appState.js`;
+  `saveReview`'s `allItems.unshift(...)` and the bookmark/save toggles only
+  ever property/array-mutate (re-verified via grep). `loadData`/`loadProfiles`
+  became `direct allItems = …` / `allBakeries = …` assignments.
+  **The leaf-can't-import-a-page problem, solved with `getAction()`
+  (standing lesson 5).** `appState.js` is imported by ~every module — it
+  must stay a leaf. So its two loaders reach their UI callbacks through
+  the registry: `loadData` → `getAction('renderRecentGrid')()` /
+  `getAction('updateStats')()`; `loadProfiles` →
+  `getAction('updateNav')()` / `getAction('renderPeople')()`.
+  `renderRecentGrid`/`updateStats` now `registerActions()` from `home.js`
+  (its first `registerActions` call — neither has a markup call site,
+  registered purely for this lookup); `renderPeople` added to `people.js`'s
+  existing call; `updateNav` was already registered in `nav.js` (residual
+  #1, for the same reason `settings.js` needed it). Registration ordering
+  is safe — every registering module evaluates at startup (all imported by
+  `legacy-app.js` and/or `nav.js`), and both loaders only *run* from
+  `initFirebaseApp`'s async `onAuthStateChanged` callback, long after
+  module init.
+  **The ~5 `getAction('buildBakeryIndex')()` sites → plain imports** (the
+  point of the whole exercise): `bakeries.js` (×2), `leaderboard.js`,
+  `bakeryModal.js`, `adminPanel.js` — every one already imports from
+  `appState.js`, so `import { buildBakeryIndex } from '../state/appState.js'`
+  is the natural form. Same for `adminPanel.js`'s single
+  `getAction('loadData')()` in `removeReviewAndFlag`. `getAction` dropped
+  from `bakeries.js`/`leaderboard.js`/`adminPanel.js`'s `actions.js`
+  imports (no longer used there); kept in `bakeryModal.js` (still used for
+  `loadMyPreorders`/`renderPreorderPage`, which *would* cycle —
+  `bakeryModal → preordersSheet → profileModal → bakeryModal`). Both
+  `registerActions({ loadData })` and `registerActions({ buildBakeryIndex })`
+  removed from `legacy-app.js`.
+  **`npx madge --circular src/`: clean before and after.** The direct
+  imports do not introduce a cycle — `appState.js` imports only
+  `events/actions.js` (`getAction`) and `utils/geo.js` (`extractCity`),
+  both leaves. This was the load-bearing check for the whole change.
+  **Standing lesson 4 — dead imports.** Trimmed from `legacy-app.js`:
+  `extractCity` (`utils/geo.js` — `buildBakeryIndex` was its last consumer;
+  `legacy-app.js` now imports nothing from `utils/geo.js`), `allBakeries`
+  (same), `allProfiles` (last reader was `loadProfiles`), `setAllItems`/
+  `setAllBakeries` (deleted upstream), and — folding in residual #1's other
+  half — `exploreCache`/`initExplorePage` were already gone, so
+  `legacy-app.js` now imports **nothing** from `src/pages/explore.js`.
+  Kept: `allItems`/`allItemRecords`/`loadItemRecords`/`ensureProfileExists`/
+  `loadData`/`loadProfiles` (real callers — `saveReview`/`saveEdit`/
+  `deleteReview`/`runCategoryMigration`/`initFirebaseApp`); `buildBakeryIndex`
+  is **not** imported back (no caller left in `legacy-app.js`).
+  **Verification.** `check:dead-refs` clean, `build` clean, `madge` clean.
+  One build failure caught and fixed mid-change (a leftover
+  `import { exploreCache } from './pages/explore.js'` in `legacy-app.js`
+  after the export moved — `[MISSING_EXPORT]`, exactly the class `build`
+  exists to catch). Throwaway debug spec (deleted before commit): `loadData`
+  → `#recentGrid .card` + non-zero `#statItems`; `buildBakeryIndex` →
+  Bakeries grid + Leaderboard bakery mode + Admin Bakeries tab all render;
+  `loadProfiles` → People members render; zero console/page errors on all
+  three. Targeted: `people-filters` / `admin-panel` / `feed` / `reactions`
+  — 16 passed, 7 skipped (data-dependent). Closing full `test:e2e`:
+  **59 passed, 12 skipped, 0 failed** — clean, no flake.
+  **Tied decision now UNBLOCKED — flagged, NOT acted on** (per the task's
+  own instruction): `saveEdit()`/`deleteReview()` → `editReviewModal.js`.
+  Their last blocker was `loadData()` (both `await` it;
+  `renderLeaderboard`/`lbCurrentTab` importable since step 27,
+  `closeEditModal` since step 9). `loadData()` is now importable from
+  `appState.js`, so the move is a clean follow-up — see CLAUDE.md's ⚠️
+  callout #2. Breadcrumb comments in `legacy-app.js` + `editReviewModal.js`
+  updated to say so.
+  **Residuals #1 and #2 are both resolved.** What remains in
+  `legacy-app.js` (~1,473 lines): the app bootstrap (`initFirebaseApp` +
+  its auth listener, delegated-event init, `buildTastingDims`/
+  `buildCategoryChips`), and a set of functions still blocked or with
+  genuine raw/`WINDOW EXPORTS` call sites — `saveReview` (registry-reached
+  by `addReviewModal.js`), `saveEdit`/`deleteReview` (the unblocked-but-
+  pending pair above), `flagReview`, `runCategoryMigration`, `toggleFollow`
+  + its refresh wrappers, `toggleSaveItem`/`removeSavedItem`,
+  `cancelReservation`, the SHOP-MANAGEMENT + ADD/EDIT PRODUCT cluster, the
+  FEATURE REQUESTS submit flow, the modal overlay-click/Escape listeners,
+  and the `WINDOW EXPORTS` block. Residual #3 (the `loadData()` reconcile
+  race) is an app-robustness bug, untouched by design — the reconcile logic
+  moved byte-for-byte into `appState.js`.
+
 - **`showPage()` + mobile-menu wrappers → `src/components/nav.js` —
   Phase 1 residual #1** (2026-08-30, commit `52250da`). Post-plan cleanup,
   not one of the 32 steps — the plan delivered "possible", this delivers

@@ -20,8 +20,9 @@ All 32 steps landed (Phase 7's last five: `src/pages/bakeries.js` (step 26,
 `src/components/preordersSheet.js` (step 31, `913d1d2`);
 `src/pages/settings.js` (step 32, `69704e0`) — the final step).
 `src/legacy-app.js` went from 9,412 lines / 296 functions at the start of
-the plan to ~1,556 lines (bootstrap + a handful of still-blocked
-functions).
+the plan to ~1,473 lines (app bootstrap + a set of functions with genuine
+raw/`WINDOW EXPORTS`/registry call sites — see the residual-#2 write-up in
+`docs/extraction-log.md` for the full inventory).
 
 **Post-plan residual cleanups (NOT plan steps — separate follow-ups):**
 1. ✅ **RESOLVED 2026-08-30 (commit `52250da`).** `showPage()` /
@@ -33,14 +34,22 @@ functions).
    (profile modal ✏️, `:824`) converted to `data-onclick`. `showPage`
    stays in `WINDOW EXPORTS` (`window.showPage`, for
    `tests/people-filters.spec.js` only). See `docs/extraction-log.md`.
-2. **`loadData()` / `buildBakeryIndex()` / `loadProfiles()` →
-   `appState.js`** (and, tied to it, **`saveEdit()` / `deleteReview()` →
-   `editReviewModal.js`**) — the Phase 0 stage 3b deferrals, unblocked
-   once step 29 gave `exploreCache` an importable home. See the ⚠️
-   callouts below.
+2. ✅ **RESOLVED 2026-08-30 (commit `2c7ef8c`).** `loadData()` /
+   `loadProfiles()` / `buildBakeryIndex()` (+ `exploreCache`) →
+   `src/state/appState.js` — the Phase 0 stage 3b deferral. `appState.js`
+   stays a leaf: its two loaders reach their UI callbacks
+   (`renderRecentGrid`/`updateStats`/`updateNav`/`renderPeople`) via
+   `getAction()`. The ~5 `getAction('buildBakeryIndex')()` sites +
+   `adminPanel.js`'s `getAction('loadData')()` became plain
+   `appState.js` imports; both `registerActions()` calls for them removed
+   from `legacy-app.js`. `setAllItems`/`setAllBakeries` deleted.
+   `madge --circular`: still clean. **Tied decision now unblocked (NOT
+   done): `saveEdit()` / `deleteReview()` → `editReviewModal.js`** — see
+   the ⚠️ callout below. See `docs/extraction-log.md`.
 3. **The `loadData()` reconcile race** (in "Known pre-existing issues") —
    an app-robustness bug, carried through the whole plan unfixed by
-   design.
+   design. The reconcile logic moved byte-for-byte into `appState.js` at
+   residual #2 — the bug is unchanged, just relocated.
 
 See `docs/extraction-log.md` for every step's write-up.
 Earlier: steps 1-25 — Phase 4's `manageOfferingsModal.js` (the "does
@@ -103,16 +112,18 @@ src/
 `allUserRoles`, `currentUserRole`, `currentUserBakery`, `bakeryProfiles`,
 `isAdmin()`/`isBusiness()`/`ownsBakery()`, `loadUserRole()`/
 `loadAllUserRoles()`/`loadBakeryProfiles()` — ✅ done, 3a), **core data
-caches** (`allItems`, `allBakeries`, `allProfiles`, `allItemRecords` + their
-loaders `loadData()`/`buildBakeryIndex()`/`loadProfiles()`/
-`loadItemRecords()`/`ensureProfileExists()` — corrected 2026-08-24: an
-earlier draft of this line duplicated `loadBakeryProfiles()`/
-`loadAllUserRoles()`/`loadUserRole()` here too, which was wrong — none of
-those three populate `allItems`/`allBakeries`/`allProfiles`/`allItemRecords`,
-they belong to identity/roles only, already moved in 3a), and **social
-state** (`myFollowing`/`myFollowers` + `loadFollows()`, `userBookmarks` +
-`loadBookmarks()`, `userSavedItems` + `loadSavedItems()`). Centralizing the
-loaders alongside the raw state is
+caches** (`allItems`, `allBakeries`, `allProfiles`, `allItemRecords`,
+`exploreCache` + their loaders `loadData()`/`buildBakeryIndex()`/
+`loadProfiles()`/`loadItemRecords()`/`ensureProfileExists()` — ✅ done, 3b
+for the caches + `loadItemRecords`/`ensureProfileExists`; the other three
+loaders + `exploreCache` followed at post-plan residual #2, 2026-08-30,
+reaching their UI callbacks via `getAction()` so `appState.js` stays a
+leaf. Corrected 2026-08-24: an earlier draft of this line duplicated
+`loadBakeryProfiles()`/`loadAllUserRoles()`/`loadUserRole()` here too,
+which was wrong — those belong to identity/roles, moved in 3a), and
+**social state** (`myFollowing`/`myFollowers` + `loadFollows()`,
+`userBookmarks` + `loadBookmarks()`, `userSavedItems` + `loadSavedItems()`
+— ✅ done, 3c). Centralizing the loaders alongside the raw state is
 deliberate — two of this doc's "Known pre-existing issues" (below) are bugs
 in exactly these loaders, and this move is a natural point to at least
 surface that, not an obligation to fix it while extracting.
@@ -160,11 +171,11 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
      imports it. Resolved by moving state + setters only for those three
      (mirroring 3a's `currentUser`/`fb` treatment), while the two genuinely
      self-contained functions (`loadItemRecords`, `ensureProfileExists`)
-     moved wholesale like 3a. **This is a deferred follow-up, not a closed
-     question — see the ⚠️ callout under Phase 7 step 29
-     (`src/pages/explore.js`) below for when to revisit it.** Re-confirm
-     3c's own scope the same way
-     before assuming — don't default to either pattern.**
+     moved wholesale like 3a. **The half-done part was closed 2026-08-30 by
+     post-plan residual #2** (commit `2c7ef8c`): all three loaders +
+     `exploreCache` moved into `appState.js`, the UI callbacks reached via
+     `getAction()`, `setAllItems`/`setAllBakeries` deleted. 3c also turned
+     out cleanest — no setters at all.
   4. Extend `check:dead-refs` to cover the new directories — ✅ **done**
      (2026-08-24, commit `d72d04e`).
 - **Phase 1 — foundational, high fan-in, implicitly covered by every spec:**
@@ -233,8 +244,10 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   is closed: `compressImage()`/`compressToDataURL()` now have a real
   importable home in `addReviewModal.js`, so `handleEditPhoto()` moved into
   `editReviewModal.js` — one-way dependency, no cycle, verified before
-  moving. `saveEdit()`/`deleteReview()`'s own deferral is unaffected —
-  still tied to step 29 (`loadData()`/`renderLeaderboard()`).
+  moving. `saveEdit()`/`deleteReview()`'s own deferral outlived step 9 —
+  its last blocker (`loadData()`) cleared at residual #2 (2026-08-30), so
+  that move is now fully unblocked but still pending (⚠️ callout under
+  residual #2).
 - **Phase 5 — composite modals aggregating several historical clusters:**
   19. `src/components/itemDetailModal.js` — ✅ **done** (2026-08-25, commit
   `2d90c6a`) — **opens Phase 5** — split, not clean:
@@ -293,22 +306,23 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   gap open:**
   26. `src/pages/bakeries.js` — ✅ **done** (2026-08-28, commit `465522f`)
   — **opens Phase 7**. Clean single-cluster move; `buildBakeryIndex()`
-  stays behind (reads `exploreCache`) and is reached via
-  `getAction('buildBakeryIndex')()`. The documented `loadData()` race is
+  stayed behind at the time (reached via `getAction('buildBakeryIndex')()`);
+  it moved to `appState.js` at residual #2 (2026-08-30) and this file's two
+  call sites are now plain imports. The documented `loadData()` race is
   carried forward unfixed (it's the still-`legacy-app.js` `loadData()` and
   the once-only `renderBakeries()` call from `showPage()` — neither moved
   or changed). Zero prior coverage confirmed; verified with a throwaway
   debug spec. See its entry in `docs/extraction-log.md` ·
   27. `src/pages/leaderboard.js` — ✅ **done** (2026-08-28, commit
-  `4f01f3`). Clean single-cluster move; `renderBakeryLeaderboard` reaches
-  the still-`legacy-app.js` `buildBakeryIndex()` via
-  `getAction('buildBakeryIndex')()`. `lbCurrentTab`/`lbCurrentMode`
+  `4f01f3`). Clean single-cluster move; `renderBakeryLeaderboard` reached
+  `buildBakeryIndex()` via `getAction()` at the time (a plain
+  `appState.js` import since residual #2). `lbCurrentTab`/`lbCurrentMode`
   exported as plain live bindings (never written outside the file). This
   makes `renderLeaderboard`/`lbCurrentTab` importable, resolving half of
-  the step-29 deferral for `editReviewModal.js`'s `saveEdit`/`deleteReview`
-  (they still also need `loadData()`, so no move yet). Removed a dead
-  `openBakeryProfile` import from `legacy-app.js`. See its entry in
-  `docs/extraction-log.md` ·
+  the deferral for `editReviewModal.js`'s `saveEdit`/`deleteReview` — the
+  other half (`loadData()`) landed at residual #2, so that move is now
+  fully unblocked (still pending). Removed a dead `openBakeryProfile`
+  import from `legacy-app.js`. See its entry in `docs/extraction-log.md` ·
   28. `src/pages/home.js` — ✅ **done** (2026-08-28, commit `7b8db6c`).
   Smallest move in the plan: `updateStats` + `renderRecentGrid` only, both
   pure render helpers with no `data-onclick`/`data-onchange` and no
@@ -325,11 +339,13 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   `EXPLORE_COUNTRIES`/`ALL_CITIES`/`UK_CITIES`, also used by Settings +
   Pre-order discovery) and `src/services/places.js` (`geocodeBakeryAddress`,
   moved out of `profileModal.js` so both it and explore can share it).
-  `exploreCache` + `initExplorePage` exported back to `legacy-app.js`. 16
-  stale WINDOW EXPORTS entries + 4 now-dead imports (`GOOGLE_MAPS_KEY`,
-  `getCategoryDisplay`, `isBookmarked`, `extractCountry`) removed. Two full
-  E2E runs given the size. The two ⚠️ deferred decisions below are now
-  unblocked — NOT acted on here. See its entry in
+  `exploreCache` + `initExplorePage` exported back to `legacy-app.js` (both
+  since severed — `initExplorePage` at residual #1, `exploreCache` at
+  residual #2, when it moved on to `appState.js`). 16 stale WINDOW EXPORTS
+  entries + 4 now-dead imports (`GOOGLE_MAPS_KEY`, `getCategoryDisplay`,
+  `isBookmarked`, `extractCountry`) removed. Two full E2E runs given the
+  size. The two ⚠️ deferred decisions this unblocked were both resolved
+  2026-08-30 (residuals #1 and #2). See its entry in
   `docs/extraction-log.md` ·
   30. `src/pages/preorders.js` — ✅ **done** (2026-08-28, commit `048fcc3`).
   Clean ~210-line move (7 functions, 4 module-private state vars, no
@@ -361,31 +377,34 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   debug spec; two closing E2E runs. See its entry in
   `docs/extraction-log.md`.
 
-  **⚠️ Deferred follow-up — NOW UNBLOCKED AND PENDING (step 29 landed
-  2026-08-28), set up in Phase 0 stage 3b.** `loadData()` and
-  `buildBakeryIndex()` stayed in `legacy-app.js` during 3b specifically
-  because `buildBakeryIndex()` reads `exploreCache`, which as of step 29
-  now has a real importable home (`src/pages/explore.js` exports it).
-  **The pending decision: whether `loadData()`/`buildBakeryIndex()` (and
-  `loadProfiles()`, deferred for a different reason — see 3b's extraction
-  log entry) can now move into `appState.js` alongside `allItems`/
-  `allBakeries`, completing what 3b left half-done.** Still a deliberate,
-  separate decision — not an automatic consequence — and explicitly NOT
-  done as part of step 29. Note: `buildBakeryIndex()` currently has ~5
-  `getAction('buildBakeryIndex')()` call sites across leaf modules
-  (`bakeryModal.js`, `adminPanel.js`, `bakeries.js`, `leaderboard.js`);
-  moving it to `appState.js` would let those become ordinary imports.
+  **✅ RESOLVED 2026-08-30 (commit `2c7ef8c`) — residual #2, set up in
+  Phase 0 stage 3b.** `loadData()`/`loadProfiles()`/`buildBakeryIndex()`
+  (+ `exploreCache`) moved into `src/state/appState.js`. `appState.js`
+  stays a leaf — its two loaders reach `renderRecentGrid`/`updateStats`
+  (`loadData`) and `updateNav`/`renderPeople` (`loadProfiles`) via
+  `getAction()` (registered from `home.js` / `people.js` / `nav.js`; none
+  has a markup call site). `exploreCache` moved too — `buildBakeryIndex`
+  is its only cross-module reader besides `explore.js`, which imports it
+  back one-way. The ~5 `getAction('buildBakeryIndex')()` sites
+  (`bakeryModal.js`, `adminPanel.js`, `bakeries.js` ×2, `leaderboard.js`)
+  + `adminPanel.js`'s `getAction('loadData')()` all became ordinary
+  `import … from '../state/appState.js'`; both `registerActions()` calls
+  for them removed from `legacy-app.js`. `setAllItems`/`setAllBakeries`
+  deleted. `legacy-app.js` now imports nothing from `src/pages/explore.js`
+  or `src/utils/geo.js`. `npx madge --circular src/`: clean.
 
-  **⚠️ Second deferred follow-up — NOW UNBLOCKED AND PENDING, set up in
-  Phase 2 step 9.** `saveEdit()`/`deleteReview()` (`editReviewModal.js`)
-  stayed in `legacy-app.js` because both call `loadData()`;
-  `deleteReview()` additionally calls `renderLeaderboard()` / reads
-  `lbCurrentTab` (both importable since step 27). With step 29 landed,
-  `loadData()` is the last blocker, and its own move is the decision
-  above. **Pending: whether `saveEdit()`/`deleteReview()` can move into
-  `editReviewModal.js`** — a natural point to make together with the
-  `loadData()` decision, though still two separate calls. NOT done as part
-  of step 29.
+  **⚠️ Tied follow-up — NOW UNBLOCKED (residual #2, 2026-08-30), set up in
+  Phase 2 step 9. NOT done.** `saveEdit()`/`deleteReview()`
+  (`editReviewModal.js`'s footer buttons, still in `legacy-app.js`) both
+  `await loadData()`; `deleteReview()` also calls `renderLeaderboard()` /
+  reads `lbCurrentTab` (importable since step 27) and `closeEditModal()`
+  (since step 9). As of residual #2 `loadData()` is importable from
+  `appState.js` — **every blocker is now gone.** Pending: move
+  `saveEdit()`/`deleteReview()` (+ their `registerActions({ saveEdit,
+  deleteReview })` call) into `editReviewModal.js`. A clean, self-contained
+  follow-up if pursued — run it under the tightened per-extraction workflow
+  (targeted `tests/edit-review.spec.js` + one closing E2E). Breadcrumb
+  comments in `legacy-app.js` and `editReviewModal.js` already flag it.
 
   **✅ RESOLVED 2026-08-30 (commit `52250da`) — residual #1, set up in
   Phase 1 step 5.**
@@ -1048,7 +1067,9 @@ afterward — no E2E gate needed for this, same reasoning as Phase 0 step 4
 
 - **`loadData()`'s unawaited reconcile can clobber recent state, and
   `allBakeries` needs a page visit nobody guarantees happened**
-  (`src/legacy-app.js`) — a real robustness gap in how this app's shared
+  (`src/state/appState.js` since post-plan residual #2 — was
+  `src/legacy-app.js`; the logic moved byte-for-byte, the bug is
+  unchanged) — a real robustness gap in how this app's shared
   module-level caches (`allItems`, `allBakeries`) get populated, three
   manifestations found so far, all unrelated to handler delegation and not
   touched here:
