@@ -44,6 +44,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Cheap static gate — dead data-onclick refs, unregistered actions,
+      # bare-variable scope leaks. Fails the deploy before a broken build
+      # can ship.
+      - name: Check for dead handler references
+        run: npm run check:dead-refs
+
       - name: Build
         run: npm run build
 
