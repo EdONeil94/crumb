@@ -105,16 +105,16 @@ fixture, `cleanup.teardown.js`, and `npm run cleanup:e2e` as a safety net).
 
 ## What's next (not started)
 
-- **Move the E2E suite onto the Firebase Emulator Suite** — it currently
-  runs against the live Firebase project. See
+- ~~Move the E2E suite onto the Firebase Emulator Suite.~~ **Done** — the
+  default `npm run test:e2e` runs fully against the local emulators. See
   `docs/tier2-emulator-scope.md`.
-- **Account management — no password change or reset.** Confirmed missing:
-  the Settings page has only profile fields (name / location / country /
-  bio / favourite category / avatar) + "Sign out"; the auth modal has no
-  "Forgot password?" link; there are no `updatePassword` /
-  `sendPasswordResetEmail` calls anywhere. An email/password user who wants
-  to change their password, or has forgotten it, has no in-app path.
-  (Google-sign-in users are unaffected — Google manages that credential.)
+- ~~Account management — no password change or reset.~~ **Done.** The auth
+  modal has a "Forgot password?" flow (`sendPasswordResetEmail` → a branded
+  `#page-reset` landing page using `verifyPasswordResetCode` /
+  `confirmPasswordReset`), and Settings has a "🔒 Password" card
+  (`reauthenticateWithCredential` + `updatePassword`) shown only for
+  email/password accounts. Firebase Console: the password-reset "Customize
+  action URL" points at `https://ohcrumbz.co.uk/`.
 - Backend / Cloud Functions (currently all client-side against Firestore)
 - React (optional — the modular structure is the groundwork for it)
 - Native app wrapper

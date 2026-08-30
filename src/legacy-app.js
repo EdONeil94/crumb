@@ -27,6 +27,7 @@ import {
   signUpEmail, showAuthError, friendlyAuthError,
 } from './components/authModal.js';
 import { closeEditModal } from './components/editReviewModal.js';
+import { initPasswordResetFromUrl } from './components/passwordReset.js';
 import { processScannedReservation } from './components/qrCode.js';
 import {
   allProducts, loadProducts,
@@ -1193,6 +1194,10 @@ registerActions({ toggleSaveItem, flagReview });
 // (Phase 6 step 25).
 
 initDelegatedEvents();
+
+// If the URL is a Firebase password-reset link (?mode=resetPassword&oobCode=…),
+// swap to #page-reset before the home page is seen. No-op on a normal load.
+initPasswordResetFromUrl();
 
 // Init tasting dims and category chips
 buildTastingDims();

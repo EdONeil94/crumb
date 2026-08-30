@@ -489,6 +489,24 @@
           <input type="password" class="form-input" id="authPassword" placeholder="••••••••">
         </div>
         <button class="btn-espresso btn-full" data-onclick="signInEmail" id="signInSubmit">Sign in</button>
+        <div style="text-align:center; margin-top:12px;">
+          <button type="button" class="auth-link" id="forgotPasswordLink" data-onclick="openForgotPassword">Forgot password?</button>
+        </div>
+      </div>
+
+      <div id="forgotForm" style="display:none">
+        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:16px;">
+          Enter your email and we'll send you a link to reset your password.
+        </p>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" class="form-input" id="forgotEmail" placeholder="you@example.com">
+        </div>
+        <button class="btn-espresso btn-full" data-onclick="sendResetEmail" id="sendResetBtn">Send reset link</button>
+        <div id="forgotMsg" style="font-size:0.82rem; margin-top:12px; display:none;"></div>
+        <div style="text-align:center; margin-top:12px;">
+          <button type="button" class="auth-link" data-onclick="backToSignIn">← Back to sign in</button>
+        </div>
       </div>
 
       <div id="signupForm" style="display:none">
@@ -874,6 +892,30 @@
       </div>
     </div>
 
+    <!-- Password — only shown to email/password accounts (see settings.js) -->
+    <div class="settings-card" id="settingsSecurityCard" style="display:none;">
+      <div class="settings-card-header">
+        <div class="settings-card-title">🔒 Password</div>
+        <div class="settings-card-sub">Change the password you use to sign in</div>
+      </div>
+      <div class="settings-card-body">
+        <div class="form-group">
+          <label class="form-label">Current password</label>
+          <input type="password" class="form-input" id="pwCurrent" autocomplete="current-password" placeholder="••••••••">
+        </div>
+        <div class="form-group">
+          <label class="form-label">New password</label>
+          <input type="password" class="form-input" id="pwNew" autocomplete="new-password" placeholder="At least 6 characters">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Confirm new password</label>
+          <input type="password" class="form-input" id="pwConfirm" autocomplete="new-password" placeholder="Re-enter new password">
+        </div>
+        <button class="btn-espresso" data-onclick="changePassword" id="changePwBtn" style="padding:11px 24px;">Update password</button>
+        <div id="pwMsg" style="font-size:0.82rem; margin-top:12px; display:none;"></div>
+      </div>
+    </div>
+
     <!-- Business section — only shown to business/admin users -->
     <div class="settings-card" id="settingsBusinessCard" style="display:none;">
       <div class="settings-card-header">
@@ -903,6 +945,63 @@
           <button class="btn-ghost" data-onclick="showAdminTab" data-args='["features"]' id="adminTabFeatures" style="font-size:0.85rem; padding:9px 18px; border:1.5px solid var(--border);">💡 Feature requests</button>
         </div>
         <div id="adminTabContent"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Password reset landing page — reached only via the boot check in
+     src/components/passwordReset.js when the URL carries ?mode=resetPassword
+     &oobCode=… (Firebase's "Customize action URL" points at the site root). -->
+<div class="page" id="page-reset">
+  <div class="section" style="max-width:440px;">
+    <div class="section-header">
+      <div class="section-eyebrow">Account</div>
+      <h2 class="section-title">Reset your password</h2>
+    </div>
+    <div class="settings-card">
+      <div class="settings-card-body">
+        <div id="resetVerifying">
+          <div style="text-align:center; padding:16px 0;">
+            <div class="spinner" style="margin:0 auto 12px;"></div>
+            <div style="font-size:0.88rem; color:var(--text-muted);">Checking your reset link…</div>
+          </div>
+        </div>
+
+        <div id="resetForm" style="display:none;">
+          <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:16px;">
+            Choose a new password for <strong id="resetEmail"></strong>.
+          </p>
+          <div class="form-group">
+            <label class="form-label">New password</label>
+            <input type="password" class="form-input" id="resetNew" autocomplete="new-password" placeholder="At least 6 characters">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Confirm new password</label>
+            <input type="password" class="form-input" id="resetConfirm" autocomplete="new-password" placeholder="Re-enter new password">
+          </div>
+          <button class="btn-espresso btn-full" data-onclick="submitNewPassword" id="resetSubmitBtn">Set new password</button>
+          <div id="resetFormMsg" style="color:#c0392b; font-size:0.82rem; margin-top:12px; display:none;"></div>
+        </div>
+
+        <div id="resetSuccess" style="display:none;">
+          <div style="text-align:center; padding:8px 0;">
+            <div style="font-size:1.8rem; margin-bottom:8px;">✓</div>
+            <div style="font-weight:600; color:var(--espresso); margin-bottom:6px;">Password updated</div>
+            <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:18px;">You can now sign in with your new password.</div>
+            <button class="btn-espresso btn-full" data-onclick="goToSignIn">Sign in</button>
+          </div>
+        </div>
+
+        <div id="resetError" style="display:none;">
+          <div id="resetErrorText" style="font-size:0.88rem; color:var(--text-body); margin-bottom:16px;"></div>
+          <div class="form-group">
+            <label class="form-label">Email</label>
+            <input type="email" class="form-input" id="resetResendEmail" placeholder="you@example.com">
+          </div>
+          <button class="btn-espresso btn-full" data-onclick="requestNewResetLink" id="resetResendBtn">Email me a new link</button>
+          <div id="resetResendMsg" style="font-size:0.82rem; margin-top:12px; display:none;"></div>
+        </div>
       </div>
     </div>
   </div>

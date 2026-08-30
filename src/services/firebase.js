@@ -12,7 +12,9 @@ import { initializeApp } from 'firebase/app';
 import {
   getAuth, connectAuthEmulator,
   signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword,
-  createUserWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile
+  createUserWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile,
+  sendPasswordResetEmail, verifyPasswordResetCode, confirmPasswordReset,
+  EmailAuthProvider, reauthenticateWithCredential, updatePassword
 } from 'firebase/auth';
 import {
   getFirestore, connectFirestoreEmulator,
@@ -59,6 +61,8 @@ window._crumb = {
   auth, db, storage, googleProvider,
   signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword,
   onAuthStateChanged, signOut, updateProfile,
+  sendPasswordResetEmail, verifyPasswordResetCode, confirmPasswordReset,
+  EmailAuthProvider, reauthenticateWithCredential, updatePassword,
   collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy,
   where, getDoc, setDoc, increment, onSnapshot, serverTimestamp, limit,
   runTransaction, ref, uploadBytes, getDownloadURL, deleteObject, listAll

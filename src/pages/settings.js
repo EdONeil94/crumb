@@ -1,21 +1,23 @@
 // ─── SETTINGS PAGE ──────────────────────────────────────────────────────────
 // The #page-settings routed view (pages/components carving, Phase 7
 // step 32 — the LAST step of the 32-step plan; see CLAUDE.md):
-// openSettingsPage (fills the profile form + shows/hides the business and
-// admin sub-cards), handleSettingsPhoto, saveSettingsProfile, and the
-// settingsPhotoFile compression buffer. (signOutFromSettings + the
-// Settings "Danger zone" card that called it were removed 2026-08-30 —
-// sign-out stays available via the nav avatar dropdown and the mobile
-// menu, both in nav.js.)
+// openSettingsPage (fills the profile form + shows/hides the business,
+// admin and password sub-cards), handleSettingsPhoto, saveSettingsProfile,
+// changePassword, and the settingsPhotoFile compression buffer.
+// (signOutFromSettings + the Settings "Danger zone" card that called it
+// were removed 2026-08-30 — sign-out stays available via the nav avatar
+// dropdown and the mobile menu, both in nav.js.)
 //
-// This cluster was NEVER in scope for the handler-delegation migration —
-// index.html's #page-settings still has two RAW inline handlers
-// (onchange="handleSettingsPhoto(this)", onclick="saveSettingsProfile()").
+// The photo/profile handlers were NEVER in scope for the handler-delegation
+// migration — index.html's #page-settings still has two RAW inline handlers
+// for them (onchange="handleSettingsPhoto(this)", onclick="saveSettingsProfile()").
 // Raw handlers can only resolve window[name], so those two functions stay
 // exported into WINDOW EXPORTS from legacy-app.js (re-imported from here)
 // — same treatment as switchFeedTab (step 13). openSettingsPage has no raw
 // site of its own (reached only via showPage('settings')'s plain-JS call),
-// so it's an ordinary export imported back for showPage.
+// so it's an ordinary export imported back for showPage. changePassword is
+// new code (the 🔒 Password card) — it uses data-onclick + registerActions
+// directly, no window export.
 //
 // saveSettingsProfile calls updateNav() — now in nav.js (Phase 1 residual
 // #1, resolved 2026-08-30). This module reaches it via
@@ -26,12 +28,12 @@
 // loadMyPreorders. showAdminTab (adminPanel.js) and renderBusinessSection
 // (businessBakeryManagement.js) import one-way — neither imports back here.
 
-import { getAction } from '../events/actions.js';
+import { registerActions, getAction } from '../events/actions.js';
 import {
   currentUser, currentUserRole, SUPER_ADMIN_UID, loadUserRole,
   allProfiles, isBusiness, isAdmin, fb,
 } from '../state/appState.js';
-import { openAuthModal } from '../components/authModal.js';
+import { openAuthModal, friendlyAuthError } from '../components/authModal.js';
 import { EXPLORE_COUNTRIES } from '../data/exploreCities.js';
 import { CATEGORY_TREE } from '../data/categories.js';
 import { renderBusinessSection } from '../components/businessBakeryManagement.js';
@@ -97,6 +99,55 @@ export async function openSettingsPage() {
   } else {
     adminCard.style.display = 'none';
   }
+
+  // Password card — only for accounts that actually have an email/password
+  // credential. Google-only users manage their password with Google; they
+  // just don't see this card (no note, per the design decision).
+  const isPasswordUser = (currentUser.providerData || []).some(p => p.providerId === 'password');
+  const secCard = document.getElementById('settingsSecurityCard');
+  secCard.style.display = isPasswordUser ? 'block' : 'none';
+  if (isPasswordUser) {
+    ['pwCurrent', 'pwNew', 'pwConfirm'].forEach(id => { document.getElementById(id).value = ''; });
+    document.getElementById('pwMsg').style.display = 'none';
+  }
+}
+
+export async function changePassword() {
+  if (!currentUser) return;
+  const current = document.getElementById('pwCurrent').value;
+  const next = document.getElementById('pwNew').value;
+  const confirm = document.getElementById('pwConfirm').value;
+  const msg = document.getElementById('pwMsg');
+  const btn = document.getElementById('changePwBtn');
+  const fail = (text) => { msg.textContent = text; msg.style.color = '#c0392b'; msg.style.display = 'block'; };
+  msg.style.display = 'none';
+
+  if (!current) return fail('Enter your current password.');
+  if (next.length < 6) return fail('New password must be at least 6 characters.');
+  if (next !== confirm) return fail('New passwords don’t match.');
+  if (next === current) return fail('New password must be different from your current one.');
+
+  btn.disabled = true;
+  const original = btn.textContent;
+  btn.textContent = 'Updating…';
+  try {
+    const cred = fb.EmailAuthProvider.credential(currentUser.email, current);
+    await fb.reauthenticateWithCredential(currentUser, cred);
+    await fb.updatePassword(currentUser, next);
+    ['pwCurrent', 'pwNew', 'pwConfirm'].forEach(id => { document.getElementById(id).value = ''; });
+    msg.textContent = 'Password updated. Other devices will need to sign in again.';
+    msg.style.color = 'var(--text-muted)';
+    msg.style.display = 'block';
+  } catch (err) {
+    if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+      fail('Current password is incorrect.');
+    } else {
+      fail(friendlyAuthError(err.code));
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
+  }
 }
 
 export function handleSettingsPhoto(input) {
@@ -140,4 +191,9 @@ export async function saveSettingsProfile() {
   } catch(e) { showToast('Could not save — try again'); console.error(e); }
   finally { if (btn) { btn.disabled = false; btn.textContent = 'Save profile'; } }
 }
+
+// changePassword is new code (the Password card), so it uses the delegated
+// system directly — unlike handleSettingsPhoto/saveSettingsProfile, which
+// pre-date the migration and stay on raw onclick + WINDOW EXPORTS.
+registerActions({ changePassword });
 
