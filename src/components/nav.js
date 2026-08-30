@@ -171,11 +171,16 @@ export function closeAvatarDropdown() {
 // fb.signOut(fb.auth) doesn't fit the plain "cleanup, then one named action"
 // data-onclick shape (delegate.js) — it's a direct method call, not a
 // registrable named function — so it gets this small wrapper instead,
-// mirroring signOutFromMobileMenu.
-export function signOutFromAvatarMenu() {
+// mirroring signOutFromMobileMenu. Both wrappers land the user back on
+// #page-home: the current view may be signed-in-only (Settings, the admin
+// panel, the feed) and would otherwise sit there showing the ex-user's
+// stale data until manual navigation — which for People/Feed is blocked
+// once updateNav() hides their nav buttons.
+export async function signOutFromAvatarMenu() {
   closeAvatarDropdown();
-  fb.signOut(fb.auth);
+  await fb.signOut(fb.auth);
   showToast('Signed out');
+  showPage('home');
 }
 
 export function closeOnClickOutside(e) {
@@ -184,10 +189,11 @@ export function closeOnClickOutside(e) {
   if (d && !d.contains(e.target) && !avatar.contains(e.target)) closeAvatarDropdown();
 }
 
-export function signOutFromMobileMenu() {
-  fb.signOut(fb.auth);
-  showToast('Signed out');
+export async function signOutFromMobileMenu() {
   closeMobileMenu();
+  await fb.signOut(fb.auth);
+  showToast('Signed out');
+  showPage('home');
 }
 
 // ─── PAGE ROUTER ─────────────────────────────────────────────────────────────
