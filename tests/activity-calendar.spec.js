@@ -1,11 +1,11 @@
-import { test, expect } from '@playwright/test';
-import { addReview } from './utils/reviews.js';
+import { test, expect } from './utils/reviews.js';
 
 // Backfills the manually-verified ACTIVITY CALENDAR checklist
 // (renderActivityTab/calNav/onCalDayClick, the profile modal's Activity
-// tab). Creates its own throwaway review via addReview() — dated "now" by
-// the real Firestore serverTimestamp(), so it always lands on today's cell
-// in the current month's view — and deletes it when done.
+// tab). Creates its throwaway review via the createReview fixture (auto-
+// deleted on teardown — see tests/utils/reviews.js), dated "now" by the real
+// Firestore serverTimestamp() so it always lands on today's cell in the
+// current month's view; also deletes it inline for UI coverage.
 
 async function openOwnProfile(page) {
   await page.locator('#navAvatar').click();
@@ -29,10 +29,10 @@ test.beforeEach(async ({ page }) => {
   ).toBeVisible({ timeout: 15_000 });
 });
 
-test('today\'s cell shows the just-added review and clicking it opens that bakery', async ({ page }) => {
+test('today\'s cell shows the just-added review and clicking it opens that bakery', async ({ page, createReview }) => {
   const name = `E2E Activity ${Date.now()}`;
   const bakeryName = `E2E Activity Bakery ${Date.now()}`;
-  const { card } = await addReview(page, { name, bakeryName });
+  const { card } = await createReview({ name, bakeryName });
 
   await openOwnProfile(page);
   await page.locator('.profile-tab', { hasText: 'Activity' }).click();

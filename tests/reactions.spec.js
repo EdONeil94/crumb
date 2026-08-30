@@ -1,10 +1,10 @@
-import { test, expect } from '@playwright/test';
-import { addReview } from './utils/reviews.js';
+import { test, expect } from './utils/reviews.js';
 
 // Backfills the manually-verified REACTIONS checklist (feedCardHTML's
 // reaction bar, only rendered on the Feed page — not the home page's
-// recentGrid, which uses cardHTML instead). Each test creates its own
-// throwaway review via addReview() and deletes it when done.
+// recentGrid, which uses cardHTML instead). Each test creates its throwaway
+// review via the createReview fixture (auto-deleted on teardown — see
+// tests/utils/reviews.js) and also deletes it inline for UI coverage.
 
 async function gotoFeedAndFindCard(page, name) {
   await page.locator('#desktopFeedBtn').click();
@@ -30,10 +30,10 @@ test.beforeEach(async ({ page }) => {
   ).toBeVisible({ timeout: 15_000 });
 });
 
-test('adding a reaction via the picker shows a pill, and clicking it again removes it', async ({ page }) => {
+test('adding a reaction via the picker shows a pill, and clicking it again removes it', async ({ page, createReview }) => {
   const name = `E2E Reaction ${Date.now()}`;
   const bakeryName = `E2E Reaction Bakery ${Date.now()}`;
-  await addReview(page, { name, bakeryName });
+  await createReview({ name, bakeryName });
   const card = await gotoFeedAndFindCard(page, name);
 
   await card.locator('[data-onclick="toggleReactionPicker"]').click();
@@ -56,10 +56,10 @@ test('adding a reaction via the picker shows a pill, and clicking it again remov
   await deleteViaEdit(page, card);
 });
 
-test('clicking outside the picker closes it without adding a reaction', async ({ page }) => {
+test('clicking outside the picker closes it without adding a reaction', async ({ page, createReview }) => {
   const name = `E2E Reaction Outside ${Date.now()}`;
   const bakeryName = `E2E Reaction Bakery ${Date.now()}`;
-  await addReview(page, { name, bakeryName });
+  await createReview({ name, bakeryName });
   const card = await gotoFeedAndFindCard(page, name);
 
   await card.locator('[data-onclick="toggleReactionPicker"]').click();
@@ -75,10 +75,10 @@ test('clicking outside the picker closes it without adding a reaction', async ({
   await deleteViaEdit(page, card);
 });
 
-test('reacting does not open the item detail modal underneath', async ({ page }) => {
+test('reacting does not open the item detail modal underneath', async ({ page, createReview }) => {
   const name = `E2E Reaction NoBubble ${Date.now()}`;
   const bakeryName = `E2E Reaction Bakery ${Date.now()}`;
-  await addReview(page, { name, bakeryName });
+  await createReview({ name, bakeryName });
   const card = await gotoFeedAndFindCard(page, name);
 
   await card.locator('[data-onclick="toggleReactionPicker"]').click();

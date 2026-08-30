@@ -1,11 +1,10 @@
-import { test, expect } from '@playwright/test';
-import { addReview } from './utils/reviews.js';
+import { test, expect } from './utils/reviews.js';
 
 // Backfills the manually-verified EDIT REVIEW checklist (openEditModal/
 // saveEdit/deleteReview and the modal's own live-update sliders + category
-// select). Each test creates its own throwaway review via addReview() and
-// is responsible for deleting it — see that helper's module comment for why
-// (items/itemRecords aren't covered by tests/cleanup.teardown.js).
+// select). Each test creates its throwaway review via the createReview
+// fixture (auto-deleted on teardown — see tests/utils/reviews.js) and also
+// deletes it inline as part of / for coverage of the delete flow.
 
 async function openEditFromDetail(page, card) {
   await card.locator('.card-image').click();
@@ -23,10 +22,10 @@ test.beforeEach(async ({ page }) => {
   ).toBeVisible({ timeout: 15_000 });
 });
 
-test('opening Edit prefills the form; Cancel discards changes', async ({ page }) => {
+test('opening Edit prefills the form; Cancel discards changes', async ({ page, createReview }) => {
   const name = `E2E Edit Review ${Date.now()}`;
   const bakeryName = `E2E Edit Bakery ${Date.now()}`;
-  const { card } = await addReview(page, { name, bakeryName, notes: 'Original notes' });
+  const { card } = await createReview({ name, bakeryName, notes: 'Original notes' });
 
   await openEditFromDetail(page, card);
   await expect(page.locator('#editName')).toHaveValue(name);
@@ -46,10 +45,10 @@ test('opening Edit prefills the form; Cancel discards changes', async ({ page })
   await expect(page.locator('#editModal')).not.toHaveClass(/open/);
 });
 
-test('rating sliders update their own live display value', async ({ page }) => {
+test('rating sliders update their own live display value', async ({ page, createReview }) => {
   const name = `E2E Edit Sliders ${Date.now()}`;
   const bakeryName = `E2E Edit Bakery ${Date.now()}`;
-  const { card } = await addReview(page, { name, bakeryName, rating: 3 });
+  const { card } = await createReview({ name, bakeryName, rating: 3 });
 
   await openEditFromDetail(page, card);
   await expect(page.locator('#editOverallDisplay')).toHaveText('3.0');
@@ -76,10 +75,10 @@ test('rating sliders update their own live display value', async ({ page }) => {
   await page.locator('[data-onclick="deleteReview"]').click();
 });
 
-test('changing category repopulates the subcategory options', async ({ page }) => {
+test('changing category repopulates the subcategory options', async ({ page, createReview }) => {
   const name = `E2E Edit Category ${Date.now()}`;
   const bakeryName = `E2E Edit Bakery ${Date.now()}`;
-  const { card } = await addReview(page, { name, bakeryName, category: 'Bread' });
+  const { card } = await createReview({ name, bakeryName, category: 'Bread' });
 
   await openEditFromDetail(page, card);
   const breadSubOptions = await page.locator('#editSubCategory option').allTextContents();
@@ -94,11 +93,11 @@ test('changing category repopulates the subcategory options', async ({ page }) =
   await page.locator('[data-onclick="deleteReview"]').click();
 });
 
-test('saving changes updates the review and shows it in the recent grid', async ({ page }) => {
+test('saving changes updates the review and shows it in the recent grid', async ({ page, createReview }) => {
   const name = `E2E Edit Save ${Date.now()}`;
   const updatedName = `${name} (edited)`;
   const bakeryName = `E2E Edit Bakery ${Date.now()}`;
-  const { card } = await addReview(page, { name, bakeryName });
+  const { card } = await createReview({ name, bakeryName });
 
   await openEditFromDetail(page, card);
   await page.locator('#editName').fill(updatedName);
@@ -117,10 +116,10 @@ test('saving changes updates the review and shows it in the recent grid', async 
   await expect(page.locator('#editModal')).not.toHaveClass(/open/);
 });
 
-test('deleting a review removes it after confirming the browser prompt', async ({ page }) => {
+test('deleting a review removes it after confirming the browser prompt', async ({ page, createReview }) => {
   const name = `E2E Edit Delete ${Date.now()}`;
   const bakeryName = `E2E Edit Bakery ${Date.now()}`;
-  const { card } = await addReview(page, { name, bakeryName });
+  const { card } = await createReview({ name, bakeryName });
 
   await openEditFromDetail(page, card);
   page.once('dialog', dialog => dialog.accept());

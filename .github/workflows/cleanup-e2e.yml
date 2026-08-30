@@ -1,0 +1,35 @@
+name: Nightly E2E data cleanup
+
+# Safety net: sweeps any E2E test data that slipped past the createReview
+# fixture and tests/cleanup.teardown.js (e.g. the Playwright process was
+# killed mid-run, so its teardown never executed). See
+# scripts/cleanup-e2e-data.mjs.
+#
+# Requires repo secrets E2E_EMAIL / E2E_PASSWORD (same account as the E2E
+# suite — Settings → Secrets and variables → Actions).
+
+on:
+  schedule:
+    - cron: '17 4 * * *'   # 04:17 UTC daily
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run cleanup:e2e
+        env:
+          E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
+          E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}

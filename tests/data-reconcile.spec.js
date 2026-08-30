@@ -1,5 +1,4 @@
-import { test, expect } from '@playwright/test';
-import { addReview } from './utils/reviews.js';
+import { test, expect } from './utils/reviews.js';
 
 // Regression coverage for Phase 1 residual #3 — loadData()'s reconcile race
 // (see docs/extraction-log.md). Each test asserts the *fixed* behaviour of
@@ -69,7 +68,7 @@ test('Settings Business section lists bakeries on a cold session, no bakery-page
 // saveReview()-triggered mergeLocal reconcile. Post-fix the mergeLocal merge
 // keeps it; a plain reconcile (every other caller, incl. deleteReview) still
 // drops it.
-test('the mergeLocal reconcile keeps a locally-present, server-absent review; a plain reconcile drops it', async ({ page }) => {
+test('the mergeLocal reconcile keeps a locally-present, server-absent review; a plain reconcile drops it', async ({ page, createReview }) => {
   await page.goto('/');
   await expect(page.locator('#navAvatar')).toBeVisible({ timeout: 15_000 });
 
@@ -79,7 +78,7 @@ test('the mergeLocal reconcile keeps a locally-present, server-absent review; a 
   const bakery = `E2E Reconcile Bakery ${stamp}`;
 
   // 1. Create R for real — it lands in allItems (optimistic) and on the server.
-  const { id: idR } = await addReview(page, { name: nameR, bakeryName: bakery, category: 'Bread', rating: 4 });
+  const { id: idR } = await createReview({ name: nameR, bakeryName: bakery, category: 'Bread', rating: 4 });
   const rCard = page.locator('#recentGrid .card').filter({ hasText: nameR });
   await expect(rCard).toBeVisible();
 
@@ -104,7 +103,7 @@ test('the mergeLocal reconcile keeps a locally-present, server-absent review; a 
 
   // 3. Save S. saveReview() fires loadData({ mergeLocal: true }); its getDocs
   //    returns S but not R. mergeLocal must keep R (local-only).
-  await addReview(page, { name: nameS, bakeryName: bakery, category: 'Bread', rating: 4 });
+  await createReview({ name: nameS, bakeryName: bakery, category: 'Bread', rating: 4 });
   await expect(page.locator('#recentGrid .card').filter({ hasText: nameS })).toBeVisible();
   // Give the background mergeLocal reconcile time to land (network read + render;
   // no DOM signal to wait on).
