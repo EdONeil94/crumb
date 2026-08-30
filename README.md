@@ -65,13 +65,13 @@ Deployment is automatic via **GitHub Actions**
 and publishes `dist/` to GitHub Pages. Repo **Settings → Pages → Source**
 must be set to **"GitHub Actions"** for this to work.
 
-The site is being migrated to the custom domain **`https://ohcrumbz.co.uk/`**
+The site is being migrated to the custom domain **`https://crumbz.lol/`**
 (GitHub Pages hosting is unchanged — Wix is only the registrar, DNS points
 at Pages). `public/CNAME` holds the domain so no deploy can drop it, and
 `base: './'` in `vite.config.js` means the same build works both there and
 at the legacy `https://edoneil94.github.io/crumb/` URL during the
 transition. Cutover steps still pending: set the custom domain in the
-Pages UI, add the DNS records at Wix, and allowlist `ohcrumbz.co.uk` in
+Pages UI, add the DNS records at Wix, and allowlist `crumbz.lol` in
 Firebase Auth / the Google Places API key / Stadia Maps.
 
 You can also trigger a deploy by hand from the repo's **Actions** tab
@@ -118,7 +118,7 @@ fixture, `cleanup.teardown.js`, and `npm run cleanup:e2e` as a safety net).
 - Backend / Cloud Functions (currently all client-side against Firestore)
 - React (optional — the modular structure is the groundwork for it)
 - Native app wrapper
-- **Custom domain** (`ohcrumbz.co.uk`) — build-side prep done (`public/CNAME`
+- **Custom domain** (`crumbz.lol`) — build-side prep done (`public/CNAME`
   + `base: './'`); DNS + Pages-UI cutover + external-service allowlisting
   still pending. See the Deploying section.
 
