@@ -1,27 +1,72 @@
 import { defineConfig, devices } from '@playwright/test';
 
-// Loads E2E_EMAIL/E2E_PASSWORD (see .env.example) without needing the
-// `dotenv` package — process.loadEnvFile is a built-in Node API (stable
-// since Node 21.7/22.0). Silently no-ops if .env doesn't exist, so CI can
-// supply these as real environment variables instead.
-try { process.loadEnvFile('.env'); } catch { /* no .env file — fine */ }
+// ─── Two modes ─────────────────────────────────────────────────────────────
+// Default: run against the local Firebase Emulator Suite (no production
+//   writes). playwright.config starts the emulators + a Vite server on 5174
+//   with VITE_USE_EMULATOR=1, and tests/seed-emulator.mjs (globalSetup)
+//   seeds baseline data. No .env / secrets needed.
+// E2E_EMULATOR=0 (`npm run test:e2e:prod`): the old behaviour — `npm run dev`
+//   on 5173 against the real Firebase project, credentials from .env. Kept
+//   for the rare "I need to test against real data" case; Tier 1's cleanup
+//   machinery (tests/utils/reviews.js's createReview fixture,
+//   cleanup.teardown.js, scripts/cleanup-e2e-data.mjs) still applies.
+const USE_EMULATOR = process.env.E2E_EMULATOR !== '0';
+// Readable by specs (workers inherit process.env set here) — a couple of
+// tests hit live external services (Google Places) that don't fit the
+// hermetic emulator run.
+process.env.E2E_MODE = USE_EMULATOR ? 'emulator' : 'prod';
 
-// vite.config.js sets base:'/crumb/', so every route (including the built
-// app served by `vite preview`) lives under that prefix — baseURL includes
-// it so tests can navigate with page.goto('/') instead of repeating it.
-const PORT = 5173;
+// .env only matters in prod mode.
+if (!USE_EMULATOR) {
+  try { process.loadEnvFile('.env'); } catch { /* no .env — CI env vars instead */ }
+} else {
+  // Fixed creds for the seeded emulator user — keep in sync with
+  // tests/seed-emulator.mjs. tests/auth.setup.js reads these unchanged.
+  process.env.E2E_EMAIL = process.env.E2E_EMAIL || 'e2e@crumb.test';
+  process.env.E2E_PASSWORD = process.env.E2E_PASSWORD || 'crumb-e2e-pw';
+}
+
+// vite.config.js sets base:'/crumb/', so every route lives under that prefix.
+const PORT = USE_EMULATOR ? 5174 : 5173;
 const BASE_URL = process.env.E2E_BASE_URL || `http://localhost:${PORT}/crumb/`;
-
 const STORAGE_STATE = 'playwright/.auth/user.json';
+
+const emulatorServers = [
+  {
+    command: 'npx firebase-tools emulators:start --only auth,firestore,storage --project crumb-ddeb6',
+    url: 'http://127.0.0.1:4000', // emulator UI — up once all three emulators are ready
+    reuseExistingServer: !process.env.CI,
+    timeout: 60_000,
+    stdout: 'pipe',
+  },
+  {
+    command: 'npx vite --port 5174',
+    env: { VITE_USE_EMULATOR: '1' },
+    url: BASE_URL,
+    reuseExistingServer: !process.env.CI,
+    timeout: 30_000,
+  },
+];
+
+const prodServer = [{
+  command: 'npm run dev',
+  url: BASE_URL,
+  reuseExistingServer: !process.env.CI,
+  timeout: 30_000,
+}];
 
 export default defineConfig({
   testDir: './tests',
-  fullyParallel: false, // specs share one real Firebase project — avoid concurrent writes racing each other
+  fullyParallel: false, // specs share one backend (emulator or project) sequentially
   workers: 1,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'html',
-  timeout: 60_000, // real Firestore round-trips are slower than a mocked backend
+  timeout: 60_000,
   expect: { timeout: 10_000 },
+
+  // Emulator mode: seed the baseline data after the emulators start, before
+  // any spec. Prod mode: nothing to seed (real data is already there).
+  globalSetup: USE_EMULATOR ? './tests/seed-emulator.mjs' : undefined,
 
   use: {
     baseURL: BASE_URL,
@@ -31,16 +76,13 @@ export default defineConfig({
   },
 
   projects: [
-    // Signs in once via the real UI (email/password — see tests/auth.setup.js
-    // for why Google popup sign-in isn't an option here) and saves the
-    // resulting Firebase Auth session, so every other spec starts already
-    // signed in instead of repeating the sign-in flow per test.
+    // Signs in once via the real UI and saves the Firebase Auth session so
+    // every spec starts signed in. In emulator mode the account is the one
+    // tests/seed-emulator.mjs creates.
     { name: 'setup', testMatch: /auth\.setup\.js/ },
-    // Runs once after every spec in "chromium" finishes (Playwright's
-    // teardown-project mechanism — see tests/cleanup.teardown.js for what
-    // it removes and how tightly it's scoped) and reuses the same signed-in
-    // session, since deleting the test data requires being signed in as
-    // whatever account created it.
+    // Runs once after the "chromium" project. In emulator mode it's a
+    // near-no-op (the emulator is wiped on next run's globalSetup anyway);
+    // in prod mode it's the load-bearing cleanup — see cleanup.teardown.js.
     { name: 'cleanup', testMatch: /cleanup\.teardown\.js/, use: { storageState: STORAGE_STATE } },
     {
       name: 'chromium',
@@ -50,13 +92,5 @@ export default defineConfig({
     },
   ],
 
-  // Reuses a dev server you already have running (e.g. via `npm run dev`)
-  // instead of starting a second one — set reuseExistingServer to false in
-  // CI so a stale/incompatible server can't be reused silently.
-  webServer: {
-    command: 'npm run dev',
-    url: BASE_URL,
-    reuseExistingServer: !process.env.CI,
-    timeout: 30_000,
-  },
+  webServer: USE_EMULATOR ? emulatorServers : prodServer,
 });

@@ -249,8 +249,14 @@ test('Followers/Following list rows jump to that person\'s profile, and their fo
   // of that) may now be stale/detached, and we may not even be on the
   // Followers tab any more. Get back there and re-query fresh rather than
   // reusing it.
+  // The if-block above (when it runs) ends with a followAndRefreshProfile
+  // re-render that lands on Reviews. Navigate back to Followers and wait for
+  // the list to actually render before clicking a row — `.follow-user-row`
+  // can be briefly absent mid-re-render. (When the if-block was skipped the
+  // modal is already on Followers; re-clicking is a harmless no-op.)
   await page.locator('.profile-tab', { hasText: 'Followers' }).click();
   const freshRow = page.locator('.follow-user-row').first();
+  await expect(freshRow).toBeVisible({ timeout: 15_000 });
   await freshRow.locator('.follow-user-info').click();
   await expect(page.locator('#profileModal')).toHaveClass(/open/);
 });

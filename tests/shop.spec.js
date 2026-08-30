@@ -17,6 +17,11 @@ import { test, expect } from '@playwright/test';
 async function gotoShopPage(page) {
   await page.getByRole('button', { name: 'Shop', exact: true }).click();
   await expect(page.locator('#page-shop')).toHaveClass(/active/);
+  // showPage('shop') fires renderShopPage() which awaits loadProducts() — the
+  // page is "active" before the grid fills. Wait for the grid to settle
+  // (a card or the empty state) so the first test doesn't race a cold load.
+  await page.locator('#shopPageGrid .product-card, #shopPageGrid .empty-state').first()
+    .waitFor({ timeout: 10_000 }).catch(() => {});
 }
 
 test.beforeEach(async ({ page }) => {

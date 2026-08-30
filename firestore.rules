@@ -1,0 +1,121 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /items/{itemId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+
+    match /bakeries/{bakeryId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    match /profiles/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    match /itemRecords/{recordId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null;
+    }
+
+    match /userRoles/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == 'KTpBS4yJx2h8LpcryCTfJDFCHlr2';
+    }
+
+    match /bakeryProfiles/{bakeryId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    match /flaggedReviews/{flagId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow delete: if request.auth != null && request.auth.uid == 'KTpBS4yJx2h8LpcryCTfJDFCHlr2';
+    }
+
+    match /reactions/{reactionId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+
+    match /follows/{followId} {
+      allow read: if true;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.followerId;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.followerId;
+    }
+
+    match /products/{productId} {
+      allow read: if true;
+      allow create, update: if request.auth != null;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.ownerId;
+    }
+
+    match /bookmarks/{bookmarkId} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+
+    match /featureRequests/{requestId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null && request.auth.uid == 'KTpBS4yJx2h8LpcryCTfJDFCHlr2';
+    }
+
+    match /preorderOfferings/{id} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.createdBy;
+      allow update: if request.auth != null && (
+        request.auth.uid == resource.data.createdBy ||
+        request.auth.uid == 'KTpBS4yJx2h8LpcryCTfJDFCHlr2' ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['remaining'])
+      );
+      allow delete: if request.auth != null && (
+        request.auth.uid == resource.data.createdBy ||
+        request.auth.uid == 'KTpBS4yJx2h8LpcryCTfJDFCHlr2'
+      );
+    }
+
+    match /reservations/{id} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow update: if request.auth != null && (
+        request.auth.uid == resource.data.userId ||
+        request.auth.uid == 'KTpBS4yJx2h8LpcryCTfJDFCHlr2'
+      );
+      allow delete: if request.auth != null && request.auth.uid == 'KTpBS4yJx2h8LpcryCTfJDFCHlr2';
+    }
+
+    match /bakeryCatalogue/{id} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.createdBy;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.createdBy;
+    }
+
+    match /savedItems/{id} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+
+    match /sharedReviews/{id} {
+      allow read: if request.auth != null && (
+        request.auth.uid == resource.data.toUserId ||
+        request.auth.uid == resource.data.fromUserId
+      );
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.fromUserId;
+    }
+
+  }
+}
