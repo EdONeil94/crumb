@@ -115,6 +115,7 @@
 import { registerActions } from '../events/actions.js';
 import { dataArgs } from '../events/delegate.js';
 import { geocodeBakeryAddress } from '../services/places.js';
+import { MAP_TILE_URL, MAP_TILE_ATTRIBUTION, MAP_TILE_MAX_ZOOM } from '../config.js';
 import { CATEGORY_TREE, CATEGORIES, getCategoryDisplay } from '../data/categories.js';
 import { lockScroll, unlockScroll, showToast } from '../utils/dom.js';
 import { extractCity, extractCountry } from '../utils/geo.js';
@@ -611,8 +612,8 @@ function loadLeafletThenMap(myItems) {
     const L = window.L;
     diningMapInstance = L.map('diningMapEl', { center: [54, -1], zoom: 6, zoomControl: true, scrollWheelZoom: false });
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-      attribution: '© OpenStreetMap © CARTO', subdomains: 'abcd', maxZoom: 19
+    L.tileLayer(MAP_TILE_URL, {
+      attribution: MAP_TILE_ATTRIBUTION, maxZoom: MAP_TILE_MAX_ZOOM
     }).addTo(diningMapInstance);
 
     function makeIcon(label) {

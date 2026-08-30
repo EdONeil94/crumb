@@ -2,8 +2,8 @@ import { test, expect } from '@playwright/test';
 
 // Backfills the manually-verified DINING MAP checklist (switchDmTab — the
 // profile modal's My Map tab's Bakes/Cities/Countries stat toggle). The
-// map itself (real Leaflet + real OpenStreetMap/CARTO tiles, loaded from
-// unpkg.com) isn't this cluster's concern and isn't asserted on here — see
+// map itself (real Leaflet + Stadia Maps raster tiles — see src/config.js)
+// isn't this cluster's concern and isn't asserted on here — see
 // CLAUDE.md's people-filters.spec.js note on why that tab's own loading
 // spinner needs a visibility check, not a "removed from the DOM" one.
 
