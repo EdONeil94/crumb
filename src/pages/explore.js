@@ -1,9 +1,11 @@
 // ─── EXPLORE PAGE ───────────────────────────────────────────────────────────
 // The #page-explore routed view (pages/components carving, Phase 7 step 29 —
-// see CLAUDE.md). ~735 lines: country/city pickers, "Nearby" radius mode,
-// the Leaflet map view + its temporary iOS-debug diagnostics panel, geo
-// detection, and the trending-bakeries logic that mixes Crumbz reviews with
-// live Google Places results.
+// see CLAUDE.md). country/city pickers, "Nearby" radius mode, the Leaflet
+// map view, geo detection, and the trending-bakeries logic that mixes
+// Crumbz reviews with live Google Places results. (An on-screen
+// "Debug log" panel under the map — scaffolding from an iOS map bug — was
+// removed 2026-08-30 along with its exploreMapLog() helper; real error
+// paths now use console.warn/console.error.)
 //
 // exploreCache lives in src/state/appState.js (moved there at Phase 1
 // residual #2, 2026-08-30, alongside buildBakeryIndex — its only
@@ -54,28 +56,11 @@ function setExploreViewMode(mode) {
   if (mode === 'map') renderExploreMap(exploreLastResults);
 }
 
-// ─── EXPLORE MAP DIAGNOSTICS (temporary — remove once mobile bug is found) ────
-function exploreMapLog(msg) {
-  const panel = document.getElementById('exploreMapDebugLog');
-  if (!panel) return;
-  panel.style.display = 'block';
-  const line = document.createElement('div');
-  const t = new Date().toLocaleTimeString();
-  line.textContent = `[${t}] ${msg}`;
-  panel.appendChild(line);
-  panel.scrollTop = panel.scrollHeight;
-}
-
 async function renderExploreMap(bakeries) {
-  const debugPanel = document.getElementById('exploreMapDebugLog');
-  if (debugPanel) { debugPanel.innerHTML = ''; debugPanel.style.display = 'block'; }
-  exploreMapLog(`Start. ${bakeries.length} bakeries passed in. UA: ${navigator.userAgent.slice(0,60)}`);
-  exploreMapLog(`GOOGLE_MAPS_KEY present: ${!!GOOGLE_MAPS_KEY}. window.L present: ${!!window.L}. markerClusterGroup present: ${!!(window.L && window.L.markerClusterGroup)}`);
-
   const el = document.getElementById('exploreMapEl');
   const loader = document.getElementById('exploreMapLoading');
   const loaderText = document.getElementById('exploreMapLoadingText');
-  if (!el) { exploreMapLog('FATAL: #exploreMapEl not found in DOM'); return; }
+  if (!el) return;
   if (loader) loader.style.display = 'flex';
   if (loaderText) loaderText.textContent = 'Loading map…';
 
@@ -85,7 +70,6 @@ async function renderExploreMap(bakeries) {
   // (same approach already used for the profile "My Map" and Bakeries→Nearest).
   const withCoords = bakeries.filter(b => b.lat && b.lng);
   const missingCoords = bakeries.filter(b => !b.lat || !b.lng);
-  exploreMapLog(`withCoords: ${withCoords.length}, missingCoords (need geocoding): ${missingCoords.length}`);
 
   if (missingCoords.length && loaderText) {
     loaderText.textContent = `Locating ${missingCoords.length} bakery${missingCoords.length !== 1 ? 'ies' : ''}…`;
@@ -93,33 +77,27 @@ async function renderExploreMap(bakeries) {
 
   let points;
   try {
-    exploreMapLog('Starting geocode step…');
     const geocoded = await Promise.all(missingCoords.map(async b => {
       const coords = await geocodeBakeryAddress(b.name, b.address);
-      exploreMapLog(`  geocode "${b.name}": ${coords ? `OK (${coords.lat.toFixed(3)}, ${coords.lng.toFixed(3)})` : 'FAILED / no result'}`);
       return coords ? { ...b, lat: coords.lat, lng: coords.lng } : null;
     }));
     points = [...withCoords, ...geocoded.filter(Boolean)];
-    exploreMapLog(`Geocode step complete. Total plottable points: ${points.length}`);
   } catch(geoErr) {
-    exploreMapLog(`Geocode step THREW: ${geoErr.message || geoErr}`);
+    console.warn('Explore map: geocode step failed', geoErr);
     points = withCoords;
   }
 
   function setupMap() {
-    exploreMapLog('setupMap() called');
     try {
       if (loader) loader.style.display = 'none';
       if (exploreMapInstance) { exploreMapInstance.remove(); exploreMapInstance = null; }
 
       const L = window.L;
       exploreMapInstance = L.map('exploreMapEl', { center: [54, -1], zoom: 6, zoomControl: true, scrollWheelZoom: false, tap: true, touchZoom: true, dragging: true });
-      exploreMapLog('L.map() created OK');
 
       L.tileLayer(MAP_TILE_URL, {
         attribution: MAP_TILE_ATTRIBUTION, maxZoom: MAP_TILE_MAX_ZOOM
       }).addTo(exploreMapInstance);
-      exploreMapLog('Tile layer added OK');
 
       // Two earlier approaches both failed: inline SVG in a divIcon silently
       // failed to paint on iOS Safari (no error, just invisible), and
@@ -137,10 +115,8 @@ async function renderExploreMap(bakeries) {
       }
 
       const markerLayer = L.layerGroup();
-      exploreMapLog(`Using plain HTML divIcon rendering. About to add ${points.length} point(s)…`);
 
       if (!points.length) {
-        exploreMapLog('points.length is 0 — showing "no mappable bakeries" message, nothing to plot');
         el.insertAdjacentHTML('beforeend', `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:400;"><div style="background:rgba(250,246,240,0.92);border-radius:8px;padding:12px 20px;font-size:0.82rem;color:var(--text-muted);text-align:center;">📍 No mappable bakeries in this result set</div></div>`);
       }
 
@@ -177,21 +153,18 @@ async function renderExploreMap(bakeries) {
           markerLayer.addLayer(marker);
           markersAdded++;
         } catch(markerErr) {
-          exploreMapLog(`Marker FAILED for "${b.name}": ${markerErr.message || markerErr}`);
+          console.warn(`Explore map: marker failed for "${b.name}"`, markerErr);
         }
       });
-      exploreMapLog(`Marker loop done. ${markersAdded}/${points.length} added successfully.`);
 
       exploreMapInstance.addLayer(markerLayer);
-      exploreMapLog('markerLayer added to map');
 
       if (points.length) {
         const group = L.featureGroup(points.map(b => L.marker([b.lat, b.lng])));
         try {
           exploreMapInstance.fitBounds(group.getBounds().pad(0.3), { maxZoom: 14 });
-          exploreMapLog('fitBounds OK');
         } catch(fbErr) {
-          exploreMapLog(`fitBounds THREW: ${fbErr.message || fbErr}`);
+          console.warn('Explore map: fitBounds failed', fbErr);
         }
       }
 
@@ -215,11 +188,9 @@ async function renderExploreMap(bakeries) {
       }
 
       if (markersAdded === 0 && points.length > 0) {
-        el.insertAdjacentHTML('beforeend', `<div style="position:absolute;top:8px;left:8px;right:8px;z-index:600;background:#c0392b;color:white;border-radius:8px;padding:10px 14px;font-size:0.78rem;">⚠️ Found ${points.length} location${points.length!==1?'s':''} but couldn't place any pins — please screenshot this and let Ed know.</div>`);
+        el.insertAdjacentHTML('beforeend', `<div style="position:absolute;top:8px;left:8px;right:8px;z-index:600;background:#c0392b;color:white;border-radius:8px;padding:10px 14px;font-size:0.78rem;">⚠️ Found ${points.length} location${points.length!==1?'s':''} but couldn't place any pins on the map.</div>`);
       }
-      exploreMapLog('setupMap() completed successfully ✅');
     } catch(fatalErr) {
-      exploreMapLog(`FATAL error in setupMap: ${fatalErr.message || fatalErr}`);
       console.error('Explore map failed to render:', fatalErr);
       if (loader) loader.style.display = 'none';
       el.insertAdjacentHTML('beforeend', `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--parchment);z-index:600;padding:20px;text-align:center;"><div><div style="font-size:1.5rem;margin-bottom:8px;">⚠️</div><div style="font-size:0.85rem;color:var(--text-body);margin-bottom:6px;font-weight:600;">Map couldn't load</div><div style="font-size:0.72rem;color:var(--text-muted);word-break:break-word;">${(fatalErr && fatalErr.message) || 'Unknown error'}</div></div></div>`);
@@ -227,15 +198,13 @@ async function renderExploreMap(bakeries) {
   }
 
   if (window.L) {
-    exploreMapLog('Branch: Leaflet already loaded — calling setupMap() directly');
     setupMap();
   } else {
-    exploreMapLog('Branch: Leaflet not loaded — loading leaflet.js…');
     const s1 = document.createElement('script');
     s1.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-    s1.onload = () => { exploreMapLog('leaflet.js onload fired'); setupMap(); };
+    s1.onload = () => setupMap();
     s1.onerror = () => {
-      exploreMapLog('leaflet.js onerror fired — CORE LIBRARY FAILED TO LOAD');
+      console.error('Explore map: leaflet.js failed to load');
       if (loader) loader.style.display = 'none';
       el.insertAdjacentHTML('beforeend', `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--parchment);z-index:600;padding:20px;text-align:center;"><div><div style="font-size:1.5rem;margin-bottom:8px;">⚠️</div><div style="font-size:0.85rem;color:var(--text-body);font-weight:600;">Couldn't load the map library</div><div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;">Check your connection and try again</div></div></div>`);
     };
