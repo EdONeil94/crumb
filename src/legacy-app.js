@@ -1,7 +1,6 @@
 import { registerActions } from './events/actions.js';
 import { initDelegatedEvents, dataArgs } from './events/delegate.js';
 import {
-  CATEGORY_TREE, CATEGORIES, SUB_TO_PARENT, SUB_LABEL,
   TASTING_DIMS_UNIVERSAL, TASTING_DIM_5TH, DEFAULT_DIM_5TH, getTastingDims,
   TASTING_DIMS,
 } from './data/categories.js';
@@ -10,7 +9,7 @@ import { escJS } from './utils/strings.js';
 import {
   currentUser, fb,
   setCurrentUser, setFb, setCurrentUserRole,
-  setCurrentUserBakery, isAdmin, isBusiness, ownsBakery, loadUserRole,
+  setCurrentUserBakery, ownsBakery, loadUserRole,
   loadBakeryProfiles,
   allItems, allItemRecords,
   loadItemRecords, ensureProfileExists, loadData, loadProfiles,
@@ -82,9 +81,11 @@ import './app/lifecycle.js';
 // their only real (non-comment) uses in this file were
 // refreshAdminUsersPanel/promoteUser/promptAssignBakery/removeUserRole/
 // showAdminTab, all moved to src/components/adminPanel.js (2026-08-26,
-// Phase 6 step 23); SUPER_ADMIN_UID/isAdmin/isBusiness/ownsBakery/
-// loadUserRole/loadBakeryProfiles are still imported above — genuinely
-// still needed elsewhere in this file.
+// Phase 6 step 23). isAdmin/isBusiness stopped being imported here when the
+// Category migration data-tool was removed (2026-08-30) — isAdmin was its
+// only caller left in this file, isBusiness was already unused.
+// SUPER_ADMIN_UID/ownsBakery/loadUserRole/loadBakeryProfiles are still
+// imported above — genuinely still needed elsewhere in this file.
 
 // loadProfiles/loadData/buildBakeryIndex moved to src/state/appState.js
 // (2026-08-30, Phase 1 residual #2) — the Phase 0 stage 3b deferral, once
@@ -95,9 +96,9 @@ import './app/lifecycle.js';
 // (renderRecentGrid/updateStats/updateNav/renderPeople) via getAction()
 // from appState.js — a leaf can't import a page/component back (standing
 // lesson 5). loadData/loadProfiles are imported above for this file's own
-// plain-JS callers (initFirebaseApp; loadData also in saveReview/saveEdit/
-// deleteReview/runCategoryMigration); buildBakeryIndex has no caller left
-// here — its ~5 former getAction() sites are now direct appState imports.
+// plain-JS callers (initFirebaseApp; loadData also in saveReview);
+// buildBakeryIndex has no caller left here — its ~5 former getAction()
+// sites are now direct appState imports.
 
 // refreshAdminUsersPanel/promoteUser/promptAssignBakery/removeUserRole
 // moved to src/components/adminPanel.js (2026-08-26, Phase 6 step 23) —
@@ -136,9 +137,12 @@ import './app/lifecycle.js';
 // CATEGORY_TREE, CATEGORIES, SUB_TO_PARENT, SUB_LABEL, getCategoryDisplay,
 // TASTING_DIMS_UNIVERSAL, TASTING_DIM_5TH, DEFAULT_DIM_5TH, getTastingDims,
 // and TASTING_DIMS moved to src/data/categories.js (2026-08-24, first step
-// of the pages/components carving) — imported at the top of this file,
-// except getCategoryDisplay (last consumer left with the Explore page,
-// Phase 7 step 29).
+// of the pages/components carving). Only the TASTING_* set is imported at
+// the top of this file now; CATEGORY_TREE/CATEGORIES/SUB_TO_PARENT/SUB_LABEL
+// stopped being imported here when the Category migration data-tool was
+// removed (2026-08-30) — CATEGORY_TREE was its only user, the other three
+// were already unused. getCategoryDisplay left with the Explore page
+// (Phase 7 step 29).
 // allProfiles/allItems/allItemRecords/ensureProfileExists moved to
 // src/state/appState.js (2026-08-24, Phase 0 step 3b) — imported above.
 
@@ -560,116 +564,6 @@ async function flagReview(itemId, bakeryName) {
 // from appState.js). All eight register from editReviewModal.js itself.
 // Only closeEditModal is imported back here, for the #editModal
 // overlay-click / keydown-Escape listeners in the UTILS section below.
-
-// ─── CATEGORY MIGRATION ───────────────────────────────────────────────────────
-const CATEGORY_MIGRATION_MAP = {
-  // Old flat category -> { category: newParent, subCategory: newSub }
-  'croissant':       { category: 'pastry',     subCategory: 'croissant' },
-  'pain_au_chocolat':{ category: 'pastry',     subCategory: 'pain_au_chocolat' },
-  'danish':          { category: 'pastry',     subCategory: 'danish' },
-  'eclair':          { category: 'pastry',     subCategory: 'eclair' },
-  'sourdough':       { category: 'bread',      subCategory: 'sourdough' },
-  'baguette':        { category: 'bread',      subCategory: 'baguette' },
-  'focaccia':        { category: 'bread',      subCategory: 'focaccia' },
-  'ciabatta':        { category: 'bread',      subCategory: 'ciabatta' },
-  'rye':             { category: 'bread',      subCategory: 'rye' },
-  'tart':            { category: 'tart',       subCategory: 'fruit_tart' },
-  'lemon_tart':      { category: 'tart',       subCategory: 'lemon_tart' },
-  'custard_tart':    { category: 'tart',       subCategory: 'custard_tart' },
-  'quiche':          { category: 'tart',       subCategory: 'quiche' },
-  'cake':            { category: 'cake',       subCategory: 'victoria_sponge' },
-  'cheesecake':      { category: 'cake',       subCategory: 'cheesecake' },
-  'carrot_cake':     { category: 'cake',       subCategory: 'carrot_cake' },
-  'bun':             { category: 'bun',        subCategory: 'cinnamon_bun' },
-  'cinnamon_bun':    { category: 'bun',        subCategory: 'cinnamon_bun' },
-  'cookie':          { category: 'cookie',     subCategory: 'chocolate_chip' },
-  'brownie':         { category: 'cookie',     subCategory: 'brownie' },
-  'shortbread':      { category: 'cookie',     subCategory: 'shortbread' },
-  'flapjack':        { category: 'cookie',     subCategory: 'flapjack' },
-  'bread':           { category: 'bread',      subCategory: 'sourdough' },
-  'pastry':          { category: 'pastry',     subCategory: 'croissant' },
-  'sandwich':        { category: 'sandwich',   subCategory: 'sandwich' },
-  'sausage_roll':    { category: 'sandwich',   subCategory: 'sausage_roll' },
-  'scone':           { category: 'scone',      subCategory: 'plain_scone' },
-  'doughnut':        { category: 'sweet_treat',subCategory: 'doughnut' },
-  'waffle':          { category: 'sweet_treat',subCategory: 'waffle' },
-  'macaron':         { category: 'sweet_treat',subCategory: 'macaron' },
-  'madeleine':       { category: 'sweet_treat',subCategory: 'madeleine' },
-};
-
-async function runCategoryMigration() {
-  if (!isAdmin()) { showToast('Admin only'); return; }
-  if (!confirm('This will update all legacy reviews to use the new category system. Continue?')) return;
-
-  const btn = document.getElementById('migrationBtn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Migrating…'; }
-
-  const { db, collection, getDocs, doc, updateDoc } = fb;
-  let updated = 0;
-  let skipped = 0;
-  let errors = 0;
-
-  try {
-    const snap = await getDocs(collection(db, 'items'));
-    const updates = [];
-
-    snap.docs.forEach(d => {
-      const item = d.data();
-      const cat = item.category || '';
-
-      // Skip if already on new system (category is a parent key in CATEGORY_TREE)
-      if (CATEGORY_TREE[cat] && item.subCategory) { skipped++; return; }
-
-      // Check if it needs migration
-      const migration = CATEGORY_MIGRATION_MAP[cat];
-      if (!migration) {
-        // Unknown category — set to other
-        updates.push({ id: d.id, category: 'other', subCategory: 'other' });
-        return;
-      }
-
-      updates.push({ id: d.id, ...migration });
-    });
-
-    // Also migrate itemRecords
-    const recSnap = await getDocs(collection(db, 'itemRecords'));
-    recSnap.docs.forEach(d => {
-      const item = d.data();
-      const cat = item.category || '';
-      if (CATEGORY_TREE[cat] && item.subCategory) { return; }
-      const migration = CATEGORY_MIGRATION_MAP[cat];
-      if (migration) updates.push({ id: d.id, _collection: 'itemRecords', ...migration });
-    });
-
-    // Batch updates (Firestore limit is 500 per batch but we'll do sequential for simplicity)
-    for (const u of updates) {
-      try {
-        const colName = u._collection || 'items';
-        await updateDoc(doc(db, colName, u.id), {
-          category: u.category,
-          subCategory: u.subCategory
-        });
-        updated++;
-      } catch(e) {
-        errors++;
-        console.error('Migration error for', u.id, e);
-      }
-    }
-
-    const msg = `Migration complete: ${updated} updated, ${skipped} already current, ${errors} errors`;
-    showToast(msg);
-    if (btn) { btn.textContent = `✓ Done (${updated} updated)`; }
-
-    // Reload data to reflect changes
-    await loadData();
-    await loadItemRecords();
-
-  } catch(e) {
-    showToast('Migration failed — check console');
-    console.error(e);
-    if (btn) { btn.disabled = false; btn.textContent = 'Run migration'; }
-  }
-}
 
 // toggleReaction/refreshReactionBar/buildReactionBarInner/
 // toggleReactionPicker/toggleReactionFromPicker/loadReactionsForItems
@@ -1293,10 +1187,6 @@ registerActions({ cancelReservation });
 // closeDetailAndOpenProfile registers from src/components/profileModal.js
 // now (Phase 5 step 22).
 registerActions({ toggleSaveItem, flagReview });
-
-// Category migration (admin settings panel) — single button, single
-// zero-arg call site, no compound logic.
-registerActions({ runCategoryMigration });
 
 // Notifications panel — toggleNotifPanel/closeNotifPanel/
 // markAllNotifsRead register from src/components/notifications.js now
