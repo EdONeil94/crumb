@@ -20,9 +20,10 @@ All 32 steps landed (Phase 7's last five: `src/pages/bakeries.js` (step 26,
 `src/components/preordersSheet.js` (step 31, `913d1d2`);
 `src/pages/settings.js` (step 32, `69704e0`) — the final step).
 `src/legacy-app.js` went from 9,412 lines / 296 functions at the start of
-the plan to ~1,473 lines (app bootstrap + a set of functions with genuine
-raw/`WINDOW EXPORTS`/registry call sites — see the residual-#2 write-up in
-`docs/extraction-log.md` for the full inventory).
+the plan to ~1,357 lines (app bootstrap + a set of functions with genuine
+raw/`WINDOW EXPORTS`/registry call sites, or explicitly held back at a
+neighbour's extraction — see the `saveEdit`/`deleteReview` write-up in
+`docs/extraction-log.md` for the current inventory).
 
 **Post-plan residual cleanups (NOT plan steps — separate follow-ups):**
 1. ✅ **RESOLVED 2026-08-30 (commit `52250da`).** `showPage()` /
@@ -43,9 +44,13 @@ raw/`WINDOW EXPORTS`/registry call sites — see the residual-#2 write-up in
    `adminPanel.js`'s `getAction('loadData')()` became plain
    `appState.js` imports; both `registerActions()` calls for them removed
    from `legacy-app.js`. `setAllItems`/`setAllBakeries` deleted.
-   `madge --circular`: still clean. **Tied decision now unblocked (NOT
-   done): `saveEdit()` / `deleteReview()` → `editReviewModal.js`** — see
-   the ⚠️ callout below. See `docs/extraction-log.md`.
+   `madge --circular`: still clean. See `docs/extraction-log.md`.
+   - ✅ **Tied follow-up RESOLVED 2026-08-30 (commit `dc45b62`).**
+     `saveEdit()` / `deleteReview()` → `src/components/editReviewModal.js`,
+     which is whole again (the Phase 2 step 9 split is fully closed). No
+     cycle — `editReviewModal.js` is imported only by `legacy-app.js`. Both
+     register from `editReviewModal.js` now;
+     `editingItemId`/`editPhotoFile`/`editPhotoDataURL` lost their `export`.
 3. **The `loadData()` reconcile race** (in "Known pre-existing issues") —
    an app-robustness bug, carried through the whole plan unfixed by
    design. The reconcile logic moved byte-for-byte into `appState.js` at
@@ -192,8 +197,11 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   `98e1120`) — genuinely clean, no split needed, matches the plan's own
   characterization of this phase ·
   9. `src/components/editReviewModal.js` — ✅ **done** (2026-08-24, commit
-  `a911b4f`) — split, not clean, unlike step 8; see step 18/29 callouts
-  below for the 3 deferred functions ·
+  `a911b4f`) — split, not clean, unlike step 8: `handleEditPhoto` deferred
+  to step 18, `saveEdit`/`deleteReview` deferred past the whole plan. **All
+  three since rejoined — the split is fully closed** (`handleEditPhoto`
+  2026-08-25 commit `d4cfec1`; `saveEdit`/`deleteReview` 2026-08-30 commit
+  `dc45b62`, a follow-up to residual #2) ·
   10. `src/components/qrCode.js` — ✅ **done** (2026-08-24, commit
   `b002aa0`) — split; see step 17 callout below for the 2 deferred
   functions ·
@@ -245,9 +253,9 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   importable home in `addReviewModal.js`, so `handleEditPhoto()` moved into
   `editReviewModal.js` — one-way dependency, no cycle, verified before
   moving. `saveEdit()`/`deleteReview()`'s own deferral outlived step 9 —
-  its last blocker (`loadData()`) cleared at residual #2 (2026-08-30), so
-  that move is now fully unblocked but still pending (⚠️ callout under
-  residual #2).
+  its last blocker (`loadData()`) cleared at residual #2 (2026-08-30), and
+  they moved into `editReviewModal.js` the same day (commit `dc45b62`),
+  fully closing the step 9 split.
 - **Phase 5 — composite modals aggregating several historical clusters:**
   19. `src/components/itemDetailModal.js` — ✅ **done** (2026-08-25, commit
   `2d90c6a`) — **opens Phase 5** — split, not clean:
@@ -320,9 +328,10 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   exported as plain live bindings (never written outside the file). This
   makes `renderLeaderboard`/`lbCurrentTab` importable, resolving half of
   the deferral for `editReviewModal.js`'s `saveEdit`/`deleteReview` — the
-  other half (`loadData()`) landed at residual #2, so that move is now
-  fully unblocked (still pending). Removed a dead `openBakeryProfile`
-  import from `legacy-app.js`. See its entry in `docs/extraction-log.md` ·
+  other half (`loadData()`) landed at residual #2, and both functions
+  moved into `editReviewModal.js` on 2026-08-30 (commit `dc45b62`).
+  Removed a dead `openBakeryProfile` import from `legacy-app.js`. See its
+  entry in `docs/extraction-log.md` ·
   28. `src/pages/home.js` — ✅ **done** (2026-08-28, commit `7b8db6c`).
   Smallest move in the plan: `updateStats` + `renderRecentGrid` only, both
   pure render helpers with no `data-onclick`/`data-onchange` and no
@@ -393,18 +402,19 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   deleted. `legacy-app.js` now imports nothing from `src/pages/explore.js`
   or `src/utils/geo.js`. `npx madge --circular src/`: clean.
 
-  **⚠️ Tied follow-up — NOW UNBLOCKED (residual #2, 2026-08-30), set up in
-  Phase 2 step 9. NOT done.** `saveEdit()`/`deleteReview()`
-  (`editReviewModal.js`'s footer buttons, still in `legacy-app.js`) both
-  `await loadData()`; `deleteReview()` also calls `renderLeaderboard()` /
-  reads `lbCurrentTab` (importable since step 27) and `closeEditModal()`
-  (since step 9). As of residual #2 `loadData()` is importable from
-  `appState.js` — **every blocker is now gone.** Pending: move
-  `saveEdit()`/`deleteReview()` (+ their `registerActions({ saveEdit,
-  deleteReview })` call) into `editReviewModal.js`. A clean, self-contained
-  follow-up if pursued — run it under the tightened per-extraction workflow
-  (targeted `tests/edit-review.spec.js` + one closing E2E). Breadcrumb
-  comments in `legacy-app.js` and `editReviewModal.js` already flag it.
+  **✅ Tied follow-up RESOLVED 2026-08-30 (commit `dc45b62`), set up in
+  Phase 2 step 9.** `saveEdit()`/`deleteReview()` moved into
+  `src/components/editReviewModal.js` — the last blocker (`loadData()`,
+  importable from `appState.js` as of residual #2) was gone;
+  `renderLeaderboard`/`lbCurrentTab` importable since step 27,
+  `closeEditModal` since step 9. **The Phase 2 step 9 split is fully
+  closed — `editReviewModal.js` is whole again.** No cycle
+  (`editReviewModal.js` is imported only by `legacy-app.js`, the entry
+  point). Both register from `editReviewModal.js`;
+  `editingItemId`/`editPhotoFile`/`editPhotoDataURL` lost their `export`
+  (nothing outside the file reads them now). `legacy-app.js` keeps only
+  `import { closeEditModal }` (its modal-overlay/Escape listeners). Closing
+  `test:e2e`: 60 passed, 11 skipped, 0 failed. See `docs/extraction-log.md`.
 
   **✅ RESOLVED 2026-08-30 (commit `52250da`) — residual #1, set up in
   Phase 1 step 5.**

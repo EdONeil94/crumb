@@ -7,6 +7,59 @@ standing rules). This file is the per-step history only: commit hashes,
 what moved, what was deferred and why, and every lesson found along the
 way. Most recent first. Add each new completed step's entry at the top.
 
+- **`saveEdit()` / `deleteReview()` → `src/components/editReviewModal.js` —
+  post-plan follow-up to residual #2** (2026-08-30, commit `dc45b62`).
+  The Edit Review cluster split at Phase 2 step 9 (`handleEditPhoto`/
+  `saveEdit`/`deleteReview` left behind, each blocked on not-yet-extracted
+  code). `handleEditPhoto` rejoined at step 18; this closes the split —
+  `editReviewModal.js` is whole again.
+  **Why now.** `saveEdit()` `await`s `loadData()`; `deleteReview()` also
+  `await`s `loadItemRecords()` and calls `renderLeaderboard(lbCurrentTab)`.
+  `renderLeaderboard`/`lbCurrentTab` became importable at step 27,
+  `closeEditModal` at step 9 — `loadData()` was the last blocker, and it
+  became importable from `appState.js` at residual #2 (2026-08-30). Every
+  blocker gone → clean move.
+  **Full unblock re-verified, not assumed.** Grepped every dependency of
+  both functions: `editingItemId`/`editPhotoFile`/`editPhotoDataURL`
+  (module state, now local), `currentUser`/`fb`/`allItems`/`loadData`/
+  `loadItemRecords` (`appState.js`), `getTastingDims` (`categories.js`),
+  `closeEditModal` (local), `showToast` (`utils/dom.js`),
+  `renderLeaderboard`/`lbCurrentTab` (`leaderboard.js`). No caller or
+  dependency beyond `loadData()` had been overlooked.
+  **No cycle — structurally impossible here.** `editReviewModal.js` is
+  imported by exactly one file: `legacy-app.js`, the entry point, which
+  nothing imports. So new imports here (`leaderboard.js`, more of
+  `appState.js`) cannot close a loop. `npx madge --circular src/`: clean
+  before and after regardless.
+  **Delegation.** `index.html:966` (`data-onclick="deleteReview"`) and
+  `:969` (`data-onclick="saveEdit"`, the `#editSaveBtn` footer button) are
+  already delegated — no markup change. Both move into
+  `editReviewModal.js`'s own `registerActions()` call (standing lesson 1 —
+  a `data-onclick` name must be registered from its own module, not left
+  behind in `legacy-app.js`). `legacy-app.js`'s
+  `registerActions({ saveEdit, deleteReview })` removed. Neither function
+  was ever in `WINDOW EXPORTS` (grepped — delegated-only); no test calls
+  `window.saveEdit`/`window.deleteReview` (all specs click the
+  `data-onclick` element).
+  **Standing lesson 4 — call sites before trimming.** `legacy-app.js`'s
+  `import { closeEditModal, editingItemId, editPhotoFile, editPhotoDataURL }`
+  → `import { closeEditModal }`. `closeEditModal` kept (real callers: the
+  `#editModal` overlay-click listener + the keydown-Escape handler in the
+  UTILS section). `editingItemId`/`editPhotoFile`/`editPhotoDataURL` had
+  zero references outside `editReviewModal.js` after the move, so they also
+  **lost their `export`** (were already only ever written in that file).
+  `renderLeaderboard`/`lbCurrentTab`/`getTastingDims`/`loadData`/
+  `loadItemRecords`/`showToast` all still have real `legacy-app.js` callers
+  (`saveReview`, `runCategoryMigration`, `flagReview`, …) — kept.
+  **Verification.** `check:dead-refs` clean, `build` clean, `madge` clean.
+  Targeted (workflow step 6): `tests/edit-review.spec.js` (its
+  `saveEdit`-via-Save-changes and `deleteReview`-via-Delete tests both
+  click the real buttons) + `tests/add-review-flow.spec.js` (uses
+  `deleteReview` for cleanup) — **10 passed**. No debug spec —
+  `edit-review.spec.js` already covers the cluster directly. Closing full
+  `test:e2e`: **60 passed, 11 skipped, 0 failed** — clean, no flake.
+  **`src/legacy-app.js`: 1,473 → 1,357 lines.**
+
 - **`loadData()` / `loadProfiles()` / `buildBakeryIndex()` (+ `exploreCache`)
   → `src/state/appState.js` — Phase 1 residual #2** (2026-08-30, commit
   `2c7ef8c`). Post-plan cleanup — the Phase 0 stage 3b deferral, finally
@@ -86,19 +139,20 @@ way. Most recent first. Add each new completed step's entry at the top.
   `appState.js`, so the move is a clean follow-up — see CLAUDE.md's ⚠️
   callout #2. Breadcrumb comments in `legacy-app.js` + `editReviewModal.js`
   updated to say so.
-  **Residuals #1 and #2 are both resolved.** What remains in
-  `legacy-app.js` (~1,473 lines): the app bootstrap (`initFirebaseApp` +
+  **Residuals #1 and #2 are both resolved.** What remained in
+  `legacy-app.js` after this (~1,473 lines; `saveEdit`/`deleteReview`
+  followed the same day, → ~1,357): the app bootstrap (`initFirebaseApp` +
   its auth listener, delegated-event init, `buildTastingDims`/
-  `buildCategoryChips`), and a set of functions still blocked or with
-  genuine raw/`WINDOW EXPORTS` call sites — `saveReview` (registry-reached
-  by `addReviewModal.js`), `saveEdit`/`deleteReview` (the unblocked-but-
-  pending pair above), `flagReview`, `runCategoryMigration`, `toggleFollow`
-  + its refresh wrappers, `toggleSaveItem`/`removeSavedItem`,
-  `cancelReservation`, the SHOP-MANAGEMENT + ADD/EDIT PRODUCT cluster, the
-  FEATURE REQUESTS submit flow, the modal overlay-click/Escape listeners,
-  and the `WINDOW EXPORTS` block. Residual #3 (the `loadData()` reconcile
-  race) is an app-robustness bug, untouched by design — the reconcile logic
-  moved byte-for-byte into `appState.js`.
+  `buildCategoryChips`), and a set of functions with genuine raw/`WINDOW
+  EXPORTS` call sites or held back at a neighbour's extraction — `saveReview`
+  (registry-reached by `addReviewModal.js`), `flagReview`,
+  `runCategoryMigration`, `toggleFollow` + its refresh wrappers,
+  `toggleSaveItem`/`removeSavedItem`, `cancelReservation`, the
+  SHOP-MANAGEMENT + ADD/EDIT PRODUCT cluster, the FEATURE REQUESTS submit
+  flow, the modal overlay-click/Escape listeners, and the `WINDOW EXPORTS`
+  block. Residual #3 (the `loadData()` reconcile race) is an app-robustness
+  bug, untouched by design — the reconcile logic moved byte-for-byte into
+  `appState.js`.
 
 - **`showPage()` + mobile-menu wrappers → `src/components/nav.js` —
   Phase 1 residual #1** (2026-08-30, commit `52250da`). Post-plan cleanup,
