@@ -29,9 +29,12 @@ jobs:
           node-version: '22'
           cache: npm
 
-      # ubuntu-latest ships a JDK; the emulators need Java 11+.
-      - name: Check Java
-        run: java -version
+      # firebase-tools 15 requires JDK 21+ for the emulators; the
+      # ubuntu-latest default is older.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
 
       - run: npm ci
 

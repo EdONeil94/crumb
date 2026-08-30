@@ -77,7 +77,7 @@ npm run test:e2e:ui      # interactive UI mode
 npm run check:dead-refs  # static: dead handler refs, bare-variable scope leaks
 ```
 
-`npm run test:e2e` needs **Java 11+** (for the emulators) and network (for
+`npm run test:e2e` needs **Java 21+** (firebase-tools 15's emulators) and network (for
 Playwright's browser + a couple of Google-Places-backed specs), but **no
 credentials and no production access**. `playwright.config.js` starts the
 Auth/Firestore/Storage emulators (`firebase.json`) and a Vite server on
