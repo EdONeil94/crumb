@@ -20,16 +20,19 @@ All 32 steps landed (Phase 7's last five: `src/pages/bakeries.js` (step 26,
 `src/components/preordersSheet.js` (step 31, `913d1d2`);
 `src/pages/settings.js` (step 32, `69704e0`) — the final step).
 `src/legacy-app.js` went from 9,412 lines / 296 functions at the start of
-the plan to ~1,574 lines (bootstrap + `showPage()`/its 2 mobile-menu
-dependents + a handful of still-blocked functions).
+the plan to ~1,556 lines (bootstrap + a handful of still-blocked
+functions).
 
-**Three documented residuals remain — all deliberately deferred decisions,
-NOT plan steps, to be picked up (or not) as separate follow-ups:**
-1. **`showPage()` / `navigateFromMobileMenu()` /
-   `openMyProfileFromMobileMenu()` → `nav.js`** — the Phase 1 step 5
-   deferral. Now that step 32 landed, every one of `showPage()`'s
-   cross-page calls resolves as a real import, so this is finally
-   *possible*. See the ⚠️ callout under the Extraction order list below.
+**Post-plan residual cleanups (NOT plan steps — separate follow-ups):**
+1. ✅ **RESOLVED 2026-08-30 (commit `52250da`).** `showPage()` /
+   `navigateFromMobileMenu()` / `openMyProfileFromMobileMenu()` →
+   `src/components/nav.js` — the Phase 1 step 5 deferral. `nav.js` imports
+   the 9 page renderers + `openProfileModal` one-way; the lone cycle edge
+   (`settings.js` ↔ `nav.js`) is broken via `getAction()` on
+   `settings.js`'s side. `index.html`'s last raw `showPage()` site
+   (profile modal ✏️, `:824`) converted to `data-onclick`. `showPage`
+   stays in `WINDOW EXPORTS` (`window.showPage`, for
+   `tests/people-filters.spec.js` only). See `docs/extraction-log.md`.
 2. **`loadData()` / `buildBakeryIndex()` / `loadProfiles()` →
    `appState.js`** (and, tied to it, **`saveEdit()` / `deleteReview()` →
    `editReviewModal.js`**) — the Phase 0 stage 3b deferrals, unblocked
@@ -384,32 +387,24 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   `loadData()` decision, though still two separate calls. NOT done as part
   of step 29.
 
-  **⚠️ Deferred follow-up — NOW UNBLOCKED (step 32 landed 2026-08-28),
-  set up in Phase 1 step 5. This is residual #1 in the status block at the
-  top of this section.**
+  **✅ RESOLVED 2026-08-30 (commit `52250da`) — residual #1, set up in
+  Phase 1 step 5.**
   `showPage()`/`navigateFromMobileMenu()`/`openMyProfileFromMobileMenu()`
-  stayed in `legacy-app.js` during step 5 because `showPage()` alone
-  directly calls ~12 functions spread across all 9 pages (`leaderboard.js`,
-  `feed.js`, `bakeries.js`, `explore.js`, `preorders.js`, `shop.js`,
-  `home.js`, `people.js`, `settings.js`) and `openMyProfileFromMobileMenu()`
-  calls `openProfileModal()` (`profileModal.js`, step 22). It needed *every*
-  page extracted before it could move cleanly — **as of step 32 that's
-  true**: every one of `showPage()`'s branch targets now exists as a real
-  import into `legacy-app.js`.
-  **The pending decision — pursue now, or leave as a documented residual:**
-  move `showPage()` + its 2 mobile-menu dependents into `src/components/nav.js`
-  (where `updateNav`/`toggleMobileMenu`/etc. already live). Mechanically it
-  would be: `nav.js` imports the ~12 page renderers/initters + `openProfileModal`
-  the normal way, `legacy-app.js` imports `showPage`/`navigateFromMobileMenu`/
-  `openMyProfileFromMobileMenu` back for its own remaining plain-JS call
-  sites (`initFirebaseApp`, the `#page-*` routing) and keeps `showPage` in
-  `WINDOW EXPORTS` + `registerActions` (its raw `onclick=` at
-  `index.html:824` and its many `data-onclick` nav buttons). No new cycle —
-  `nav.js` is already a leaf every page module is willing to import from.
-  This is a **post-plan cleanup**, not one of the 32 steps; the plan
-  delivered "possible", not "done". Run it under the same tightened
-  workflow (targeted spec covering nav across all 9 pages + the mobile
-  menu, one closing E2E) if pursued.
+  moved into `src/components/nav.js`. `nav.js` imports the 9 page
+  renderers/initters + `openProfileModal` one-way and registers all three
+  (+ `updateNav`) as delegated actions. The lone cycle edge —
+  `showPage()`'s `settings` branch → `openSettingsPage()` while
+  `settings.js` imported `updateNav` from `nav.js` — was broken on
+  `settings.js`'s side: it now reaches both `updateNav` and `showPage` via
+  `getAction()` and no longer imports `nav.js`. `index.html:824`'s raw
+  `onclick="closeProfileModal(); showPage('settings')"` (the profile
+  modal's ✏️) → `data-onclick="closeProfileModal,showPage" data-args='["settings"]'`;
+  every other nav / mobile-menu site was already `data-onclick`. **Raw
+  handler sites in `index.html`: 11 → 10.** `showPage` stays in
+  `legacy-app.js`'s `WINDOW EXPORTS` (`window.showPage`, used only by
+  `tests/people-filters.spec.js` to bypass the signed-out nav-button
+  visibility gate); `legacy-app.js` imports it back from `nav.js` for that.
+  `npx madge --circular src/`: clean. See `docs/extraction-log.md`.
 
 **Coverage verified, not assumed, for the two originally-"unclear" items**:
 grepped `tests/` for every DOM id/function name tied to `#page-preorders`
@@ -589,20 +584,18 @@ that had been blocking its live-network test:
 - `src/legacy-app.js` — 0 raw handler sites left (every remaining
   `onclick=`/`onchange=`/`oninput=` match is inside a comment, verified
   line-by-line).
-- `index.html` — 11 raw handler sites left, all in clusters that were never
-  in scope for this migration: top-level nav's "+ Add"/"Rate a Bake!"
-  triggers (`:73`, `:138`), FEED TABS (`:262`–`:263`), RATING's own
-  overall-rating slider (`:420`), SETTINGS (`:877`, `:881`, `:936`,
-  confirmed by DOM to be inside `#page-settings`), and the admin-only
-  Manage Bakery assignment modal (`:988`, `:1009`, confirmed by DOM to be
-  the modal alongside `closeManageBakeryModal`). One of the 11
-  (`:824`, the user-profile modal's ✏️ edit-profile button — its handler is
-  just `closeProfileModal(); showPage('settings');`) wasn't spelled out
-  verbatim in this list before; it's bucketed under SETTINGS here since its
-  only job is entering that page, the same way the nav's own "+ Add"
-  trigger is bucketed separately from the Add modal it opens — not a gap
-  introduced by this migration, just a site worth naming explicitly rather
-  than leaving implicit.
+- `index.html` — **10 raw handler sites left** (was 11 — the profile
+  modal's ✏️ edit-profile button at `:824`,
+  `onclick="closeProfileModal(); showPage('settings');"`, was converted to
+  `data-onclick` as part of Phase 1 residual #1, 2026-08-30, since
+  `showPage` had to leave `legacy-app.js` for `nav.js`). The remaining 10
+  are all in clusters that were never in scope for this migration:
+  top-level nav's "+ Add"/"Rate a Bake!" triggers (`:73`, `:138`), FEED
+  TABS (`:262`–`:263`), RATING's own overall-rating slider (`:420`),
+  SETTINGS (`:877`, `:881`, `:936`, confirmed by DOM to be inside
+  `#page-settings`), and the admin-only Manage Bakery assignment modal
+  (`:988`, `:1009`, confirmed by DOM to be the modal alongside
+  `closeManageBakeryModal`).
 
 **Not the same milestone as README.md's "Phase 1."** This migration —
 converting inline handlers to the delegated system — is complete, but
@@ -631,19 +624,19 @@ system in `src/events/` (see `src/events/delegate.js` and
 
 **Status as of 2026-08-24: migration complete** — every cluster that was
 ever in scope, including the last one (**BAKERY SEARCH**), is now fully
-delegated. 281 of 292 total handler sites (raw + delegated, across both
-files, comments excluded) are delegated; the 11 remaining raw sites are all
-in `index.html` and all belong to clusters that were never in scope for this
-migration (top-level nav's "+ Add"/"Rate a Bake!" triggers, FEED TABS,
-RATING's own overall-rating slider, SETTINGS, and the admin-only Manage
-Bakery assignment modal). `src/legacy-app.js` itself is now 100% delegated —
-0 raw sites left.
+delegated. The remaining raw sites are all in `index.html` and all belong
+to clusters that were never in scope for this migration (top-level nav's
+"+ Add"/"Rate a Bake!" triggers, FEED TABS, RATING's own overall-rating
+slider, SETTINGS, and the admin-only Manage Bakery assignment modal).
+`src/legacy-app.js` itself is 100% delegated — 0 raw sites left. (The
+count dropped from 11 to 10 on 2026-08-30 when the profile modal's ✏️
+button, `index.html:824`, was delegated as part of Phase 1 residual #1.)
 
 | | raw (`onclick=`/`onchange=`/`oninput=`) | delegated (`data-on*=`) |
 |---|---|---|
-| `index.html` | 11 | 112 |
+| `index.html` | 10 | 113 |
 | `src/legacy-app.js` | 0 | 169 |
-| **total** | **11** | **281** |
+| **total** | **10** | **282** |
 
 Converted clusters (fully delegated, 0 raw handlers left): **FOLLOWS**,
 **FILTER HELPERS**, Pre-order discovery page + My Pre-orders burger-menu

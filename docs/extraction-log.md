@@ -7,6 +7,98 @@ standing rules). This file is the per-step history only: commit hashes,
 what moved, what was deferred and why, and every lesson found along the
 way. Most recent first. Add each new completed step's entry at the top.
 
+- **`showPage()` + mobile-menu wrappers → `src/components/nav.js` —
+  Phase 1 residual #1** (2026-08-30, commit `52250da`). Post-plan cleanup,
+  not one of the 32 steps — the plan delivered "possible", this delivers
+  "done". `showPage()` / `navigateFromMobileMenu()` /
+  `openMyProfileFromMobileMenu()` were the Phase 1 step 5 deferral:
+  `showPage()` alone fans out to ~12 renderers/initters across all 9 pages,
+  so it could not move until every page had a real importable home (step
+  32, 2026-08-28).
+  **What moved.** All three functions, verbatim, into `nav.js` alongside
+  `updateNav`/`toggleMobileMenu`/etc. `nav.js` now imports the 9 page
+  renderers/initters (`populateLbLocationFilter`/`renderBakeryLeaderboard`/
+  `renderLeaderboard` + `lbCurrentMode`/`lbCurrentTab` from `leaderboard.js`;
+  `renderFeed`; `setBakeryViewMode`/`renderBakeries`; `initExplorePage`;
+  `initPreorderPage`; `renderShopPage`; `populateRankingLocationFilter`/
+  `renderRankings`/`renderPeople` + `peopleViewMode`; `openSettingsPage`)
+  plus `openProfileModal` — all one-way. All three register as delegated
+  actions from `nav.js` now, plus `updateNav` (needed for the cycle break
+  below and for residual #2).
+  **The one cycle edge, broken on `settings.js`'s side.** `showPage()`'s
+  `settings` branch calls `openSettingsPage()` (`settings.js`), and
+  `settings.js` previously imported `updateNav` from `nav.js` — a direct
+  `nav.js` → `settings.js` → `nav.js` cycle. Resolved by switching
+  `settings.js` to `getAction('updateNav')()` /
+  `getAction('showPage')('home')` (the latter was already that shape from
+  step 32) and dropping its `nav.js` import entirely. `nav.js` stays the
+  leaf every page module may import from. `npx madge --circular src/`:
+  clean before and after (the repo has had zero circular deps throughout
+  the plan — preserved deliberately, `getAction()` over a back-import,
+  standing lesson 5).
+  **Delegation.** Grep confirmed `index.html`'s nav buttons and mobile-menu
+  items were *already* `data-onclick="showPage"` / `"navigateFromMobileMenu"`
+  / `"openMyProfileFromMobileMenu"` (delegated in an earlier session) —
+  they resolve via the global registry regardless of which module calls
+  `registerActions()`, so no markup change there. The **one** genuine raw
+  site was the profile modal's ✏️ edit button
+  (`index.html:824`, `onclick="closeProfileModal(); showPage('settings');"`)
+  — converted to
+  `data-onclick="closeProfileModal,showPage" data-args='["settings"]'`,
+  the exact "cleanup, then one parameterized action" shape `nav.js:131`'s
+  own avatar-dropdown Settings row already uses. **Raw handler sites in
+  `index.html`: 11 → 10** (the milestone note's count; this site was
+  bucketed under SETTINGS there). `src/legacy-app.js` remains at 0 raw
+  sites.
+  **`WINDOW EXPORTS`.** `showPage` **stays** — `tests/people-filters.spec.js`
+  calls `window.showPage('people')` to bypass the signed-out nav-button
+  visibility gate (`updateNav()` hides the People button when logged out).
+  Same precedent as `selectManualBakery` (specs call it directly) and
+  `switchFeedTab` (raw markup). `legacy-app.js` imports `showPage` back
+  from `nav.js` solely for that entry. `navigateFromMobileMenu`/
+  `openMyProfileFromMobileMenu` were never in `WINDOW EXPORTS` (delegated),
+  and leave `legacy-app.js`'s `registerActions()` calls.
+  **Standing lesson 4 — dead imports.** Trimmed from `legacy-app.js`: 7
+  stale `nav.js` exports (`toggleMobileMenu`/`closeMobileMenu`/
+  `toggleUserMenu`/`closeAvatarDropdown`/`signOutFromAvatarMenu`/
+  `closeOnClickOutside`/`signOutFromMobileMenu` — dead since step 5, all
+  reached only through the registry; `closeMobileMenu` was the one this
+  change newly orphaned, its two callers having moved); the 12
+  page-renderer imports only `showPage()` used
+  (`renderShopPage`/`renderFeed`/`renderBakeries`/`setBakeryViewMode`/
+  `initExplorePage`/`initPreorderPage`/`populateLbLocationFilter`/
+  `lbCurrentMode`/`renderBakeryLeaderboard`/`populateRankingLocationFilter`/
+  `renderRankings`/`peopleViewMode`); `setPeopleView` and `productCardHTML`
+  (dead independently of this change); `openProfileModal` (last caller was
+  `openMyProfileFromMobileMenu`, now importing it in `nav.js`). Kept:
+  `updateNav` (auth listener + `loadProfiles()`), `switchFeedTab`/
+  `handleSettingsPhoto`/`saveSettingsProfile`/`signOutFromSettings` (WINDOW
+  EXPORTS), `lbCurrentTab`/`renderLeaderboard`/`renderPeople`/`renderRecentGrid`/
+  `updateStats`/`allProducts`/`loadProducts`/`exploreCache` (real callers
+  remain — `saveReview`/`saveEdit`/`deleteReview`/`buildBakeryIndex`/
+  `refreshFollowButtons`/shop-management).
+  **Verification.** `check:dead-refs` clean, `build` clean, `madge
+  --circular` clean. Throwaway debug spec (deleted before commit) drove all
+  8 desktop nav buttons + the avatar-dropdown Settings path + the ✏️ button
+  + mobile-menu navigate + `openMyProfileFromMobileMenu`, zero console/page
+  errors. Targeted: `people-filters` / `bakery-profile-management` /
+  `admin-panel` (all exercise `showPage` — the first via `window.showPage`,
+  the other two via the dropdown path) — 13 passed, 5 skipped. Two closing
+  full `test:e2e` runs (elevated bar — highest fan-in change in the whole
+  plan): run 1 = 58 passed / 12 skipped / **1 failed**
+  (`people-filters.spec.js:258`, the documented mutable-follow-graph flake
+  — timed out waiting for `.ranking-card, .member-card` deep in the
+  sequential run; green in isolation at 3.5s *and* green in the earlier
+  targeted run; change is orthogonal to ranking/member-card rendering,
+  standing lesson 8); run 2 = **57 passed / 14 skipped / 0 failed**, flake
+  did not recur. A final inert dead-import trim (`updateNav, showPage` only)
+  landed after run 2 — verified by grep (zero call sites) + `build` +
+  `check:dead-refs` + `madge`, not re-gated (standing lesson 7's "no second
+  to-be-sure run").
+  **Residual #1 is resolved.** Two residuals remain in `legacy-app.js`
+  going into residual #2: `loadData()`/`buildBakeryIndex()`/`loadProfiles()`
+  and the `loadData()` reconcile race.
+
 - **`src/pages/settings.js` — step 32** (2026-08-28, commit `69704e0`).
   **The final step of the 32-step carving plan.** `#page-settings`:
   `settingsPhotoFile` (compression buffer, module-private — not exported),
