@@ -2,24 +2,25 @@
 // The #page-settings routed view (pages/components carving, Phase 7
 // step 32 — the LAST step of the 32-step plan; see CLAUDE.md):
 // openSettingsPage (fills the profile form + shows/hides the business and
-// admin sub-cards), handleSettingsPhoto, saveSettingsProfile,
-// signOutFromSettings, and the settingsPhotoFile compression buffer.
+// admin sub-cards), handleSettingsPhoto, saveSettingsProfile, and the
+// settingsPhotoFile compression buffer. (signOutFromSettings + the
+// Settings "Danger zone" card that called it were removed 2026-08-30 —
+// sign-out stays available via the nav avatar dropdown and the mobile
+// menu, both in nav.js.)
 //
 // This cluster was NEVER in scope for the handler-delegation migration —
-// index.html's #page-settings still has three RAW inline handlers
-// (onchange="handleSettingsPhoto(this)", onclick="saveSettingsProfile()",
-// onclick="signOutFromSettings()"). Raw handlers can only resolve
-// window[name], so those three functions stay exported into WINDOW EXPORTS
-// from legacy-app.js (re-imported from here) — same treatment as
-// switchFeedTab (step 13). openSettingsPage has no raw site of its own
-// (reached only via showPage('settings')'s plain-JS call), so it's an
-// ordinary export imported back for showPage.
+// index.html's #page-settings still has two RAW inline handlers
+// (onchange="handleSettingsPhoto(this)", onclick="saveSettingsProfile()").
+// Raw handlers can only resolve window[name], so those two functions stay
+// exported into WINDOW EXPORTS from legacy-app.js (re-imported from here)
+// — same treatment as switchFeedTab (step 13). openSettingsPage has no raw
+// site of its own (reached only via showPage('settings')'s plain-JS call),
+// so it's an ordinary export imported back for showPage.
 //
-// signOutFromSettings calls showPage('home'), and saveSettingsProfile calls
-// updateNav() — both now live in nav.js (Phase 1 residual #1, resolved
-// 2026-08-30). This module reaches them via getAction('showPage')() /
+// saveSettingsProfile calls updateNav() — now in nav.js (Phase 1 residual
+// #1, resolved 2026-08-30). This module reaches it via
 // getAction('updateNav')() rather than importing nav.js directly: nav.js
-// itself now imports openSettingsPage from here (for showPage()'s settings
+// itself imports openSettingsPage from here (for showPage()'s settings
 // branch), so a direct import back would form a cycle. Same registry-lookup
 // pattern used for loadData / buildBakeryIndex / renderPreorderPage /
 // loadMyPreorders. showAdminTab (adminPanel.js) and renderBusinessSection
@@ -140,10 +141,3 @@ export async function saveSettingsProfile() {
   finally { if (btn) { btn.disabled = false; btn.textContent = 'Save profile'; } }
 }
 
-export function signOutFromSettings() {
-  if (confirm('Sign out of Crumbz?')) {
-    fb.signOut(fb.auth);
-    getAction('showPage')('home');
-    showToast('Signed out');
-  }
-}
