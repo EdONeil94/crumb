@@ -391,7 +391,11 @@ near-zero entanglement, so it's Phase 1, not Phase 7).
   `renderBusinessSection`, `showAdminTab`, `SUPER_ADMIN_UID`,
   `currentUserRole`). Runtime-verified window-reachability + full flow in a
   debug spec; two closing E2E runs. See its entry in
-  `docs/extraction-log.md`.
+  `docs/extraction-log.md`. (`signOutFromSettings` was later removed
+  entirely — 2026-08-30 — along with the Settings "Danger zone" card that
+  was its only call site; sign-out stays in nav.js's avatar dropdown +
+  mobile menu. Settings' raw-handler set is now just
+  `handleSettingsPhoto`/`saveSettingsProfile`.)
 
   **✅ RESOLVED 2026-08-30 (commit `2c7ef8c`) — residual #2, set up in
   Phase 0 stage 3b.** `loadData()`/`loadProfiles()`/`buildBakeryIndex()`
@@ -620,18 +624,19 @@ that had been blocking its live-network test:
 - `src/legacy-app.js` — 0 raw handler sites left (every remaining
   `onclick=`/`onchange=`/`oninput=` match is inside a comment, verified
   line-by-line).
-- `index.html` — **10 raw handler sites left** (was 11 — the profile
-  modal's ✏️ edit-profile button at `:824`,
-  `onclick="closeProfileModal(); showPage('settings');"`, was converted to
-  `data-onclick` as part of Phase 1 residual #1, 2026-08-30, since
-  `showPage` had to leave `legacy-app.js` for `nav.js`). The remaining 10
-  are all in clusters that were never in scope for this migration:
-  top-level nav's "+ Add"/"Rate a Bake!" triggers (`:73`, `:138`), FEED
-  TABS (`:262`–`:263`), RATING's own overall-rating slider (`:420`),
-  SETTINGS (`:877`, `:881`, `:936`, confirmed by DOM to be inside
-  `#page-settings`), and the admin-only Manage Bakery assignment modal
-  (`:988`, `:1009`, confirmed by DOM to be the modal alongside
-  `closeManageBakeryModal`).
+- `index.html` — **9 raw handler sites left** (was 11: the profile modal's
+  ✏️ edit-profile button at `:824` was delegated in Phase 1 residual #1,
+  2026-08-30, when `showPage` moved to `nav.js`; the Settings "Danger zone"
+  → Sign out button (`onclick="signOutFromSettings()"`) was removed
+  entirely 2026-08-30 with the Danger-zone card — sign-out stays in the nav
+  avatar dropdown + mobile menu). The remaining 9 are all in clusters that
+  were never in scope for this migration: top-level nav's "+ Add"/"Rate a
+  Bake!" triggers (`:73`, `:138`), FEED TABS (`:262`–`:263`), RATING's own
+  overall-rating slider (`:420`), SETTINGS (`:877`, `:881`, confirmed by
+  DOM to be inside `#page-settings`), and the admin-only Manage Bakery
+  assignment modal (`:965`, `:986`, confirmed by DOM to be the modal
+  alongside `closeManageBakeryModal`). Line numbers drift as unrelated
+  sections are removed — re-grep rather than trusting them.
 
 **Not the same milestone as README.md's "Phase 1."** This migration —
 converting inline handlers to the delegated system — is complete, but
@@ -665,14 +670,21 @@ to clusters that were never in scope for this migration (top-level nav's
 "+ Add"/"Rate a Bake!" triggers, FEED TABS, RATING's own overall-rating
 slider, SETTINGS, and the admin-only Manage Bakery assignment modal).
 `src/legacy-app.js` itself is 100% delegated — 0 raw sites left. (The
-count dropped from 11 to 10 on 2026-08-30 when the profile modal's ✏️
-button, `index.html:824`, was delegated as part of Phase 1 residual #1.)
+`index.html` count went 11 → 10 on 2026-08-30 when the profile modal's ✏️
+button, `index.html:824`, was delegated (Phase 1 residual #1), then 10 → 9
+the same day when the Settings "Danger zone" → Sign out button was removed
+outright with its card.)
 
 | | raw (`onclick=`/`onchange=`/`oninput=`) | delegated (`data-on*=`) |
 |---|---|---|
-| `index.html` | 10 | 113 |
-| `src/legacy-app.js` | 0 | 169 |
-| **total** | **10** | **282** |
+| `index.html` | 9 | ~112 |
+| `src/legacy-app.js` | 0 | ~169 |
+| **total** | **9** | **~281** |
+
+(The delegated counts drift slightly as unrelated feature sections are
+removed — e.g. the Category migration data-tool, 2026-08-30 — and aren't
+re-tallied each time; re-grep `data-on` if an exact number matters. The
+raw count is kept exact.)
 
 Converted clusters (fully delegated, 0 raw handlers left): **FOLLOWS**,
 **FILTER HELPERS**, Pre-order discovery page + My Pre-orders burger-menu
@@ -979,9 +991,11 @@ Remaining clusters: **none.** BAKERY SEARCH was the last one, converted
 2026-08-24. `src/legacy-app.js` now has 0 raw handler sites left (run
 `npm run check:dead-refs` to re-verify, or a quick
 `grep -noE '\son(click|change|input)=' src/legacy-app.js | grep -v data-on`,
-excluding comment lines). The 11 raw sites still in `index.html` all belong
+excluding comment lines). The 9 raw sites still in `index.html` all belong
 to clusters that were never in scope for this migration (see the status
-summary at the top of this section).
+summary at the top of this section) — down from 11 as two individual sites
+were removed (not converted) on 2026-08-30: the profile-modal ✏️ button
+and the Settings "Danger zone" → Sign out button.
 
 ### Conversion workflow (every cluster — this is the definition of done)
 

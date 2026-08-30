@@ -38,7 +38,7 @@ import {
 } from './pages/leaderboard.js';
 import { loadMyPreorders } from './components/preordersSheet.js';
 import {
-  handleSettingsPhoto, saveSettingsProfile, signOutFromSettings,
+  handleSettingsPhoto, saveSettingsProfile,
 } from './pages/settings.js';
 import { renderPeople } from './pages/people.js';
 import {
@@ -467,14 +467,14 @@ registerActions({ saveReview });
 
 // ─── SETTINGS PAGE ────────────────────────────────────────────────────────────
 // settingsPhotoFile + openSettingsPage/handleSettingsPhoto/
-// saveSettingsProfile/signOutFromSettings moved to src/pages/settings.js
-// (2026-08-28, Phase 7 step 32 — the last step of the 32-step plan).
-// All four are imported back above: openSettingsPage for showPage()'s
-// plain call, and handleSettingsPhoto/saveSettingsProfile/
-// signOutFromSettings additionally kept in WINDOW EXPORTS below because
-// #page-settings still has three RAW inline handlers in index.html
-// (never in scope for the handler-delegation migration). signOutFromSettings
-// reaches showPage() (staying here) via getAction('showPage')().
+// saveSettingsProfile moved to src/pages/settings.js (2026-08-28, Phase 7
+// step 32 — the last step of the 32-step plan). All three are imported
+// back above: openSettingsPage for showPage()'s plain call, and
+// handleSettingsPhoto/saveSettingsProfile additionally kept in WINDOW
+// EXPORTS below because #page-settings still has two RAW inline handlers in
+// index.html (never in scope for the handler-delegation migration).
+// (signOutFromSettings + the "Danger zone" card were removed 2026-08-30 —
+// sign-out stays available via nav.js's avatar dropdown + mobile menu.)
 
 // renderBusinessSection/editingBakeryName/bakeryEditPhotoFile/
 // openBakeryEditModal/handleBakeryEditPhoto/saveBakeryPage/
@@ -1222,10 +1222,9 @@ buildCategoryChips();
 Object.assign(window, {
   closeProfileModal,
   handleBakeryPhoto,
-  // handleSettingsPhoto/saveSettingsProfile/signOutFromSettings are in
-  // src/pages/settings.js (Phase 7 step 32) but MUST stay here — index.html's
-  // #page-settings still has raw onchange="handleSettingsPhoto(this)" /
-  // onclick="saveSettingsProfile()" / onclick="signOutFromSettings()"
+  // handleSettingsPhoto/saveSettingsProfile are in src/pages/settings.js
+  // (Phase 7 step 32) but MUST stay here — index.html's #page-settings still
+  // has raw onchange="handleSettingsPhoto(this)" / onclick="saveSettingsProfile()"
   // handlers (never in scope for the handler-delegation migration), and a
   // raw handler can only resolve window[name]. Same as switchFeedTab below.
   handleSettingsPhoto,
@@ -1238,7 +1237,6 @@ Object.assign(window, {
   selectManualBakery,
   showKnownBakeries,
   showPage,
-  signOutFromSettings,
   // Now in src/pages/feed.js (Phase 3 step 13) — kept here (unlike every
   // other moved function) since index.html's FEED TABS buttons still use a
   // raw, undelegated onclick="switchFeedTab(...)"; that cluster was out of
