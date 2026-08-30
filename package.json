@@ -1,0 +1,21 @@
+{
+  "name": "crumbz-app",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "check:dead-refs": "node scripts/check-dead-refs.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "vite": "^8.2.0"
+  },
+  "dependencies": {
+    "firebase": "^12.18.0"
+  }
+}
