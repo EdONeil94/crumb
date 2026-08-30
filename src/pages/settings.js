@@ -15,9 +15,12 @@
 // (reached only via showPage('settings')'s plain-JS call), so it's an
 // ordinary export imported back for showPage.
 //
-// signOutFromSettings calls showPage('home'); showPage() stays in
-// legacy-app.js (its own Phase 1 deferral, a post-plan decision), so this
-// reaches it via getAction('showPage')() — the same registry-lookup
+// signOutFromSettings calls showPage('home'), and saveSettingsProfile calls
+// updateNav() — both now live in nav.js (Phase 1 residual #1, resolved
+// 2026-08-30). This module reaches them via getAction('showPage')() /
+// getAction('updateNav')() rather than importing nav.js directly: nav.js
+// itself now imports openSettingsPage from here (for showPage()'s settings
+// branch), so a direct import back would form a cycle. Same registry-lookup
 // pattern used for loadData / buildBakeryIndex / renderPreorderPage /
 // loadMyPreorders. showAdminTab (adminPanel.js) and renderBusinessSection
 // (businessBakeryManagement.js) import one-way — neither imports back here.
@@ -33,7 +36,6 @@ import { CATEGORY_TREE } from '../data/categories.js';
 import { renderBusinessSection } from '../components/businessBakeryManagement.js';
 import { showAdminTab } from '../components/adminPanel.js';
 import { compressImage } from '../components/addReviewModal.js';
-import { updateNav } from '../components/nav.js';
 import { showToast } from '../utils/dom.js';
 
 let settingsPhotoFile = null;
@@ -132,7 +134,7 @@ export async function saveSettingsProfile() {
     };
     await setDoc(doc(db, 'profiles', currentUser.uid), profileData, { merge: true });
     allProfiles[currentUser.uid] = profileData;
-    updateNav();
+    getAction('updateNav')();
     showToast('Profile saved ✓');
   } catch(e) { showToast('Could not save — try again'); console.error(e); }
   finally { if (btn) { btn.disabled = false; btn.textContent = 'Save profile'; } }

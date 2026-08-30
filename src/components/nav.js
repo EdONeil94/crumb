@@ -1,26 +1,39 @@
 // ─── NAV ─────────────────────────────────────────────────────────────────────
-// The desktop avatar dropdown, mobile hamburger menu, and top-nav sign-in
-// state (pages/components carving, Phase 1 step 5 — see CLAUDE.md).
+// The desktop avatar dropdown, mobile hamburger menu, top-nav sign-in
+// state, and the page router (pages/components carving, Phase 1 step 5 +
+// residual #1 — see CLAUDE.md).
 //
-// showPage()/navigateFromMobileMenu()/openMyProfileFromMobileMenu() stay in
-// legacy-app.js for now, deliberately deferred — see CLAUDE.md's own note
-// on this step. showPage() alone directly calls 12 functions spread across
-// 8 pages that haven't been extracted yet (populateLbLocationFilter,
-// renderBakeryLeaderboard, renderLeaderboard, renderFeed, renderBakeries,
-// initExplorePage, initPreorderPage, renderShopPage,
-// populateRankingLocationFilter, renderRankings, renderPeople,
-// openSettingsPage), and openMyProfileFromMobileMenu() calls
-// openProfileModal() (now src/components/profileModal.js, Phase 5 step 22,
-// but showPage()'s other 12 dependencies are still what actually blocks
-// this move — see CLAUDE.md's Phase 7 step 32 callout). Moving them now
-// would mean this module importing back from the file that imports it — the
-// same shape of problem as 3b's loadData()/buildBakeryIndex(), just at a
-// larger scale here.
+// showPage()/navigateFromMobileMenu()/openMyProfileFromMobileMenu() moved
+// here 2026-08-30 (Phase 1 residual #1), once every one of showPage()'s
+// ~12 cross-page targets finally had a real importable home (the 32-step
+// carving plan completed at step 32). showPage() imports the 9 page
+// renderers/initters + openProfileModal the normal one-way way. The one
+// edge that would have formed a cycle — settings.js needing showPage() /
+// updateNav() — is broken on settings.js's side: it reaches both via
+// getAction() (see settings.js's own header comment). legacy-app.js keeps
+// importing showPage back purely for its WINDOW EXPORTS entry
+// (tests/people-filters.spec.js calls window.showPage('people') directly
+// to bypass the signed-out nav-button visibility gate — same precedent as
+// selectManualBakery / switchFeedTab).
 
 import { registerActions } from '../events/actions.js';
 import { dataArgs } from '../events/delegate.js';
 import { currentUser, fb, allProfiles, isAdmin, isBusiness } from '../state/appState.js';
 import { showToast } from '../utils/dom.js';
+import { openProfileModal } from './profileModal.js';
+import {
+  lbCurrentTab, lbCurrentMode, populateLbLocationFilter,
+  renderBakeryLeaderboard, renderLeaderboard,
+} from '../pages/leaderboard.js';
+import { renderFeed } from '../pages/feed.js';
+import { setBakeryViewMode, renderBakeries } from '../pages/bakeries.js';
+import { initExplorePage } from '../pages/explore.js';
+import { initPreorderPage } from '../pages/preorders.js';
+import { renderShopPage } from '../pages/shop.js';
+import {
+  peopleViewMode, populateRankingLocationFilter, renderRankings, renderPeople,
+} from '../pages/people.js';
+import { openSettingsPage } from '../pages/settings.js';
 
 export function updateNav() {
   const avatar = document.getElementById('navAvatar');
@@ -177,7 +190,43 @@ export function signOutFromMobileMenu() {
   closeMobileMenu();
 }
 
+// ─── PAGE ROUTER ─────────────────────────────────────────────────────────────
+// The #page-* view switcher, plus the two mobile-menu wrappers that close
+// the menu before navigating (so the destination isn't rendered underneath
+// a still-animating-out menu).
+export function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  if (name === 'leaderboard') {
+    populateLbLocationFilter();
+    if (lbCurrentMode === 'bakeries') renderBakeryLeaderboard(); else renderLeaderboard(lbCurrentTab);
+  }
+  if (name === 'feed') renderFeed();
+  if (name === 'bakeries') { setBakeryViewMode('all'); renderBakeries(); }
+  if (name === 'explore') initExplorePage();
+  if (name === 'preorders') initPreorderPage();
+  if (name === 'shop') renderShopPage();
+  if (name === 'people') {
+    populateRankingLocationFilter();
+    if (peopleViewMode === 'rankings') renderRankings();
+    else renderPeople();
+  }
+  if (name === 'settings') openSettingsPage();
+}
+
+export function navigateFromMobileMenu(page) {
+  closeMobileMenu();
+  setTimeout(() => showPage(page), 50);
+}
+
+export function openMyProfileFromMobileMenu() {
+  closeMobileMenu();
+  setTimeout(() => { if (currentUser) openProfileModal(currentUser.uid); }, 50);
+}
+
 registerActions({
   toggleUserMenu, toggleMobileMenu, closeAvatarDropdown, signOutFromAvatarMenu,
   signOutFromMobileMenu, closeMobileMenu,
+  showPage, navigateFromMobileMenu, openMyProfileFromMobileMenu, updateNav,
 });

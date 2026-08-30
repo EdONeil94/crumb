@@ -18,11 +18,12 @@ import {
   myFollowing, myFollowers, loadFollows, loadBookmarks,
   userSavedItems, loadSavedItems,
 } from './state/appState.js';
-import {
-  updateNav, toggleMobileMenu, closeMobileMenu, toggleUserMenu,
-  closeAvatarDropdown, signOutFromAvatarMenu, closeOnClickOutside,
-  signOutFromMobileMenu,
-} from './components/nav.js';
+// updateNav: initFirebaseApp()'s auth listener + loadProfiles() call it
+// directly. showPage: WINDOW EXPORTS only (window.showPage, used by
+// tests/people-filters.spec.js). The rest of nav.js's exports
+// (toggle/close menu helpers, sign-out wrappers) are reached purely through
+// the delegated-action registry now — no import needed here.
+import { updateNav, showPage } from './components/nav.js';
 import {
   openAuthModal, closeAuthModal, switchAuthTab, signInGoogle, signInEmail,
   signUpEmail, showAuthError, friendlyAuthError,
@@ -32,25 +33,19 @@ import {
 } from './components/editReviewModal.js';
 import { processScannedReservation } from './components/qrCode.js';
 import {
-  allProducts, loadProducts, renderShopPage, productCardHTML,
+  allProducts, loadProducts,
 } from './pages/shop.js';
-import { switchFeedTab, renderFeed } from './pages/feed.js';
-import { setBakeryViewMode, renderBakeries } from './pages/bakeries.js';
+import { switchFeedTab } from './pages/feed.js';
 import { renderRecentGrid, updateStats } from './pages/home.js';
 import {
-  lbCurrentTab, lbCurrentMode, populateLbLocationFilter,
-  renderBakeryLeaderboard, renderLeaderboard,
+  lbCurrentTab, renderLeaderboard,
 } from './pages/leaderboard.js';
-import { exploreCache, initExplorePage } from './pages/explore.js';
-import { initPreorderPage } from './pages/preorders.js';
+import { exploreCache } from './pages/explore.js';
 import { loadMyPreorders } from './components/preordersSheet.js';
 import {
-  openSettingsPage, handleSettingsPhoto, saveSettingsProfile, signOutFromSettings,
+  handleSettingsPhoto, saveSettingsProfile, signOutFromSettings,
 } from './pages/settings.js';
-import {
-  peopleViewMode, setPeopleView,
-  populateRankingLocationFilter, renderRankings, renderPeople,
-} from './pages/people.js';
+import { renderPeople } from './pages/people.js';
 import {
   parseSlotStartTime, renderOrdersTab,
 } from './components/reservations.js';
@@ -64,7 +59,7 @@ import { openDetail, closeDetailModal } from './components/itemDetailModal.js';
 import { closeShareReviewModal } from './components/shareReviewModal.js';
 import { closeBakeryModal } from './components/bakeryModal.js';
 import {
-  openProfileModal, closeProfileModal, switchProfileTab, refreshOpenProfile,
+  closeProfileModal, switchProfileTab, refreshOpenProfile,
 } from './components/profileModal.js';
 import {
   closeManageBakeryModal, handleBakeryPhoto, saveBakeryProfile,
@@ -216,44 +211,15 @@ if (window._crumb) {
 }
 
 // ─── NAVIGATION ───────────────────────────────────────────────────────────────
-function showPage(name) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.getElementById('page-' + name).classList.add('active');
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  if (name === 'leaderboard') {
-    populateLbLocationFilter();
-    if (lbCurrentMode === 'bakeries') renderBakeryLeaderboard(); else renderLeaderboard(lbCurrentTab);
-  }
-  if (name === 'feed') renderFeed();
-  if (name === 'bakeries') { setBakeryViewMode('all'); renderBakeries(); }
-  if (name === 'explore') initExplorePage();
-  if (name === 'preorders') initPreorderPage();
-  if (name === 'shop') renderShopPage();
-  if (name === 'people') {
-    populateRankingLocationFilter();
-    if (peopleViewMode === 'rankings') renderRankings();
-    else renderPeople();
-  }
-  if (name === 'settings') openSettingsPage();
-}
-
 // updateNav/toggleMobileMenu/closeMobileMenu/toggleUserMenu/
 // closeAvatarDropdown/signOutFromAvatarMenu/closeOnClickOutside/
 // signOutFromMobileMenu moved to src/components/nav.js (2026-08-24, Phase 1
-// step 5) — imported above. showPage/navigateFromMobileMenu/
-// openMyProfileFromMobileMenu stay here — see nav.js's own header comment
-// for why.
-
-// Mobile menu items that close the menu before acting, so the destination
-// isn't rendered underneath a still-animating-out menu.
-function navigateFromMobileMenu(page) {
-  closeMobileMenu();
-  setTimeout(() => showPage(page), 50);
-}
-function openMyProfileFromMobileMenu() {
-  closeMobileMenu();
-  setTimeout(() => { if (currentUser) openProfileModal(currentUser.uid); }, 50);
-}
+// step 5). showPage/navigateFromMobileMenu/openMyProfileFromMobileMenu
+// followed 2026-08-30 (Phase 1 residual #1), once step 32 gave every one of
+// showPage()'s ~12 cross-page targets a real importable home — see nav.js's
+// own header comment. showPage is imported back above solely for its WINDOW
+// EXPORTS entry (window.showPage, used by tests/people-filters.spec.js);
+// navigateFromMobileMenu/openMyProfileFromMobileMenu register from nav.js.
 
 // ─── DATA ─────────────────────────────────────────────────────────────────────
 async function loadData() {
@@ -1400,11 +1366,14 @@ registerActions({
   closeFeatureRequestModal,
 });
 
-// showPage still has a real raw call site (index.html's profileEditBtn,
-// SETTINGS cluster) so it stays in WINDOW EXPORTS — see its own note there.
+// showPage/navigateFromMobileMenu/openMyProfileFromMobileMenu +
 // toggleUserMenu/toggleMobileMenu/closeAvatarDropdown/signOutFromAvatarMenu
-// registered from src/components/nav.js now (Phase 1 step 5) instead of here.
-registerActions({ showPage });
+// all register from src/components/nav.js now (Phase 1 step 5 + residual #1)
+// instead of here. index.html's last raw showPage() call site (the profile
+// modal's ✏️ profileEditBtn, onclick="closeProfileModal(); showPage('settings')")
+// was converted to data-onclick="closeProfileModal,showPage" as part of
+// residual #1. showPage stays in WINDOW EXPORTS below only for
+// tests/people-filters.spec.js's window.showPage('people') call.
 
 // openNotifItem registers from src/components/notifications.js now (Phase
 // 6 step 25).
@@ -1419,16 +1388,12 @@ registerActions({ showPage });
 
 // Mobile menu. openFeatureRequestModal is also named directly in a
 // comma-chained data-onclick list (zero-arg, synchronous, no delay) — see
-// delegate.js. closeMobileMenu/signOutFromMobileMenu registered from
-// src/components/nav.js now (Phase 1 step 5), triggerPwaInstall from
+// delegate.js. closeMobileMenu/signOutFromMobileMenu/navigateFromMobileMenu/
+// openMyProfileFromMobileMenu registered from src/components/nav.js now
+// (Phase 1 step 5 + residual #1), triggerPwaInstall from
 // src/app/lifecycle.js now (Phase 1 step 7), openMyPreordersSheet from
-// src/components/preordersSheet.js now (Phase 7 step 31) —
-// navigateFromMobileMenu/openMyProfileFromMobileMenu (staying here, see
-// nav.js's own header comment) still call closeMobileMenu() as a plain
-// imported function, not through the registry.
-registerActions({
-  navigateFromMobileMenu, openMyProfileFromMobileMenu, openFeatureRequestModal,
-});
+// src/components/preordersSheet.js now (Phase 7 step 31).
+registerActions({ openFeatureRequestModal });
 
 // Feature requests — the general submit flow only; toggleFeatureVote/
 // deleteFeatureRequest/updateFeatureStatus register from
