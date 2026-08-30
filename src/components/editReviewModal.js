@@ -1,43 +1,36 @@
-// ─── EDIT REVIEW (partial) ──────────────────────────────────────────────────
+// ─── EDIT REVIEW ────────────────────────────────────────────────────────────
 // The Edit Review modal (pages/components carving, Phase 2 step 9 — see
-// CLAUDE.md). Split, not moved wholesale, per explicit confirmation:
+// CLAUDE.md). Now whole: it was split at step 9 because
 // handleEditPhoto()/saveEdit()/deleteReview() each depended on code not yet
-// extracted at the time (compressImage()/compressToDataURL() — step 18,
-// addReviewModal.js; loadData() — moved to appState.js at Phase 1 residual
-// #2; renderLeaderboard()/lbCurrentTab — step 27, leaderboard.js).
-// As of residual #2 (2026-08-30) saveEdit()/deleteReview() are fully
-// unblocked to move in here — a pending, deliberate follow-up (CLAUDE.md
-// ⚠️ callout #2), NOT done as part of residual #2.
+// extracted (compressImage()/compressToDataURL() — step 18, addReviewModal.js;
+// loadData() — Phase 1 residual #2, appState.js; renderLeaderboard()/
+// lbCurrentTab — step 27, leaderboard.js). handleEditPhoto() moved in
+// 2026-08-25 (once step 18 landed); saveEdit()/deleteReview() followed
+// 2026-08-30 as a post-plan follow-up to residual #2 — its own ⚠️ callout,
+// once loadData() became importable from appState.js was the last blocker.
 //
-// handleEditPhoto() moved in here 2026-08-25, once step 18 landed and
-// compressImage()/compressToDataURL() got a real importable home in
-// addReviewModal.js — the tied deferred-follow-up decision that step's own
-// header comment pointed back to. Verified one-way before moving: this
-// file importing from addReviewModal.js doesn't risk a cycle, since
-// nothing in addReviewModal.js needs anything from editReviewModal.js.
-// saveEdit()/deleteReview() stay deferred — separate trigger (step 29),
-// unaffected by step 18 landing.
+// No cycle: this file is imported ONLY by legacy-app.js (the entry point,
+// which nothing imports), so importing leaderboard.js / appState.js /
+// addReviewModal.js here can't close a loop — verified with
+// `npx madge --circular src/`.
 //
-// editingItemId/editPhotoFile/editPhotoDataURL are read from legacy-app.js
-// (saveEdit/deleteReview, still deferred there) but, now that
-// handleEditPhoto lives here too, never WRITTEN from outside this module
-// any more — setEditPhotoFile()/setEditPhotoDataURL() (setters this file
-// used to export for exactly that) were genuinely dead as of this move and
-// deleted; handleEditPhoto assigns editPhotoFile/editPhotoDataURL directly
-// now, matching openEditModal/clearEditPhoto's own existing style in this
-// same file. Exported as plain live bindings — no setters needed, same as
-// any other appState.js-style state nothing external writes.
+// editingItemId/editPhotoFile/editPhotoDataURL are module-private now — with
+// saveEdit/deleteReview/handleEditPhoto all local, nothing outside this file
+// reads or writes them, so they lost their `export` (they were already only
+// ever WRITTEN in here; the setters this file used to export died with the
+// step-18 handleEditPhoto move).
 
 import { registerActions } from '../events/actions.js';
 import { dataArgs } from '../events/delegate.js';
-import { allItems, currentUser } from '../state/appState.js';
+import { allItems, currentUser, fb, loadData, loadItemRecords } from '../state/appState.js';
 import { CATEGORY_TREE, getTastingDims } from '../data/categories.js';
-import { lockScroll, unlockScroll } from '../utils/dom.js';
+import { lockScroll, unlockScroll, showToast } from '../utils/dom.js';
 import { compressImage, compressToDataURL } from './addReviewModal.js';
+import { renderLeaderboard, lbCurrentTab } from '../pages/leaderboard.js';
 
-export let editingItemId = null;
-export let editPhotoFile = null;
-export let editPhotoDataURL = null;
+let editingItemId = null;
+let editPhotoFile = null;
+let editPhotoDataURL = null;
 
 export function openEditModal(id) {
   const item = allItems.find(i => i.id === id);
@@ -183,4 +176,112 @@ export function clearEditPhoto() {
   if (wrap) wrap.innerHTML = `<div style="background:var(--parchment-dark);border-radius:var(--radius);height:80px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:0.85rem;">No photo</div>`;
 }
 
-registerActions({ openEditModal, updateDimDisplay, updateEditSubCategory, closeEditModal, clearEditPhoto, handleEditPhoto });
+async function saveEdit() {
+  if (!editingItemId || !currentUser) return;
+  const btn = document.getElementById('editSaveBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const { db, storage, doc, updateDoc, ref, uploadBytes, getDownloadURL } = fb;
+    let photoURL = editPhotoDataURL && !editPhotoFile ? editPhotoDataURL : null;
+    if (editPhotoFile) {
+      const storageRef = ref(storage, `items/${currentUser.uid}/${Date.now()}_edit.jpg`);
+      const snap = await uploadBytes(storageRef, editPhotoFile, { contentType: 'image/jpeg' });
+      photoURL = await getDownloadURL(snap.ref);
+    }
+    const item = allItems.find(i => i.id === editingItemId);
+    const newCategory = document.getElementById('editCategory')?.value || item?.category || 'other';
+    const newSubCategory = document.getElementById('editSubCategory')?.value || item?.subCategory || '';
+    const overallRating = parseFloat(document.getElementById('editOverallRating').value);
+    const editSaveDims = getTastingDims(newCategory);
+    const dimData = {};
+    editSaveDims.forEach(d => {
+      const el = document.getElementById('edit_' + d.key);
+      dimData[d.key] = el ? parseFloat(el.value) : 0;
+    });
+    const updates = {
+      name: document.getElementById('editName').value,
+      category: newCategory,
+      subCategory: newSubCategory,
+      price: document.getElementById('editPrice').value ? parseFloat(document.getElementById('editPrice').value) : null,
+      overallRating,
+      communityAvg: overallRating,
+      notes: document.getElementById('editNotes').value,
+      ...dimData,
+      ...(photoURL !== null ? { photoURL } : {})
+    };
+    await updateDoc(doc(db, 'items', editingItemId), updates);
+    closeEditModal();
+    showToast('Review updated ✓');
+    await loadData();
+  } catch(e) {
+    showToast('Could not save — check your connection');
+    console.error(e);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save changes';
+  }
+}
+
+async function deleteReview() {
+  if (!editingItemId || !currentUser) return;
+  const item = allItems.find(i => i.id === editingItemId);
+  if (!item || item.userId !== currentUser.uid) return;
+  if (!confirm(`Delete your review of "${item.name || 'this item'}"? This cannot be undone.`)) return;
+  try {
+    const { db, storage, doc, deleteDoc, updateDoc, ref, deleteObject } = fb;
+    if (item.photoURL && item.photoURL.includes('firebasestorage')) {
+      try { await deleteObject(ref(storage, item.photoURL)); } catch(e) {}
+    }
+
+    const itemRecordId = item.itemRecordId;
+    await deleteDoc(doc(db, 'items', editingItemId));
+
+    // Clean up the shared itemRecord so a deleted review doesn't leave stale
+    // orphaned data lingering on the leaderboard / bakery pages.
+    if (itemRecordId) {
+      const remaining = allItems.filter(i => i.itemRecordId === itemRecordId && i.id !== editingItemId);
+      try {
+        if (!remaining.length) {
+          // That was the only review for this item — remove the record entirely
+          await deleteDoc(doc(db, 'itemRecords', itemRecordId));
+        } else {
+          // Recalculate every aggregate fresh from whatever reviews remain,
+          // rather than trying to subtract the deleted one incrementally
+          const reviewCount = remaining.length;
+          const communityAvg = remaining.reduce((s, r) => s + (r.overallRating || 0), 0) / reviewCount;
+          const withPrice = remaining.filter(r => r.price !== null && r.price !== undefined);
+          const avgPrice = withPrice.length ? withPrice.reduce((s, r) => s + r.price, 0) / withPrice.length : null;
+          const dims = getTastingDims(item.category || 'other');
+          const dimData = {};
+          dims.forEach(d => {
+            const vals = remaining.map(r => r[d.key] || 0);
+            dimData[d.key] = vals.reduce((s, v) => s + v, 0) / vals.length;
+          });
+          await updateDoc(doc(db, 'itemRecords', itemRecordId), {
+            communityAvg: Math.round(communityAvg * 10) / 10,
+            reviewCount,
+            avgPrice: avgPrice !== null ? Math.round(avgPrice * 100) / 100 : null,
+            priceCount: withPrice.length,
+            ...dimData
+          });
+        }
+      } catch(e) { console.warn('Could not clean up itemRecord after delete:', e); }
+    }
+
+    closeEditModal();
+    showToast('Review deleted');
+    await loadData();
+    await loadItemRecords();
+    renderLeaderboard(lbCurrentTab);
+  } catch(e) {
+    showToast('Could not delete — try again');
+    console.error(e);
+  }
+}
+
+// saveEdit/deleteReview's data-onclick sites are the Edit Review modal's
+// static footer buttons in index.html (:966/:969) — registered here now,
+// not from legacy-app.js (moved 2026-08-30, post-plan follow-up to residual #2).
+registerActions({
+  openEditModal, updateDimDisplay, updateEditSubCategory, closeEditModal,
+  clearEditPhoto, handleEditPhoto, saveEdit, deleteReview,
+});

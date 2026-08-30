@@ -27,9 +27,7 @@ import {
   openAuthModal, closeAuthModal, switchAuthTab, signInGoogle, signInEmail,
   signUpEmail, showAuthError, friendlyAuthError,
 } from './components/authModal.js';
-import {
-  closeEditModal, editingItemId, editPhotoFile, editPhotoDataURL,
-} from './components/editReviewModal.js';
+import { closeEditModal } from './components/editReviewModal.js';
 import { processScannedReservation } from './components/qrCode.js';
 import {
   allProducts, loadProducts,
@@ -551,129 +549,15 @@ async function flagReview(itemId, bakeryName) {
 // needed here, since its only callers are markup data-onclick references.
 
 // ─── EDIT REVIEW ──────────────────────────────────────────────────────────────
+// The whole cluster now lives in src/components/editReviewModal.js.
 // openEditModal/updateDimDisplay/updateEditSubCategory/closeEditModal/
-// clearEditPhoto/editingItemId/editPhotoFile/editPhotoDataURL moved to
-// src/components/editReviewModal.js (2026-08-24, Phase 2 step 9) —
-// imported above. handleEditPhoto moved there too (2026-08-25, once Phase
-// 4 step 18 landed and compressImage/compressToDataURL got a real
-// importable home) — resolving that step's own tied deferred-follow-up.
-// saveEdit/deleteReview stay here for now. As of Phase 1 residual #2
-// (2026-08-30) they are FULLY UNBLOCKED — their last blocker, loadData(),
-// is now importable from src/state/appState.js (renderLeaderboard/
-// lbCurrentTab importable since step 27, closeEditModal since step 9). The
-// move into editReviewModal.js is a clean follow-up but a deliberate,
-// separate decision — see CLAUDE.md's ⚠️ callout #2.
-
-async function saveEdit() {
-  if (!editingItemId || !currentUser) return;
-  const btn = document.getElementById('editSaveBtn');
-  btn.disabled = true; btn.textContent = 'Saving…';
-  try {
-    const { db, storage, doc, updateDoc, ref, uploadBytes, getDownloadURL } = fb;
-    let photoURL = editPhotoDataURL && !editPhotoFile ? editPhotoDataURL : null;
-    if (editPhotoFile) {
-      const storageRef = ref(storage, `items/${currentUser.uid}/${Date.now()}_edit.jpg`);
-      const snap = await uploadBytes(storageRef, editPhotoFile, { contentType: 'image/jpeg' });
-      photoURL = await getDownloadURL(snap.ref);
-    }
-    const item = allItems.find(i => i.id === editingItemId);
-    const newCategory = document.getElementById('editCategory')?.value || item?.category || 'other';
-    const newSubCategory = document.getElementById('editSubCategory')?.value || item?.subCategory || '';
-    const overallRating = parseFloat(document.getElementById('editOverallRating').value);
-    const editSaveDims = getTastingDims(newCategory);
-    const dimData = {};
-    editSaveDims.forEach(d => {
-      const el = document.getElementById('edit_' + d.key);
-      dimData[d.key] = el ? parseFloat(el.value) : 0;
-    });
-    const updates = {
-      name: document.getElementById('editName').value,
-      category: newCategory,
-      subCategory: newSubCategory,
-      price: document.getElementById('editPrice').value ? parseFloat(document.getElementById('editPrice').value) : null,
-      overallRating,
-      communityAvg: overallRating,
-      notes: document.getElementById('editNotes').value,
-      ...dimData,
-      ...(photoURL !== null ? { photoURL } : {})
-    };
-    await updateDoc(doc(db, 'items', editingItemId), updates);
-    closeEditModal();
-    showToast('Review updated ✓');
-    await loadData();
-  } catch(e) {
-    showToast('Could not save — check your connection');
-    console.error(e);
-  } finally {
-    btn.disabled = false; btn.textContent = 'Save changes';
-  }
-}
-
-async function deleteReview() {
-  if (!editingItemId || !currentUser) return;
-  const item = allItems.find(i => i.id === editingItemId);
-  if (!item || item.userId !== currentUser.uid) return;
-  if (!confirm(`Delete your review of "${item.name || 'this item'}"? This cannot be undone.`)) return;
-  try {
-    const { db, storage, doc, deleteDoc, updateDoc, ref, deleteObject } = fb;
-    if (item.photoURL && item.photoURL.includes('firebasestorage')) {
-      try { await deleteObject(ref(storage, item.photoURL)); } catch(e) {}
-    }
-
-    const itemRecordId = item.itemRecordId;
-    await deleteDoc(doc(db, 'items', editingItemId));
-
-    // Clean up the shared itemRecord so a deleted review doesn't leave stale
-    // orphaned data lingering on the leaderboard / bakery pages.
-    if (itemRecordId) {
-      const remaining = allItems.filter(i => i.itemRecordId === itemRecordId && i.id !== editingItemId);
-      try {
-        if (!remaining.length) {
-          // That was the only review for this item — remove the record entirely
-          await deleteDoc(doc(db, 'itemRecords', itemRecordId));
-        } else {
-          // Recalculate every aggregate fresh from whatever reviews remain,
-          // rather than trying to subtract the deleted one incrementally
-          const reviewCount = remaining.length;
-          const communityAvg = remaining.reduce((s, r) => s + (r.overallRating || 0), 0) / reviewCount;
-          const withPrice = remaining.filter(r => r.price !== null && r.price !== undefined);
-          const avgPrice = withPrice.length ? withPrice.reduce((s, r) => s + r.price, 0) / withPrice.length : null;
-          const dims = getTastingDims(item.category || 'other');
-          const dimData = {};
-          dims.forEach(d => {
-            const vals = remaining.map(r => r[d.key] || 0);
-            dimData[d.key] = vals.reduce((s, v) => s + v, 0) / vals.length;
-          });
-          await updateDoc(doc(db, 'itemRecords', itemRecordId), {
-            communityAvg: Math.round(communityAvg * 10) / 10,
-            reviewCount,
-            avgPrice: avgPrice !== null ? Math.round(avgPrice * 100) / 100 : null,
-            priceCount: withPrice.length,
-            ...dimData
-          });
-        }
-      } catch(e) { console.warn('Could not clean up itemRecord after delete:', e); }
-    }
-
-    closeEditModal();
-    showToast('Review deleted');
-    await loadData();
-    await loadItemRecords();
-    renderLeaderboard(lbCurrentTab);
-  } catch(e) {
-    showToast('Could not delete — try again');
-    console.error(e);
-  }
-}
-
-// Edit Review modal. saveEdit/deleteReview's data-onclick call sites are in
-// index.html (the modal's static footer buttons).
-// updateDimDisplay/updateEditSubCategory/closeEditModal/clearEditPhoto/
-// handleEditPhoto registered from src/components/editReviewModal.js now
-// (Phase 2 step 9 / Phase 4 step 18); saveEdit/deleteReview stay
-// registered here — now fully unblocked to move into editReviewModal.js
-// (residual #2 made loadData() importable), a pending separate decision.
-registerActions({ saveEdit, deleteReview });
+// clearEditPhoto + editingItemId/editPhotoFile/editPhotoDataURL moved at
+// Phase 2 step 9 (2026-08-24); handleEditPhoto at Phase 4 step 18
+// (2026-08-25); saveEdit/deleteReview 2026-08-30, a post-plan follow-up to
+// residual #2 (which made loadData() — their last blocker — importable
+// from appState.js). All eight register from editReviewModal.js itself.
+// Only closeEditModal is imported back here, for the #editModal
+// overlay-click / keydown-Escape listeners in the UTILS section below.
 
 // ─── CATEGORY MIGRATION ───────────────────────────────────────────────────────
 const CATEGORY_MIGRATION_MAP = {
