@@ -1189,9 +1189,12 @@ afterward — no E2E gate needed for this, same reasoning as Phase 0 step 4
     creating; `cleanup.teardown.js` also sweeps `items`/`itemRecords`;
     `scripts/cleanup-e2e-data.mjs` (`npm run cleanup:e2e`) + a nightly
     GitHub Actions cron are the standalone safety net.
-  - ⏳ **Tier 2 — move the suite onto the Firebase Emulator Suite** so no
-    test writes hit production at all. Scoped in
-    `docs/tier2-emulator-scope.md`, not yet implemented.
+  - ✅ **Tier 2 (2026-08-30) — the suite now runs against the Firebase
+    Emulator Suite.** No test writes hit production at all. `npm run
+    test:e2e` starts the emulators + a seeded baseline (see the "E2E tests"
+    section below); `npm run test:e2e:prod` is the escape hatch for the
+    real project. `firestore.rules` / `storage.rules` committed (were
+    console-only). Design record: `docs/tier2-emulator-scope.md`.
   - 🔽 **Low-priority backlog: ~469 cancelled `E2E ` reservations in
     prod.** `tests/utils/preorders.js`'s pre-order specs create
     `reservations` docs; `cleanup.teardown.js` can't hard-delete them
@@ -1200,11 +1203,57 @@ afterward — no E2E gate needed for this, same reasoning as Phase 0 step 4
     client — confirmed), so it marks them `status: 'cancelled'` instead,
     run after run. They're **invisible to users** (cancelled reservations
     don't render anywhere), just collection bloat (469 of 473 total).
-    Tier 2 stops new ones. Purging the existing backlog needs the Admin
-    SDK (a service-account key) — deliberately deferred as not worth it
+    Tier 2 stopped new ones (they land in the emulator now). The committed
+    `firestore.rules` show `reservations` delete needs
+    `request.auth.uid == 'KTpBS4yJx2h8LpcryCTfJDFCHlr2'` — the *real*
+    super-admin account (not the E2E account, which is admin only via a
+    `userRoles` doc), so purging the 469 is doable by running
+    `scripts/cleanup-e2e-data.mjs` signed in as that account, or via the
+    Admin SDK with a service-account key. Deliberately deferred as not
+    worth it
     for cosmetic cleanup.
 
 ## E2E tests (Playwright)
+
+**Status as of 2026-08-30: runs against the Firebase Emulator Suite — no
+production writes.** (Tier 2 of the prod-data-leak fix — see "Known
+pre-existing issues" and `docs/tier2-emulator-scope.md`.)
+
+- `npm run test:e2e` (the default): `playwright.config.js` starts the Auth +
+  Firestore + Storage emulators (`firebase.json`, ports 9099/8080/9199) and
+  a Vite server on **5174** with `VITE_USE_EMULATOR=1`;
+  `tests/seed-emulator.mjs` (Playwright `globalSetup`, via `firebase-admin`)
+  wipes both emulators and seeds a deterministic baseline (4 users — the E2E
+  user forced to `SUPER_ADMIN_UID`; 3 bakeries; 9 reviews with "Bea" as the
+  #1-ranked power reviewer; 4 products; a 4-edge follow graph). No `.env` /
+  secrets. `src/services/firebase.js` calls `connect*Emulator()` only when
+  `VITE_USE_EMULATOR` is set, so `npm run dev` and the production build are
+  untouched (the block is dead code Vite strips from `dist/`).
+- `npm run test:e2e:prod` (`E2E_EMULATOR=0`): the old path — `npm run dev` on
+  5173 against real `crumb-ddeb6`, creds from `.env`. Kept for the rare
+  "check against real data" case; Tier 1's cleanup machinery still applies.
+- `.github/workflows/e2e.yml` runs the emulator suite on PRs + pushes to
+  `main` (free, no secrets).
+- The security rules the emulator loads (`firestore.rules`, `storage.rules`)
+  are the real production rules — committed 2026-08-30, previously
+  console-only.
+- **Two tests behave differently under the emulator**, both deliberate:
+  `bakery-search.spec.js:90` (live Google Places call) `test.skip`s when
+  `E2E_MODE === 'emulator'`; `people-filters.spec.js:190` got a small
+  robustness fix (re-query the Followers list after the follow-toggle
+  re-render instead of reusing a stale locator) — it used to *skip* against
+  prod when the E2E account's follow graph didn't have the right shape, and
+  the deterministic seed made it run.
+- **71 passed / 3 skipped / 0 failed** — verified locally (runs 3–5) and in
+  CI, identical every time. The 3 skips: `admin-panel.js:128` (no flagged
+  reviews seeded — wiring-only test), `bakery-profile-management.js:33` +
+  `bakery-search.js:90` (both need live Google Places, which the emulator
+  run doesn't touch). A round of `people-filters.spec.js` /
+  `share-and-saved.spec.js` waits was needed — those grids/modals are built
+  from `allItems`/`allProfiles`, which aren't awaited on load, so a fast CI
+  worker used to race the data and skip.
+
+<details><summary>Earlier status (2026-08-24, against the live project) — historical</summary>
 
 **Status as of 2026-08-24: verified green**, dedicated E2E account in place
 (separate from the personal super-admin account used earlier), Google
@@ -1313,3 +1362,11 @@ npm run test:e2e:ui    # interactive UI mode
   of an interrupted run, not a real "everything skipped" result. Don't treat
   a report like that as a clean/uneventful run; treat it as "did not really
   run" and re-run before trusting the result.
+
+</details>
+
+The bullets above still describe `test:e2e:prod` accurately (real project,
+`.env`, teardown scoped to the `E2E ` prefix). Under the default emulator
+run, `auth.setup.js` signs in the *seeded* account, and
+`cleanup.teardown.js` is a near-no-op (the emulator is wiped by the next
+run's `globalSetup`).

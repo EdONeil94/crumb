@@ -1,8 +1,12 @@
 import { test as teardown } from '@playwright/test';
 
 // Runs once after all specs finish (wired via the "chromium" project's
-// `teardown: 'cleanup'` in playwright.config.js) and removes the Firestore
-// data the suite creates:
+// `teardown: 'cleanup'` in playwright.config.js). Under the default emulator
+// run this is a near-no-op — the emulator is wiped by the next run's
+// globalSetup anyway; it just deletes this run's own `E2E `-prefixed docs
+// from the emulator, harmlessly. It's load-bearing under
+// `npm run test:e2e:prod`, where it removes the Firestore data the suite
+// creates in the real project:
 //   - preorderOfferings + bakeryCatalogue + reservations — from
 //     tests/utils/preorders.js (addOffering / reserveFromBakeryProfile).
 //   - items + itemRecords — from tests/utils/reviews.js's createReview

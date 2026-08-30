@@ -10,16 +10,12 @@ import { test as setup, expect } from '@playwright/test';
 // email/password sign-in form instead — see index.html's #authEmail/
 // #authPassword/#signInSubmit.
 //
-// Required env vars: E2E_EMAIL / E2E_PASSWORD, for an account that already
-// exists in the target Firebase project (crumb-ddeb6 by default — see
-// src/services/firebase.js).
-//
-// manage-offerings.spec.js and reservations.spec.js additionally need this
-// account to be able to open "Manage pre-orders" on whichever bakery
-// tests/utils/preorders.js picks — the app's ownsBakery() only allows that
-// for the bakery's own business-role owner, or the hardcoded SUPER_ADMIN_UID
-// (src/legacy-app.js). Using the super-admin account is the simplest way to
-// satisfy this for any bakery in the project.
+// E2E_EMAIL / E2E_PASSWORD: under the default emulator run
+// (playwright.config.js) these are the fixed values for the account
+// tests/seed-emulator.mjs creates — seeded with the app's SUPER_ADMIN_UID,
+// so isAdmin()/ownsBakery() are true everywhere (manage-offerings.spec.js /
+// reservations.spec.js need that). Under `npm run test:e2e:prod` they come
+// from .env and must be a real crumb-ddeb6 account with the same powers.
 
 const STORAGE_STATE = 'playwright/.auth/user.json';
 

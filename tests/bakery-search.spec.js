@@ -88,6 +88,10 @@ test('typing a name that matches a previously-reviewed bakery shows it under "Al
 });
 
 test('a real Google Places search returns results, and selecting one fills the location with a live map', async ({ page }) => {
+  // Hits the live places.googleapis.com — not part of the hermetic emulator
+  // run (and the API key's referrer allowlist is per-origin, so it wouldn't
+  // authorise the emulator's :5174 anyway). Covered by `npm run test:e2e:prod`.
+  test.skip(process.env.E2E_MODE === 'emulator', 'live Google Places call — runs under test:e2e:prod only');
   await openAddModalStep1(page);
   // A generic, near-universally-present query — real network call to
   // places.googleapis.com, not mocked. fetchBakeryPlaces debounces 400ms

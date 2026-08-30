@@ -12,6 +12,15 @@ dist
 dist-ssr
 *.local
 
+# Firebase emulators
+firebase-debug.log
+firestore-debug.log
+database-debug.log
+ui-debug.log
+pubsub-debug.log
+firebase-export-*
+.firebase/
+
 # Playwright
 /test-results/
 /playwright-report/

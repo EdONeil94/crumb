@@ -18,11 +18,23 @@ async function gotoSignedIn(page) {
     page.locator('#navAvatar'),
     'Not signed in — check E2E_EMAIL/E2E_PASSWORD and tests/auth.setup.js'
   ).toBeVisible({ timeout: 15_000 });
+  // loadData()/loadProfiles() aren't awaited on load — the rankings/members
+  // grids and profile modals here are built from allItems/allProfiles, so
+  // wait for the recent grid to fill (its universal "data ready" signal)
+  // before a fast worker inspects half-loaded content.
+  await page.locator('#recentGrid .card, #recentGrid .empty-state').first()
+    .waitFor({ timeout: 15_000 }).catch(() => {});
 }
 
 async function gotoPeoplePage(page) {
   await page.getByRole('button', { name: 'People', exact: true }).click();
   await expect(page.locator('#page-people')).toHaveClass(/active/);
+  // renderRankings/renderPeople need allItems + allProfiles, neither of which
+  // is awaited on load — wait for the grid to actually fill (or show its
+  // empty state) so a fast worker doesn't check for cards before the data
+  // has landed.
+  await page.locator('#peopleGrid .ranking-card, #peopleGrid .member-card, #peopleGrid .empty-state')
+    .first().waitFor({ timeout: 10_000 }).catch(() => {});
 }
 
 test('rankings filters repopulate the location dropdown and re-filter the list', async ({ page }) => {
@@ -121,6 +133,7 @@ test('follow button toggles and refreshes the People grid, and separately refres
   await gotoSignedIn(page);
   await gotoPeoplePage(page);
   await page.locator('#peopleViewMembers').click();
+  await page.locator('.member-card').first().waitFor({ timeout: 10_000 }).catch(() => {});
 
   const followBtn = page.locator('.member-card .people-follow-btn').first();
   test.skip((await followBtn.count()) === 0, 'No other members to follow (only your own card, or no members yet).');
@@ -249,8 +262,14 @@ test('Followers/Following list rows jump to that person\'s profile, and their fo
   // of that) may now be stale/detached, and we may not even be on the
   // Followers tab any more. Get back there and re-query fresh rather than
   // reusing it.
+  // The if-block above (when it runs) ends with a followAndRefreshProfile
+  // re-render that lands on Reviews. Navigate back to Followers and wait for
+  // the list to actually render before clicking a row — `.follow-user-row`
+  // can be briefly absent mid-re-render. (When the if-block was skipped the
+  // modal is already on Followers; re-clicking is a harmless no-op.)
   await page.locator('.profile-tab', { hasText: 'Followers' }).click();
   const freshRow = page.locator('.follow-user-row').first();
+  await expect(freshRow).toBeVisible({ timeout: 15_000 });
   await freshRow.locator('.follow-user-info').click();
   await expect(page.locator('#profileModal')).toHaveClass(/open/);
 });

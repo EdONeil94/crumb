@@ -72,17 +72,28 @@ You can also trigger a deploy by hand from the repo's **Actions** tab
 ## Tests
 
 ```bash
-cp .env.example .env    # fill in E2E_EMAIL / E2E_PASSWORD (a real test account —
-                         # see .env.example and tests/auth.setup.js)
-npm run test:e2e         # full Playwright suite
+npm run test:e2e         # full Playwright suite — against the Firebase emulators
 npm run test:e2e:ui      # interactive UI mode
 npm run check:dead-refs  # static: dead handler refs, bare-variable scope leaks
 ```
 
-The suite signs in once via the real UI, reuses that session, and cleans up
-its own `E2E `-prefixed Firestore/Storage data afterwards. It runs against
-the live Firebase project, so it needs network and the test credentials.
-Normal result: ~60 passed, 10–14 skipped (data-dependent), 0 failed.
+`npm run test:e2e` needs **Java 21+** (firebase-tools 15's emulators) and network (for
+Playwright's browser + a couple of Google-Places-backed specs), but **no
+credentials and no production access**. `playwright.config.js` starts the
+Auth/Firestore/Storage emulators (`firebase.json`) and a Vite server on
+5174; `tests/seed-emulator.mjs` seeds a fresh deterministic baseline every
+run. Result: **71 passed, 3 skipped, 0 failed** (verified locally and in
+CI). The 3 skips are the live-Google-Places test and two Places-backed
+cases the emulator can't cover.
+
+```bash
+cp .env.example .env       # E2E_EMAIL / E2E_PASSWORD — a real test account
+npm run test:e2e:prod      # run the suite against the live Firebase project instead
+```
+
+Use `test:e2e:prod` only when you specifically need to check behaviour
+against real data — it writes to `crumb-ddeb6` (with cleanup: a per-test
+fixture, `cleanup.teardown.js`, and `npm run cleanup:e2e` as a safety net).
 
 ## What's next (not started)
 

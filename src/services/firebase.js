@@ -10,15 +10,20 @@
 
 import { initializeApp } from 'firebase/app';
 import {
-  getAuth, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword,
+  getAuth, connectAuthEmulator,
+  signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword,
   createUserWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile
 } from 'firebase/auth';
 import {
-  getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc,
+  getFirestore, connectFirestoreEmulator,
+  collection, addDoc, getDocs, doc, updateDoc, deleteDoc,
   query, orderBy, where, getDoc, setDoc, increment, onSnapshot,
   serverTimestamp, limit, runTransaction
 } from 'firebase/firestore';
-import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject, listAll } from 'firebase/storage';
+import {
+  getStorage, connectStorageEmulator,
+  ref, uploadBytes, getDownloadURL, deleteObject, listAll
+} from 'firebase/storage';
 
 // ─── FIREBASE CONFIG ────────────────────────────────────────────────────────
 const firebaseConfig = {
@@ -35,6 +40,18 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
 const googleProvider = new GoogleAuthProvider();
+
+// ─── EMULATORS (E2E only) ──────────────────────────────────────────────────
+// Point at the local Firebase Emulator Suite when VITE_USE_EMULATOR is set —
+// which ONLY the Playwright test webServer does (see playwright.config.js).
+// `npm run dev` and the production build never set it, so this block is dead
+// code Vite strips from `dist/` — the shipped app can't reach a localhost
+// emulator. Ports match firebase.json.
+if (import.meta.env.VITE_USE_EMULATOR) {
+  connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
+  connectFirestoreEmulator(db, '127.0.0.1', 8080);
+  connectStorageEmulator(storage, '127.0.0.1', 9199);
+}
 
 // Expose to global scope — the legacy app code (still one big module for now)
 // reads this exactly the same way it always has.
