@@ -95,6 +95,11 @@ test('each candidate\'s Send button is wired to sendSharedReview with the right 
   const { card, id: itemId } = await createReview({ name, bakeryName });
 
   await openDetailAndShare(page, card);
+  // openShareReviewModal loads the candidate list async (a follows query +
+  // interaction-signal lookups) — wait for it to resolve to rows or its
+  // empty state before checking, so a fast worker doesn't read the spinner.
+  await page.locator('#shareReviewContent .share-user-row, #shareReviewContent .empty-state')
+    .first().waitFor({ timeout: 10_000 }).catch(() => {});
   const firstRow = page.locator('.share-user-row').first();
   test.skip((await firstRow.count()) === 0, 'Share candidate list rendered empty despite a follow existing.');
 

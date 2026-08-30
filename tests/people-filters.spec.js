@@ -18,11 +18,23 @@ async function gotoSignedIn(page) {
     page.locator('#navAvatar'),
     'Not signed in — check E2E_EMAIL/E2E_PASSWORD and tests/auth.setup.js'
   ).toBeVisible({ timeout: 15_000 });
+  // loadData()/loadProfiles() aren't awaited on load — the rankings/members
+  // grids and profile modals here are built from allItems/allProfiles, so
+  // wait for the recent grid to fill (its universal "data ready" signal)
+  // before a fast worker inspects half-loaded content.
+  await page.locator('#recentGrid .card, #recentGrid .empty-state').first()
+    .waitFor({ timeout: 15_000 }).catch(() => {});
 }
 
 async function gotoPeoplePage(page) {
   await page.getByRole('button', { name: 'People', exact: true }).click();
   await expect(page.locator('#page-people')).toHaveClass(/active/);
+  // renderRankings/renderPeople need allItems + allProfiles, neither of which
+  // is awaited on load — wait for the grid to actually fill (or show its
+  // empty state) so a fast worker doesn't check for cards before the data
+  // has landed.
+  await page.locator('#peopleGrid .ranking-card, #peopleGrid .member-card, #peopleGrid .empty-state')
+    .first().waitFor({ timeout: 10_000 }).catch(() => {});
 }
 
 test('rankings filters repopulate the location dropdown and re-filter the list', async ({ page }) => {
@@ -121,6 +133,7 @@ test('follow button toggles and refreshes the People grid, and separately refres
   await gotoSignedIn(page);
   await gotoPeoplePage(page);
   await page.locator('#peopleViewMembers').click();
+  await page.locator('.member-card').first().waitFor({ timeout: 10_000 }).catch(() => {});
 
   const followBtn = page.locator('.member-card .people-follow-btn').first();
   test.skip((await followBtn.count()) === 0, 'No other members to follow (only your own card, or no members yet).');
