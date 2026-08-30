@@ -1170,27 +1170,39 @@ afterward — no E2E gate needed for this, same reasoning as Phase 0 step 4
   elements' relative position in `index.html`. Worth a real fix eventually
   (e.g. bumping `z-index` on open so the most-recently-opened modal always
   wins, regardless of source order).
-- **Manual Firestore cleanup still needed** in the live project (`crumb-ddeb6`)
-  — two separate items, neither touched by `tests/cleanup.teardown.js`:
-  - **"Test Croissant"** seeded test data. Not `E2E_`/`E2E `-prefixed, so
-    outside the teardown script's scope entirely.
-  - **8 orphaned `items` docs (+ their `itemRecords`)**, confirmed via a
-    one-off signed-in script against the live project on 2026-08-24 (not
-    caught by `npm run test:e2e`'s own teardown, since `items`/`itemRecords`
-    were never in its scope — see `tests/utils/reviews.js`'s module
-    comment). Leftover from *earlier* debugging runs this same session,
-    where a test failed before reaching its own `deleteReview()` step, back
-    when those tests still had bugs (now fixed — a clean run self-cleans
-    these correctly). Harmless (each is a single throwaway review + its
-    1:1 itemRecord, no Storage photos attached), just needs a delete pass:
-    items `3oukHDHwNbout4AE71Hs`/`T6fme6I6VKEzxoZyUu4D`/`XZpGu1g3xzulRIqup0qb`/
-    `XReVQqqln5cfSChcV9Ij`/`uu5N12dS5cMxRfvgFZY9`/`rpf58hEnW3lNc7S4KNtG`/
-    `lBxvYkuoWzW4S41Nkkvq`/`U4usowrGynWZF7o48x9c` (names all start with
-    `E2E Edit Sliders`/`E2E Share`/`E2E Share Wiring`), each with a matching
-    `itemRecords` doc of the same id-relationship (check `item.itemRecordId`
-    per doc — don't assume without checking, per `deleteReview()`'s own
-    logic, in case a future session's runs left more than one review
-    sharing a record).
+- **E2E test data leaking into the live project (`crumb-ddeb6`).** The
+  suite runs against real Firebase (no separate project / emulator — yet;
+  see below). Two rounds of cleanup + fixes so far:
+  - ✅ **2026-08-30 — the review leak, fixed and purged.** A mid-test
+    `test.skip()` in `share-and-saved.spec.js`'s "Send button wiring" test
+    (the E2E account follows nobody, so it skipped *every* run, after
+    `addReview()` had already created a review and before its inline
+    delete) leaked **87 `E2E Share Wiring` / `E2E Share` / `E2E Edit
+    Sliders` / etc. reviews (+ 87 `itemRecords`)** into the live Recent
+    Reviews feed over ~6 days — `cleanup.teardown.js` never swept
+    `items`/`itemRecords`. All 87 + 87 purged (2026-08-30); the earlier
+    "8 orphaned items" and "Test Croissant" notes here are subsumed by that
+    sweep (verified: 0 `E2E `-prefixed items remain, no "Test Croissant").
+    **Tier 1 fix (commit `045f50e`)**: `tests/utils/reviews.js`'s
+    `createReview` fixture auto-deletes every review on test teardown
+    (incl. mid-test skip); the "Send wiring" test now skips *before*
+    creating; `cleanup.teardown.js` also sweeps `items`/`itemRecords`;
+    `scripts/cleanup-e2e-data.mjs` (`npm run cleanup:e2e`) + a nightly
+    GitHub Actions cron are the standalone safety net.
+  - ⏳ **Tier 2 — move the suite onto the Firebase Emulator Suite** so no
+    test writes hit production at all. Scoped in
+    `docs/tier2-emulator-scope.md`, not yet implemented.
+  - 🔽 **Low-priority backlog: ~469 cancelled `E2E ` reservations in
+    prod.** `tests/utils/preorders.js`'s pre-order specs create
+    `reservations` docs; `cleanup.teardown.js` can't hard-delete them
+    (the Firestore rules only let `KTpBS4yJx2h8LpcryCTfJDFCHlr2` delete a
+    reservation, and even that path is currently rejected from the
+    client — confirmed), so it marks them `status: 'cancelled'` instead,
+    run after run. They're **invisible to users** (cancelled reservations
+    don't render anywhere), just collection bloat (469 of 473 total).
+    Tier 2 stops new ones. Purging the existing backlog needs the Admin
+    SDK (a service-account key) — deliberately deferred as not worth it
+    for cosmetic cleanup.
 
 ## E2E tests (Playwright)
 
