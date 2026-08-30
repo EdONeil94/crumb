@@ -64,6 +64,15 @@ function onLbFilterChange() {
   else renderLeaderboard(lbCurrentTab);
 }
 
+// Zero-arg "re-render whichever leaderboard mode is showing", using this
+// module's own lbCurrentMode/lbCurrentTab state. renderLeaderboard() already
+// delegates to renderBakeryLeaderboard() in bakery mode, so one call covers
+// both. Registered for appState.js's loadData() → refreshActiveDataView()
+// (Phase 1 residual #3) — no data-onclick call site of its own.
+export function refreshLeaderboard() {
+  renderLeaderboard(lbCurrentTab);
+}
+
 function getLbFilters() {
   return {
     location: document.getElementById('lbLocationFilter')?.value || '',
@@ -276,4 +285,4 @@ export function renderLeaderboard(tab) {
   }).join('');
 }
 
-registerActions({ switchLbMode, switchLbTab, closeLbAndOpenBakery, onLbFilterChange });
+registerActions({ switchLbMode, switchLbTab, closeLbAndOpenBakery, onLbFilterChange, refreshLeaderboard });

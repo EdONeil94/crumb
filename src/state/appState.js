@@ -89,6 +89,13 @@ export async function loadAllUserRoles() {
 // elsewhere that touch these (saveReview's `allItems.unshift(...)`,
 // toggleBookmark, …) only ever mutate by property/array method, never
 // reassign — verified via grep across the whole codebase.
+//
+// Phase 1 residual #3 (2026-08-30) fixed loadData()'s reconcile race:
+// loadData() now (a) rebuilds allBakeries via buildBakeryIndex() so that
+// derived cache is never stale w.r.t. allItems, (b) re-renders the active
+// Bakeries/Leaderboard page if visible, and (c) supports an opt-in
+// `mergeLocal` mode that preserves a just-written row a racing server read
+// hasn't caught up to. See docs/extraction-log.md.
 
 export let allItems = [];
 export let allBakeries = {}; // keyed by bakeryName
@@ -98,21 +105,62 @@ export let exploreCache = {}; // Explore-page Places results, cityKey -> results
                               // (populated by src/pages/explore.js; read here
                               // by buildBakeryIndex to back-fill bakery coords)
 
-export async function loadData() {
+// Re-render whichever data-dependent page is currently visible, so a
+// background fetch landing after the user has already navigated actually
+// refreshes what they're looking at — not just #recentGrid. Before Phase 1
+// residual #3 (2026-08-30) loadData() only re-rendered the home grid, so
+// navigating to Bakeries/Leaderboard before the initial fetch resolved left
+// a *permanent* empty state (nothing re-triggered renderBakeries/
+// renderLeaderboard once the data arrived). Mirrors loadProfiles()'s
+// existing "re-render People if visible" pattern below.
+function refreshActiveDataView() {
+  if (document.getElementById('page-bakeries')?.classList.contains('active')) {
+    getAction('renderBakeries')();
+  }
+  if (document.getElementById('page-leaderboard')?.classList.contains('active')) {
+    getAction('refreshLeaderboard')();
+  }
+}
+
+// Merge helper for the `mergeLocal` reconcile mode (see loadData below): keep
+// any local rows whose id the server snapshot doesn't have yet, in front of
+// the (already-sorted) fresh rows. Used only right after a confirmed write,
+// where the sole such row is the one just written — genuinely on the server,
+// just not visible to this particular read yet.
+function mergeById(local, fresh) {
+  const freshIds = new Set(fresh.map(r => r.id));
+  const pending = local.filter(r => !freshIds.has(r.id));
+  return pending.length ? [...pending, ...fresh] : fresh;
+}
+
+// `mergeLocal` is opt-in and used by exactly one caller — saveReview()'s
+// reconcile (legacy-app.js), which runs synchronously after a confirmed
+// addDoc(). Without it, a getDocs() that races ahead of Firestore making
+// the just-written doc visible to the writer's own client overwrites
+// allItems with a version missing that review, and renderRecentGrid()
+// repaints it away with nothing to re-trigger a correct render. Every other
+// caller (default mergeLocal:false) keeps the exact prior full-replace
+// behavior — deleteReview()/removeReviewAndFlag() in particular *need* the
+// replace to drop a deleted row. See docs/extraction-log.md (Phase 1
+// residual #3) for the full rationale.
+export async function loadData({ mergeLocal = false } = {}) {
   if (!fb) return;
   const { db, collection, getDocs, query, orderBy, limit } = fb;
   try {
     const q = query(collection(db, 'items'));
     const snap = await getDocs(q);
-    allItems = snap.docs
+    const fresh = snap.docs
       .map(d => ({ id: d.id, ...d.data() }))
       .sort((a, b) => {
         const ta = a.createdAt?.toMillis?.() || a.createdAt?.seconds || 0;
         const tb = b.createdAt?.toMillis?.() || b.createdAt?.seconds || 0;
         return tb - ta;
       });
+    allItems = mergeLocal ? mergeById(allItems, fresh) : fresh;
+    buildBakeryIndex(); // keep allBakeries in sync with allItems (residual #3)
     getAction('renderRecentGrid')();
     getAction('updateStats')();
+    refreshActiveDataView();
   } catch (e) {
     console.log('Data load error (likely not configured yet):', e.message);
   }
@@ -182,12 +230,17 @@ export function buildBakeryIndex() {
   });
 }
 
-export async function loadItemRecords() {
+// mergeLocal here mirrors loadData's — saveReview() optimistically push()es a
+// brand-new itemRecord and then reconciles; a racing getDocs() that hasn't
+// seen the write yet would otherwise drop it (residual #3, sibling of the
+// allItems race). Same one-caller, same safety argument.
+export async function loadItemRecords({ mergeLocal = false } = {}) {
   if (!fb) return;
   const { db, collection, getDocs } = fb;
   try {
     const snap = await getDocs(collection(db, 'itemRecords'));
-    allItemRecords = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const fresh = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    allItemRecords = mergeLocal ? mergeById(allItemRecords, fresh) : fresh;
   } catch(e) { console.log('itemRecords load:', e.message); }
 }
 

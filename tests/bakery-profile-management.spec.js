@@ -47,13 +47,11 @@ test('toggling opening hours expands and collapses the list', async ({ page }) =
 });
 
 test('Edit page (from Settings\' Business section) opens pre-filled, previews a new photo locally, and Cancel discards without saving', async ({ page }) => {
-  // renderBusinessSection() (Settings page) reads the module-level
-  // allBakeries directly with no ensure-built call of its own — it's only
-  // ever populated as a side effect of buildBakeryIndex(), called from
-  // pages like Bakeries/a bakery profile. Going straight to Settings on a
-  // fresh page leaves it empty, showing a misleading "No bakeries assigned
-  // yet" empty state for an admin account that actually manages all of
-  // them. Visit a bakery profile first so it's genuinely populated.
+  // Phase 1 residual #3 made loadData() build allBakeries on every run, so
+  // renderBusinessSection() (Settings) is populated on a cold session now —
+  // the dedicated tests/data-reconcile.spec.js covers that directly. This
+  // pre-visit is no longer needed for correctness; kept as a reliable
+  // "app is ready" wait (openFirstBakeryProfile waits for #recentGrid).
   await openFirstBakeryProfile(page);
   await page.locator('[data-onclick="closeBakeryModal"]').first().click();
   await gotoSettings(page);

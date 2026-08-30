@@ -54,16 +54,15 @@ export async function addReview(page, {
   await page.locator('#nextBtn').click();
   await expect(page.locator('#addModal')).not.toHaveClass(/open/);
 
-  // saveReview() unshifts the new review to the front of #recentGrid
-  // (home page) immediately, ahead of its own background Firestore
-  // reconcile (loadData(), unawaited) — but that reconcile can occasionally
-  // win the race and overwrite the optimistic add before the just-written
-  // doc is visible to its own fresh read, dropping the card entirely with
-  // nothing to re-trigger a render once it would resolve correctly. Same
-  // root cause as the Bakeries-page race in CLAUDE.md's "Known pre-existing
-  // issues", different manifestation — seen once in practice. A reload
-  // forces a completely fresh loadData() call, by which point real
-  // wall-clock time has passed and Firestore consistency has caught up.
+  // saveReview() unshifts the new review to the front of #recentGrid (home
+  // page) immediately, then runs its background reconcile. Phase 1 residual
+  // #3 fixed the race that used to let that reconcile overwrite the
+  // optimistic add before the just-written doc was visible to its own fresh
+  // read (saveReview now calls loadData({ mergeLocal: true }), which keeps a
+  // local row the server snapshot doesn't have yet). This reload-and-retry
+  // is now a dormant safety net — kept because Firestore consistency is
+  // still probabilistic and a test helper benefits from the insurance, but
+  // it should effectively never fire.
   let card = page.locator('#recentGrid .card').filter({ hasText: name }).first();
   try {
     await expect(card).toBeVisible({ timeout: 10_000 });

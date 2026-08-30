@@ -14,16 +14,13 @@ import { expect } from '@playwright/test';
 // — i.e. be the super-admin account, or that bakery's registered owner.
 
 export async function openFirstBakeryProfile(page) {
-  // loadData() (populates allItems, the only thing renderBakeries() reads
-  // via buildBakeryIndex()) runs async and unawaited from onAuthStateChanged
-  // — #navAvatar becoming visible only means auth resolved, not that this
-  // fetch has finished. renderBakeries() itself runs exactly once, on nav
-  // click, and nothing re-renders it once loadData() completes later — so
-  // navigating to Bakeries before that fetch resolves shows a permanent
-  // "No bakeries found" empty state, not a slow-then-eventually-populated
-  // one. #recentGrid .card (loadData()'s first synchronous side effect,
-  // renderRecentGrid()) is a reliable proxy that the fetch is done, so wait
-  // for that before ever clicking into Bakeries.
+  // Wait for the initial data load to finish before navigating. Phase 1
+  // residual #3 fixed the permanent-empty-state bug this used to guard
+  // against (loadData() now re-renders the Bakeries page if it's the active
+  // one when the fetch lands), so this is no longer strictly required — but
+  // #recentGrid .card (renderRecentGrid(), loadData()'s first side effect)
+  // is still a good "app is ready" signal that keeps the rest of this helper
+  // deterministic.
   await expect(
     page.locator('#recentGrid .card').first(),
     'Initial data (allItems) never finished loading — #recentGrid stayed empty.'

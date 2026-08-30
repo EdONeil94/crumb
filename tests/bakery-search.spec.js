@@ -17,10 +17,12 @@ async function openAddModalStep1(page) {
   // showKnownBakeries()/renderKnownMatches() read the module-level allItems
   // (populated by loadData(), unawaited from onAuthStateChanged) — opening
   // the modal before that resolves would show a false "no known bakeries"
-  // empty state. #recentGrid .card is loadData()'s first synchronous side
-  // effect, same proxy used in tests/utils/preorders.js — checked for
-  // attachment rather than visibility, since a test may have already
-  // navigated off the home page (where #recentGrid lives) by this point.
+  // empty state. This wait is still genuinely required: Phase 1 residual #3
+  // made loadData() re-render the active *page* when it lands, but the Add
+  // modal isn't a page, so nothing re-renders its known-bakeries list.
+  // #recentGrid .card is loadData()'s first side effect, same proxy used in
+  // tests/utils/preorders.js — checked for attachment rather than
+  // visibility, since a test may have already navigated off the home page.
   await expect(
     page.locator('#recentGrid .card').first(),
     'Initial data (allItems) never finished loading — #recentGrid stayed empty.'

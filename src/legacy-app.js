@@ -438,9 +438,11 @@ async function saveReview() {
     // Reconcile with the server in the background — this fills in anything
     // the optimistic update above doesn't cover (itemRecords aggregates,
     // leaderboard, etc.) without blocking the UI or requiring the user to
-    // do anything themselves.
-    loadData();
-    loadItemRecords().then(() => renderLeaderboard(lbCurrentTab));
+    // do anything themselves. mergeLocal:true so a getDocs() that races
+    // ahead of Firestore making this just-written review visible to our own
+    // client can't clobber the optimistic add above (Phase 1 residual #3).
+    loadData({ mergeLocal: true });
+    loadItemRecords({ mergeLocal: true }).then(() => renderLeaderboard(lbCurrentTab));
   } catch (err) {
     showToast('Error saving — check your config');
     console.error(err);
