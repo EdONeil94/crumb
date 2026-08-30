@@ -51,10 +51,17 @@ neighbour's extraction — see the `saveEdit`/`deleteReview` write-up in
      cycle — `editReviewModal.js` is imported only by `legacy-app.js`. Both
      register from `editReviewModal.js` now;
      `editingItemId`/`editPhotoFile`/`editPhotoDataURL` lost their `export`.
-3. **The `loadData()` reconcile race** (in "Known pre-existing issues") —
-   an app-robustness bug, carried through the whole plan unfixed by
-   design. The reconcile logic moved byte-for-byte into `appState.js` at
-   residual #2 — the bug is unchanged, just relocated.
+3. ✅ **RESOLVED 2026-08-30.** The `loadData()` reconcile race (was in
+   "Known pre-existing issues") — an app-robustness bug carried through the
+   whole plan unfixed by design, then fixed as a deliberate post-plan
+   behavior change (diagnosed first in `docs/residual-3-diagnosis.md`).
+   `loadData()` now rebuilds `allBakeries` so it's never stale w.r.t.
+   `allItems`, re-renders the active Bakeries/Leaderboard page if the fetch
+   lands after navigation, and supports an opt-in `mergeLocal` mode (used
+   only by `saveReview`'s reconcile) that preserves a just-written row a
+   racing server read hasn't caught up to. Regression coverage:
+   `tests/data-reconcile.spec.js` (one deterministic test per manifestation,
+   each confirmed to fail pre-fix). See `docs/extraction-log.md`.
 
 See `docs/extraction-log.md` for every step's write-up.
 Earlier: steps 1-25 — Phase 4's `manageOfferingsModal.js` (the "does
@@ -1075,14 +1082,25 @@ afterward — no E2E gate needed for this, same reasoning as Phase 0 step 4
 
 ## Known pre-existing issues (out of scope for this migration)
 
-- **`loadData()`'s unawaited reconcile can clobber recent state, and
-  `allBakeries` needs a page visit nobody guarantees happened**
-  (`src/state/appState.js` since post-plan residual #2 — was
-  `src/legacy-app.js`; the logic moved byte-for-byte, the bug is
-  unchanged) — a real robustness gap in how this app's shared
-  module-level caches (`allItems`, `allBakeries`) get populated, three
-  manifestations found so far, all unrelated to handler delegation and not
-  touched here:
+- ✅ **RESOLVED 2026-08-30 (Phase 1 residual #3)** — `loadData()`'s
+  unawaited reconcile could clobber recent state, and `allBakeries` needed
+  a page visit nobody guaranteed happened (`src/state/appState.js`). Fixed
+  as a deliberate post-plan behavior change: (a) `loadData()` now calls
+  `buildBakeryIndex()` so `allBakeries` is never stale w.r.t. `allItems`
+  (kills the "Settings Business empty" and "Bakeries needs a visit"
+  halves), (b) it re-renders the active Bakeries/Leaderboard page if the
+  fetch lands after the user has navigated there
+  (`refreshActiveDataView()`, mirroring `loadProfiles()`'s existing
+  "re-render People if visible"), (c) an opt-in `loadData({ mergeLocal:
+  true })` / `loadItemRecords({ mergeLocal: true })` — used **only** by
+  `saveReview()`'s reconcile — keeps a just-written row a racing `getDocs()`
+  hasn't seen yet, instead of overwriting it away. Every other caller keeps
+  the exact prior full-replace behavior (`deleteReview()` /
+  `removeReviewAndFlag()` need it to drop a deleted row). Diagnosis:
+  `docs/residual-3-diagnosis.md`. Regression coverage:
+  `tests/data-reconcile.spec.js` — one deterministic test per manifestation
+  below, each confirmed to fail on the pre-fix code. The three
+  manifestations, for the record:
   - **Bakeries page.** `loadData()` (populates `allItems`, the only thing
     `renderBakeries()` reads via `buildBakeryIndex()`) runs async and
     unawaited from `onAuthStateChanged` — `#navAvatar` becoming visible
@@ -1126,11 +1144,16 @@ afterward — no E2E gate needed for this, same reasoning as Phase 0 step 4
     `tests/bakery-profile-management.spec.js`, worked around there by
     visiting a bakery profile first.
 
-  Worth fixing in the app itself eventually (e.g. `loadData()` re-rendering
-  whichever page/state is currently active instead of only what called it,
-  the reconcile merging rather than overwriting, or `buildBakeryIndex()`
-  becoming part of the same startup sequence as `loadData()` instead of an
-  incidental side effect of unrelated pages).
+  (All three suggested directions from this note — `loadData()` re-rendering
+  the active page, the reconcile merging rather than overwriting, and
+  `buildBakeryIndex()` becoming part of `loadData()` — were taken together
+  in the residual #3 fix above.)
+
+  **Related, NOT fixed:** the People page's *rankings* view reads `allItems`
+  but `loadProfiles()` only re-renders the *members* view when it lands
+  (`renderPeople`, not `renderRankings`), so a fast-nav-to-rankings at
+  startup can still show an empty list until re-nav. Smaller blast radius,
+  and it's `loadProfiles` not `loadData` — left for a follow-up.
 - **Every `.modal-overlay` shares the same `z-index: 2000`**
   (`src/styles/main.css`), so when two modals are open simultaneously,
   which one is interactively on top is decided purely by DOM order in

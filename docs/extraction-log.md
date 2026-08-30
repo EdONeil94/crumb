@@ -7,6 +7,150 @@ standing rules). This file is the per-step history only: commit hashes,
 what moved, what was deferred and why, and every lesson found along the
 way. Most recent first. Add each new completed step's entry at the top.
 
+- **`loadData()` reconcile race — Phase 1 residual #3 (a real bug fix, not a
+  relocation)** (2026-08-30, commit `04e504f`). CLAUDE.md's "Known
+  pre-existing issues" carried this through the whole plan unfixed by
+  design. Fully diagnosed first in `docs/residual-3-diagnosis.md` (kept as
+  the decision record); this is the implementation.
+
+  ### The bug — three manifestations of one shape
+
+  `loadData()` (in `appState.js` since residual #2) did
+  `allItems = <server snapshot>` — a **blind full replace** — and
+  re-rendered **only** `#recentGrid` + the stat counters. Nothing kept the
+  derived `allBakeries` cache in sync with `allItems`, and nothing
+  re-rendered any other view. Two of its six call sites
+  (`initFirebaseApp`'s auth listener, `saveReview`'s reconcile) fire it
+  **unawaited**.
+
+  1. **Bakeries page permanently empty on fast nav.** Navigate to Bakeries
+     before the startup `getDocs(items)` resolves → `renderBakeries()` runs
+     once on empty `allItems` → paints the `"No bakeries found"`
+     empty-state HTML → `loadData()` later populates `allItems` but only
+     calls `renderRecentGrid`/`updateStats`, never `renderBakeries()` → the
+     page stays empty **forever** (until reload / re-nav).
+  2. **Just-saved review vanishes from the home grid.** `saveReview()`
+     optimistically `unshift`es the new review into `allItems` and renders
+     the card, then fires an unawaited `loadData()` reconcile. If that
+     reconcile's `getDocs()` races ahead of Firestore making the writer's
+     own just-written doc visible (an eventual-consistency edge —
+     documented as "seen once in practice"), `allItems = <snapshot>`
+     overwrites the optimistic entry with a version **missing the review**,
+     and `renderRecentGrid()` repaints the card away with nothing to
+     re-trigger a correct render. Identical shape one line down at
+     `loadItemRecords()` (`saveReview:443`) for the optimistically-`push`ed
+     new `itemRecord`.
+  3. **Settings → Business shows "No bakeries assigned yet" for an admin.**
+     Not a race — `renderBusinessSection()` reads `allBakeries`, which was
+     only ever built as an incidental side effect of
+     `buildBakeryIndex()` from a page that happens to call it (Bakeries, a
+     bakery profile, the leaderboard, the admin bakeries tab). Cold session
+     straight to Settings → `allBakeries` is `{}` → empty section
+     regardless of how much data exists.
+
+  ### The fix (`appState.js` + `leaderboard.js` + `legacy-app.js`)
+
+  Three parts, all in `loadData()` (Part C also `loadItemRecords()`):
+
+  - **Part A — maintain the `allItems → allBakeries` invariant.**
+    `loadData()` calls `buildBakeryIndex()` right after setting `allItems`.
+    `allBakeries` is a *pure derived projection* of `allItems`; making the
+    one function that mutates `allItems` also refresh its projection means
+    the projection is never stale. **This alone fixes M3** (no timing
+    involved — `renderBusinessSection` just needs `allBakeries` non-empty
+    after startup) and is the prerequisite for Part B.
+  - **Part B — re-render whichever data page is active.** New
+    module-private `refreshActiveDataView()` (mirrors the "re-render People
+    if visible" logic `loadProfiles()` already has): if `#page-bakeries` is
+    active → `getAction('renderBakeries')()`; if `#page-leaderboard` →
+    `getAction('refreshLeaderboard')()`. **Fixes M1** — the page the user
+    is looking at repaints when the fetch lands instead of freezing on the
+    empty state. `renderBakeries` was already a registered action;
+    `leaderboard.js` gets a new 1-line `refreshLeaderboard()` export
+    (`renderLeaderboard(lbCurrentTab)` — which itself already delegates to
+    the bakery-mode renderer) + registration. **Leaderboard is the
+    identical bug, just not separately documented** — folded in for
+    consistency (approved).
+  - **Part C — opt-in `mergeLocal` merge.** `loadData({ mergeLocal = false } = {})`
+    and `loadItemRecords({ mergeLocal = false } = {})`. With `mergeLocal`,
+    a shared `mergeById(local, fresh)` helper keeps any local row whose id
+    the server snapshot lacks, in front of the (already-sorted) fresh rows.
+    **Only `saveReview()` passes `mergeLocal: true`** (both calls) —
+    it runs synchronously after a confirmed `addDoc`, so the sole
+    local-not-in-snapshot row is the one just written; it genuinely exists
+    on the server, keeping it is correct, and it can't have been
+    concurrently deleted (brand-new, current user's own, sequential modal
+    flows). **Every other caller keeps the exact prior full-replace
+    behavior** (default `false`) — `deleteReview()` / `removeReviewAndFlag()`
+    specifically *need* the replace to drop a deleted row. **Fixes M2**
+    without a hack, converges on the next plain `loadData()`, and avoids
+    the `new Date()`-vs-Firestore-Timestamp sort quirk by prepending
+    (pending rows are the newest thing that exists).
+
+  ### Why this is correct, not "an await somewhere"
+
+  Awaiting `saveReview`'s `loadData()` would **not** help M2 — the read
+  still races the write's server visibility. The fix is that `loadData()`
+  no longer *destroys* newer local state it can't yet see. And M1/M3 aren't
+  about awaiting at all — they're about `loadData()` under-rendering and
+  `allBakeries` never being maintained centrally.
+
+  ### Verification (bug-fix bar — assert the *fixed* behavior)
+
+  New `tests/data-reconcile.spec.js`, one deterministic regression test per
+  manifestation, **each confirmed to FAIL on the pre-fix code** (via
+  `git stash` of the source change) and pass with it:
+  - **M1** — `window.showPage('bakeries')` immediately after
+    `window.showPage` is defined (before `getDocs` resolves); assert a
+    `.bakery-card` appears. Fails pre-fix (permanent empty).
+  - **M3** — cold session straight to Settings (no bakery-page visit);
+    assert the Business section lists bakeries. Fails pre-fix.
+  - **M2** — the real race can't be forced in-suite, so drive the exact
+    mid-race *state*: `addReview` a review R, delete R's doc server-side
+    directly and poll until a fresh read confirms it's gone (R now
+    local-only), then `addReview` a second review S (whose `saveReview`
+    fires `loadData({ mergeLocal: true })`) → assert R's card **survives**
+    the merge → then `page.reload()` (fresh auth → plain `loadData()`) →
+    assert R's card is **gone** (the property `deleteReview` relies on).
+    Both halves fail pre-fix (old `loadData` ignores the options arg).
+  - `check:dead-refs` clean, `build` clean, `npx madge --circular src/`
+    clean (`appState.js` still imports only `getAction` + `extractCity` —
+    `refreshLeaderboard` / `renderBakeries` reached via the registry, no
+    page import, no cycle).
+  - Targeted: `edit-review` (incl. the `deleteReview` `toHaveCount(0)`
+    canary that proves the plain reconcile still drops rows),
+    `add-review-flow`, `reactions`, `bakery-profile-management` — 17
+    passed, 1 skipped.
+  - Closing full `test:e2e`: **62 passed, 12 skipped, 0 failed** (was
+    59/12/0 — the +3 are the new `data-reconcile` tests).
+  - Orphaned `items`/`itemRecords` from the two deliberate `git stash`
+    pre-fix verification runs (M2 aborts before its own cleanup when it
+    fails) swept with a throwaway spec — `cleanup.teardown.js` doesn't
+    cover those collections.
+
+  ### Test workarounds — kept, comments updated (approved)
+
+  `tests/utils/reviews.js`'s reload-and-retry (M2 compensation) is now a
+  **dormant safety net** — Firestore consistency is still probabilistic, a
+  test helper benefits from the insurance, but it should never fire.
+  `tests/utils/preorders.js`'s `#recentGrid .card` wait and
+  `tests/bakery-profile-management.spec.js`'s pre-visit are now "app ready"
+  conveniences rather than bug guards. `tests/bakery-search.spec.js`'s wait
+  is **still genuinely required** — residual #3 re-renders the active
+  *page*, but the Add modal isn't a page, so nothing re-renders its
+  known-bakeries list; comment updated to say so.
+
+  ### Not changed (deliberately)
+
+  The four awaited `loadData()` call sites' await-ness; the scattered
+  `buildBakeryIndex()` calls in `renderBakeries` / `renderBakeryLeaderboard`
+  / `openBakeryProfile` / `renderAdminBakeriesHTML` (idempotent, cheap,
+  harmless defense-in-depth — removing them is a separate refactor);
+  `saveEdit`'s lack of an optimistic `allItems` patch (a
+  stale-field-until-next-load possibility, distinct from the vanish bug);
+  the People/rankings gap (`loadProfiles` re-renders the members view but
+  not rankings — smaller, `loadProfiles` not `loadData`, noted for later).
+
 - **`saveEdit()` / `deleteReview()` → `src/components/editReviewModal.js` —
   post-plan follow-up to residual #2** (2026-08-30, commit `dc45b62`).
   The Edit Review cluster split at Phase 2 step 9 (`handleEditPhoto`/
