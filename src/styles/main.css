@@ -1578,6 +1578,8 @@ nav::before {
 }
 .btn-google:hover { border-color: var(--honey); background: var(--parchment); }
 .btn-full { width: 100%; padding: 13px; border-radius: var(--radius-sm); font-size: 0.95rem; font-weight: 600; }
+.auth-link { background: none; border: none; padding: 0; font-size: 0.82rem; font-weight: 500; color: var(--caramel); cursor: pointer; text-decoration: none; }
+.auth-link:hover { text-decoration: underline; }
 
 /* ─── ITEM DETAIL MODAL ──────────────────────────────────────────────────────── */
 .detail-hero { position: relative; height: 240px; background: var(--parchment-dark); overflow: hidden; }
