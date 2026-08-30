@@ -29,7 +29,7 @@ import { allItems, currentUser, isBookmarked, exploreCache } from '../state/appS
 import { distKm } from '../utils/geo.js';
 import { showToast } from '../utils/dom.js';
 import { getCategoryDisplay } from '../data/categories.js';
-import { GOOGLE_MAPS_KEY } from '../config.js';
+import { GOOGLE_MAPS_KEY, MAP_TILE_URL, MAP_TILE_ATTRIBUTION, MAP_TILE_MAX_ZOOM } from '../config.js';
 import { geocodeBakeryAddress } from '../services/places.js';
 
 let exploreActiveCity = null;
@@ -116,8 +116,8 @@ async function renderExploreMap(bakeries) {
       exploreMapInstance = L.map('exploreMapEl', { center: [54, -1], zoom: 6, zoomControl: true, scrollWheelZoom: false, tap: true, touchZoom: true, dragging: true });
       exploreMapLog('L.map() created OK');
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-        attribution: '© OpenStreetMap © CARTO', subdomains: 'abcd', maxZoom: 19
+      L.tileLayer(MAP_TILE_URL, {
+        attribution: MAP_TILE_ATTRIBUTION, maxZoom: MAP_TILE_MAX_ZOOM
       }).addTo(exploreMapInstance);
       exploreMapLog('Tile layer added OK');
 
