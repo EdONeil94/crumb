@@ -1096,6 +1096,35 @@ afterward — no E2E gate needed for this, same reasoning as Phase 0 step 4
 
 ## Known pre-existing issues (out of scope for this migration)
 
+- 🔽 **Backlog (found 2026-08-30): `sw.js` 404 on every live page load.**
+  `src/app/lifecycle.js:302-306` runs
+  `navigator.serviceWorker.register('/sw.js')` whenever `isFirebaseHosting`
+  is true. `isFirebaseHosting` (same file, ~`:296`) is a denylist —
+  anything that isn't localhost / 127.0.0.1 / claude.ai / bitbucket counts
+  as "Firebase hosting", so `edoneil94.github.io` matches. But there is no
+  `sw.js` anywhere in the repo or in `dist/`, so the registration request
+  is `GET https://edoneil94.github.io/sw.js` → **404**, and the browser
+  logs `console.error: A bad HTTP response code (404) was received when
+  fetching the script.` on **every** page load (confirmed live, home page,
+  no interaction). The `.catch(() => {})` swallows the promise rejection
+  but not the console noise. **User-facing impact: none** — there's simply
+  no offline/PWA caching layer; nothing else depends on the SW. Just
+  console noise on every visit.
+  - **Fix option A — ship a real `sw.js`:** add a minimal service worker
+    (even a no-op / network-first shell-cache) to the repo root so Vite
+    copies it into `dist/`, and the registration succeeds. More work,
+    gives the app actual offline capability, needs its own cache-busting
+    story.
+  - **Fix option B — tighten the host check / drop the registration:**
+    the site is on GitHub Pages, not Firebase Hosting — the
+    `isFirebaseHosting` denylist is simply wrong for the current
+    deployment. Either flip it to an allowlist of the real Firebase
+    Hosting domains (`*.web.app` / `*.firebaseapp.com`, already half
+    there), or remove the `serviceWorker.register` block entirely until
+    there's a real SW to register. Minimal, removes the noise, no
+    behavior change (there's no SW today anyway).
+  - Not fixed now — logged here per the "one item at a time" cadence.
+
 - ✅ **RESOLVED 2026-08-30 (Phase 1 residual #3)** — `loadData()`'s
   unawaited reconcile could clobber recent state, and `allBakeries` needed
   a page visit nobody guaranteed happened (`src/state/appState.js`). Fixed
