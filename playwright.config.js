@@ -26,9 +26,10 @@ if (!USE_EMULATOR) {
   process.env.E2E_PASSWORD = process.env.E2E_PASSWORD || 'crumb-e2e-pw';
 }
 
-// vite.config.js sets base:'/crumb/', so every route lives under that prefix.
+// vite.config.js sets base:'./' (relative), so the dev server serves at the
+// root. E2E_BASE_URL overrides for prod runs (e.g. https://ohcrumbz.co.uk/).
 const PORT = USE_EMULATOR ? 5174 : 5173;
-const BASE_URL = process.env.E2E_BASE_URL || `http://localhost:${PORT}/crumb/`;
+const BASE_URL = process.env.E2E_BASE_URL || `http://localhost:${PORT}/`;
 const STORAGE_STATE = 'playwright/.auth/user.json';
 
 const emulatorServers = [

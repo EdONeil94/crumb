@@ -46,13 +46,13 @@ Manage-Bakery modal) or where a test drives one directly.
 
 ```bash
 npm install        # first time only
-npm run dev         # dev server + live reload at http://localhost:5173/crumb/
+npm run dev         # dev server + live reload at http://localhost:5173/
 ```
 
 ## Building
 
 ```bash
-npm run build       # → dist/ (optimized, GitHub-Pages-ready; base = /crumb/)
+npm run build       # → dist/ (optimized, GitHub-Pages-ready; base = './' relative)
 npm run preview     # serve the built dist/ locally to sanity-check it
 ```
 
@@ -62,9 +62,17 @@ npm run preview     # serve the built dist/ locally to sanity-check it
 
 Deployment is automatic via **GitHub Actions**
 (`.github/workflows/deploy.yml`): every push to `main` runs `npm run build`
-and publishes `dist/` to GitHub Pages
-(`https://edoneil94.github.io/crumb/`). Repo **Settings → Pages → Source**
+and publishes `dist/` to GitHub Pages. Repo **Settings → Pages → Source**
 must be set to **"GitHub Actions"** for this to work.
+
+The site is being migrated to the custom domain **`https://ohcrumbz.co.uk/`**
+(GitHub Pages hosting is unchanged — Wix is only the registrar, DNS points
+at Pages). `public/CNAME` holds the domain so no deploy can drop it, and
+`base: './'` in `vite.config.js` means the same build works both there and
+at the legacy `https://edoneil94.github.io/crumb/` URL during the
+transition. Cutover steps still pending: set the custom domain in the
+Pages UI, add the DNS records at Wix, and allowlist `ohcrumbz.co.uk` in
+Firebase Auth / the Google Places API key / Stadia Maps.
 
 You can also trigger a deploy by hand from the repo's **Actions** tab
 (the workflow has a `workflow_dispatch` trigger).
@@ -110,8 +118,9 @@ fixture, `cleanup.teardown.js`, and `npm run cleanup:e2e` as a safety net).
 - Backend / Cloud Functions (currently all client-side against Firestore)
 - React (optional — the modular structure is the groundwork for it)
 - Native app wrapper
-- **Custom domain** — a Wix-managed domain could be pointed at the Pages
-  site later; a separate task, not wired up.
+- **Custom domain** (`ohcrumbz.co.uk`) — build-side prep done (`public/CNAME`
+  + `base: './'`); DNS + Pages-UI cutover + external-service allowlisting
+  still pending. See the Deploying section.
 
 ## Background
 
