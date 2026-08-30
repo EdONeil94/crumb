@@ -32,35 +32,30 @@
 // apply cleanly; co-locating it with the state it reads sidesteps the
 // two-caller question entirely, with zero cycle risk.
 //
-// openBakeryProfile calls getAction('buildBakeryIndex')() instead of a
-// direct import — buildBakeryIndex() itself stays in legacy-app.js because
-// it reads exploreCache, owned by the not-yet-extracted Explore page
-// (already flagged as a Phase 7 step 29 follow-up in CLAUDE.md, Phase 0
-// step 3b's own note). openBakeryProfile is the unavoidable core of this
-// whole cluster — deferring it would mean not extracting bakeryModal.js at
-// all — so this reuses the getAction() action-registry lookup pattern from
-// Phase 4 step 18 (modalNext → saveReview) instead of a forbidden direct
-// import back into legacy-app.js. legacy-app.js registers buildBakeryIndex
-// via a new registerActions() call for this lookup to resolve.
+// openBakeryProfile imports buildBakeryIndex() directly from
+// src/state/appState.js — it moved there (with exploreCache, its only
+// blocker) at Phase 1 residual #2 (2026-08-30), so the
+// getAction('buildBakeryIndex')() indirection this file used while it lived
+// in legacy-app.js is gone. This module already imports several caches from
+// appState.js.
 //
-// reserveOffering — brought in this step per explicit instruction, after
+// reserveOffering — brought in at step 21 per explicit instruction, after
 // confirming (re-reading, not trusting step 16's note alone) that it does
 // belong here: it's the "Reserve" flow reached from a bakery profile's own
 // Pre-order tab, the exact cluster step 16 deliberately left out of
-// reservations.js for this reason. It calls getAction('loadMyPreorders')()
-// and getAction('renderPreorderPage')() for the same reason as
-// buildBakeryIndex above — both stay in legacy-app.js (Phase 7 steps 31 and
-// 30 respectively, both distant), and reserveOffering itself can't be
-// deferred without abandoning the very flow this step was asked to bring
-// in. loadMyPreorders gets a new registerActions() call in legacy-app.js
-// for this lookup; renderPreorderPage already had one (pre-existing, no
-// markup call site of its own — reused as-is, not added by this step).
+// reservations.js for this reason. It reaches loadMyPreorders
+// (src/components/preordersSheet.js, step 31) and renderPreorderPage
+// (src/pages/preorders.js, step 30) via getAction() — a direct import
+// either way would form a cycle (bakeryModal → preordersSheet →
+// profileModal → bakeryModal), so those two keep the registry-lookup
+// pattern even though buildBakeryIndex above graduated to a direct import
+// at Phase 1 residual #2.
 import { registerActions, getAction } from '../events/actions.js';
 import { dataArgs } from '../events/delegate.js';
 import { GOOGLE_MAPS_KEY } from '../config.js';
 import { CATEGORY_TREE, getCategoryDisplay } from '../data/categories.js';
 import { lockScroll, unlockScroll, showToast } from '../utils/dom.js';
-import { allBakeries, allItems, allItemRecords, currentUser, fb, ownsBakery, isBookmarked } from '../state/appState.js';
+import { allBakeries, allItems, allItemRecords, currentUser, fb, ownsBakery, isBookmarked, buildBakeryIndex } from '../state/appState.js';
 import { openAuthModal } from './authModal.js';
 import { allProducts, loadProducts, productCardHTML } from '../pages/shop.js';
 
@@ -147,7 +142,7 @@ export function buildCategoryFilterBar(items, activeCategory, fnName, argsFor) {
 let bakeryActiveCatFilter = '';
 
 export async function openBakeryProfile(bakeryName, catFilter, googleData) {
-  getAction('buildBakeryIndex')();
+  buildBakeryIndex();
   let b = allBakeries[bakeryName];
 
   if (!b && googleData) {

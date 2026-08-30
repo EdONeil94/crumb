@@ -3,8 +3,11 @@
 // CLAUDE.md). Split, not moved wholesale, per explicit confirmation:
 // handleEditPhoto()/saveEdit()/deleteReview() each depended on code not yet
 // extracted at the time (compressImage()/compressToDataURL() — step 18,
-// addReviewModal.js; loadData() — deferred since 3b, step 29;
-// renderLeaderboard()/lbCurrentTab — step 27, leaderboard.js).
+// addReviewModal.js; loadData() — moved to appState.js at Phase 1 residual
+// #2; renderLeaderboard()/lbCurrentTab — step 27, leaderboard.js).
+// As of residual #2 (2026-08-30) saveEdit()/deleteReview() are fully
+// unblocked to move in here — a pending, deliberate follow-up (CLAUDE.md
+// ⚠️ callout #2), NOT done as part of residual #2.
 //
 // handleEditPhoto() moved in here 2026-08-25, once step 18 landed and
 // compressImage()/compressToDataURL() got a real importable home in

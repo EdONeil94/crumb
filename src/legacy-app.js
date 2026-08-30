@@ -6,15 +6,14 @@ import {
   TASTING_DIMS,
 } from './data/categories.js';
 import { lockScroll, unlockScroll, showToast, timeAgo } from './utils/dom.js';
-import { extractCity } from './utils/geo.js';
 import { escJS } from './utils/strings.js';
 import {
   currentUser, fb,
   setCurrentUser, setFb, setCurrentUserRole,
   setCurrentUserBakery, isAdmin, isBusiness, ownsBakery, loadUserRole,
   loadBakeryProfiles,
-  allItems, allBakeries, allProfiles, allItemRecords, setAllItems,
-  setAllBakeries, loadItemRecords, ensureProfileExists,
+  allItems, allItemRecords,
+  loadItemRecords, ensureProfileExists, loadData, loadProfiles,
   myFollowing, myFollowers, loadFollows, loadBookmarks,
   userSavedItems, loadSavedItems,
 } from './state/appState.js';
@@ -40,7 +39,6 @@ import { renderRecentGrid, updateStats } from './pages/home.js';
 import {
   lbCurrentTab, renderLeaderboard,
 } from './pages/leaderboard.js';
-import { exploreCache } from './pages/explore.js';
 import { loadMyPreorders } from './components/preordersSheet.js';
 import {
   handleSettingsPhoto, saveSettingsProfile, signOutFromSettings,
@@ -72,9 +70,10 @@ import './app/lifecycle.js';
 
 // lockScroll/unlockScroll, showToast, timeAgo, escJS, distKm, extractCity,
 // extractCountry moved to src/utils/ (2026-08-24, pages/components carving
-// Phase 0 step 2). Only extractCity is still imported here (buildBakeryIndex);
-// extractCountry's last consumer left with Explore (step 29), distKm's with
-// the Pre-order discovery page (step 30).
+// Phase 0 step 2). None of the geo helpers are imported here any more —
+// extractCity's last consumer was buildBakeryIndex (moved to appState.js,
+// Phase 1 residual #2); extractCountry's left with Explore (step 29),
+// distKm's with the Pre-order discovery page (step 30).
 
 // ─── ROLES ────────────────────────────────────────────────────────────────────
 // SUPER_ADMIN_UID/currentUserRole/currentUserBakery/allUserRoles/
@@ -89,18 +88,18 @@ import './app/lifecycle.js';
 // loadUserRole/loadBakeryProfiles are still imported above — genuinely
 // still needed elsewhere in this file.
 
-async function loadProfiles() {
-  if (!fb) return;
-  const { db, collection, getDocs } = fb;
-  try {
-    const snap = await getDocs(collection(db, 'profiles'));
-    snap.docs.forEach(d => { allProfiles[d.id] = d.data(); });
-    if (currentUser) updateNav();
-    // Re-render People page if visible
-    const peoplePage = document.getElementById('page-people');
-    if (peoplePage && peoplePage.classList.contains('active')) renderPeople();
-  } catch(e) { console.log('Profiles load error:', e.message); }
-}
+// loadProfiles/loadData/buildBakeryIndex moved to src/state/appState.js
+// (2026-08-30, Phase 1 residual #2) — the Phase 0 stage 3b deferral, once
+// step 29 (exploreCache) + step 28 (renderRecentGrid/updateStats) gave
+// every dependency a real home. exploreCache moved to appState.js in the
+// same change (buildBakeryIndex is its only cross-module reader besides
+// explore.js itself). loadData/loadProfiles reach their UI render callbacks
+// (renderRecentGrid/updateStats/updateNav/renderPeople) via getAction()
+// from appState.js — a leaf can't import a page/component back (standing
+// lesson 5). loadData/loadProfiles are imported above for this file's own
+// plain-JS callers (initFirebaseApp; loadData also in saveReview/saveEdit/
+// deleteReview/runCategoryMigration); buildBakeryIndex has no caller left
+// here — its ~5 former getAction() sites are now direct appState imports.
 
 // refreshAdminUsersPanel/promoteUser/promptAssignBakery/removeUserRole
 // moved to src/components/adminPanel.js (2026-08-26, Phase 6 step 23) —
@@ -222,25 +221,8 @@ if (window._crumb) {
 // navigateFromMobileMenu/openMyProfileFromMobileMenu register from nav.js.
 
 // ─── DATA ─────────────────────────────────────────────────────────────────────
-async function loadData() {
-  if (!fb) return;
-  const { db, collection, getDocs, query, orderBy, limit } = fb;
-  try {
-    const q = query(collection(db, 'items'));
-    const snap = await getDocs(q);
-    setAllItems(snap.docs
-      .map(d => ({ id: d.id, ...d.data() }))
-      .sort((a, b) => {
-        const ta = a.createdAt?.toMillis?.() || a.createdAt?.seconds || 0;
-        const tb = b.createdAt?.toMillis?.() || b.createdAt?.seconds || 0;
-        return tb - ta;
-      }));
-    renderRecentGrid();
-    updateStats();
-  } catch (e) {
-    console.log('Data load error (likely not configured yet):', e.message);
-  }
-}
+// loadData() moved to src/state/appState.js (2026-08-30, Phase 1 residual
+// #2) — see the note under the ROLES header above.
 
 // ─── HOME PAGE ────────────────────────────────────────────────────────────────
 // updateStats/renderRecentGrid moved to src/pages/home.js (2026-08-28,
@@ -261,73 +243,13 @@ async function loadData() {
 // feedCardHTML's markup resolve fine regardless of which file registers it.
 
 // ─── BAKERIES ─────────────────────────────────────────────────────────────────
-// allBakeries moved to src/state/appState.js (2026-08-24, Phase 0 step
-// 3b), imported above; buildBakeryIndex() still lives here — it reads
-// exploreCache (now imported from src/pages/explore.js, Phase 7 step 29)
-// and is called from loadData()/saveReview() (also still here). Whether
-// buildBakeryIndex()/loadData() can now move into appState.js alongside
-// allItems/allBakeries is a deliberate follow-up (CLAUDE.md Phase 7 step
-// 29 note), NOT done as part of step 29.
-// Registered below (not a click action — src/components/bakeryModal.js's
-// openBakeryProfile calls it via getAction('buildBakeryIndex')() instead of
-// a forbidden direct import, since openBakeryProfile itself had to move
-// this step and this function couldn't move with it; Phase 4 step 18's
-// modalNext/saveReview precedent, reused here — see bakeryModal.js's own
-// header comment).
-
-function buildBakeryIndex() {
-  setAllBakeries({});
-  allItems.forEach(item => {
-    const key = item.bakeryName || 'Unknown bakery';
-    if (!allBakeries[key]) {
-      allBakeries[key] = {
-        name: key,
-        address: item.bakeryAddress || '',
-        placeId: item.bakeryPlaceId || null,
-        lat: item.bakeryLat || null,
-        lng: item.bakeryLng || null,
-        city: extractCity(item.bakeryAddress || ''),
-        items: [],
-        totalScore: 0,
-        blurb: ''
-      };
-    }
-    // Grab coords from any item that has them (older reviews may not)
-    if (!allBakeries[key].lat && item.bakeryLat) {
-      allBakeries[key].lat = item.bakeryLat;
-      allBakeries[key].lng = item.bakeryLng;
-    }
-    // Grab placeId from any item that has it
-    if (!allBakeries[key].placeId && item.bakeryPlaceId) {
-      allBakeries[key].placeId = item.bakeryPlaceId;
-    }
-    allBakeries[key].items.push(item);
-    allBakeries[key].totalScore += (item.communityAvg || item.overallRating || 0);
-  });
-
-  // For bakeries still missing coords, try to get them from bakeryProfiles
-  // (bakeryProfiles doesn't store coords, but we can try the Explore cache
-  // which has lat/lng from the Places nearby search)
-  Object.values(allBakeries).forEach(b => {
-    if (!b.lat) {
-      // Try exploreCache across all cities
-      for (const cityResults of Object.values(exploreCache || {})) {
-        const match = cityResults.find(r =>
-          (r.name || '').toLowerCase() === b.name.toLowerCase() ||
-          (b.placeId && r.placeId === b.placeId)
-        );
-        if (match?.lat) {
-          b.lat = match.lat;
-          b.lng = match.lng;
-          break;
-        }
-      }
-    }
-  });
-}
-
-registerActions({ buildBakeryIndex });
-
+// allBakeries + buildBakeryIndex() moved to src/state/appState.js
+// (allBakeries at Phase 0 step 3b; buildBakeryIndex + exploreCache at Phase
+// 1 residual #2, 2026-08-30 — see the note under the ROLES header above).
+// The ~5 getAction('buildBakeryIndex')() call sites in leaf modules
+// (bakeryModal.js, adminPanel.js, bakeries.js, leaderboard.js) became
+// ordinary `import { buildBakeryIndex } from '../state/appState.js'` in the
+// same change — appState.js is a module they all already import from.
 
 // ─── FILTER HELPERS ───────────────────────────────────────────────────────────
 // Now fully empty of code — the "splits three ways" grab-bag CLAUDE.md's own
@@ -351,12 +273,11 @@ registerActions({ buildBakeryIndex });
 // onLbFilterChange/getLbFilters/switchLbTab/renderBakeryLeaderboard/
 // closeLbAndOpenBakery/renderLeaderboard moved to src/pages/leaderboard.js
 // (2026-08-28, Phase 7 step 27). lbCurrentTab was declared up in the STATE
-// section, not here — it moved too. lbCurrentMode/lbCurrentTab/
-// populateLbLocationFilter/renderBakeryLeaderboard/renderLeaderboard are
-// imported back above (showPage() reads the state and renders on nav;
-// saveReview()/deleteReview() re-render after a write). buildBakeryIndex()
-// stays here (reads exploreCache) — renderBakeryLeaderboard reaches it via
-// getAction('buildBakeryIndex')().
+// section, not here — it moved too. Only lbCurrentTab/renderLeaderboard are
+// imported back here now (saveReview()/deleteReview() re-render after a
+// write); showPage() moved to nav.js (residual #1) and reads the rest
+// there. renderBakeryLeaderboard imports buildBakeryIndex directly from
+// appState.js now (residual #2).
 
 // ─── ITEM DETAIL ──────────────────────────────────────────────────────────────
 // openDetail/closeDetailModal/isSavedItem moved to
@@ -577,14 +498,11 @@ registerActions({ saveReview });
 // showAdminTab's last caller was openSettingsPage, which moved to
 // src/pages/settings.js at Phase 7 step 32 and imports it directly from
 // adminPanel.js. See adminPanel.js's own header comment for the full
-// reasoning, including a
-// pre-existing bug surfaced in removeReviewAndFlag's dependency on
-// loadData()). removeReviewAndFlag() calls loadData() (stays here, blocked
-// on Explore's exploreCache — Phase 0 step 3b / Phase 7 step 29's own note)
-// via getAction('loadData')() instead of a forbidden direct import; this
-// file now registers loadData for that lookup to resolve (new — loadData
-// had no prior action registration).
-registerActions({ loadData });
+// reasoning, including a pre-existing bug surfaced in removeReviewAndFlag's
+// dependency on loadData(). removeReviewAndFlag() imports loadData()
+// directly from src/state/appState.js now (Phase 1 residual #2) — the
+// getAction('loadData')() indirection and this file's
+// registerActions({ loadData }) both went away with that move.
 
 // ─── FLAG REVIEW ──────────────────────────────────────────────────────────────
 // flagReview did NOT move to adminPanel.js despite this header's physical
@@ -611,29 +529,22 @@ async function flagReview(itemId, bakeryName) {
 }
 
 // renderAdminUsersHTML/renderAdminBakeriesHTML moved to
-// src/components/adminPanel.js (2026-08-26, Phase 6 step 23) — imported
-// below. renderAdminBakeriesHTML's own buildBakeryIndex() call resolves via
-// getAction('buildBakeryIndex')() there instead (same blocked dependency,
-// same resolution as bakeryModal.js's openBakeryProfile at step 21).
+// src/components/adminPanel.js (2026-08-26, Phase 6 step 23). Nothing is
+// imported back here for them. renderAdminBakeriesHTML's buildBakeryIndex()
+// call is a direct appState.js import there now (residual #2).
 
 // ─── EXPLORE PAGE ─────────────────────────────────────────────────────────────
-// The whole Explore cluster (~735 lines: exploreCache + explore* state,
-// setExploreViewMode, the Leaflet map view + its diagnostics panel,
-// Nearby-radius mode, country/city dropdowns, geo detection,
-// initExplorePage, and the trending-bakeries logic) moved to
-// src/pages/explore.js (2026-08-28, Phase 7 step 29). exploreCache and
-// initExplorePage are imported back above — buildBakeryIndex() reads
-// exploreCache, showPage() calls initExplorePage(). The static city data
-// (EXPLORE_COUNTRIES/ALL_CITIES/UK_CITIES) moved to
-// src/data/exploreCities.js — legacy-app.js still imports EXPLORE_COUNTRIES
-// for the Settings admin panel (Pre-order discovery moved to
-// src/pages/preorders.js at step 30 and imports both from there). The 8
-// delegated explore actions register from explore.js itself now.
-//
-// Deferred follow-up now unblocked-in-principle (CLAUDE.md Phase 7 step 29
-// note): whether loadData()/buildBakeryIndex()/loadProfiles() can move
-// into appState.js now that exploreCache has an importable home. NOT done
-// in this step — a deliberate, separate decision.
+// The whole Explore cluster (~735 lines: explore* state, setExploreViewMode,
+// the Leaflet map view + its diagnostics panel, Nearby-radius mode,
+// country/city dropdowns, geo detection, initExplorePage, and the
+// trending-bakeries logic) moved to src/pages/explore.js (2026-08-28,
+// Phase 7 step 29). The static city data (EXPLORE_COUNTRIES/ALL_CITIES/
+// UK_CITIES) moved to src/data/exploreCities.js; the 8 delegated explore
+// actions register from explore.js itself. As of Phase 1 residual #1
+// (showPage → nav.js) and #2 (exploreCache → appState.js), legacy-app.js
+// imports NOTHING from explore.js — initExplorePage() is called by
+// showPage() in nav.js, and exploreCache lives in appState.js alongside
+// buildBakeryIndex (its only cross-module reader).
 
 // openAddModalForBakery moved to src/components/addReviewModal.js
 // (2026-08-25, Phase 4 step 18) — registers from there now; no import
@@ -646,8 +557,12 @@ async function flagReview(itemId, bakeryName) {
 // imported above. handleEditPhoto moved there too (2026-08-25, once Phase
 // 4 step 18 landed and compressImage/compressToDataURL got a real
 // importable home) — resolving that step's own tied deferred-follow-up.
-// saveEdit/deleteReview stay here, still deferred — see CLAUDE.md's own
-// callout for why and when to revisit (step 29, a separate trigger).
+// saveEdit/deleteReview stay here for now. As of Phase 1 residual #2
+// (2026-08-30) they are FULLY UNBLOCKED — their last blocker, loadData(),
+// is now importable from src/state/appState.js (renderLeaderboard/
+// lbCurrentTab importable since step 27, closeEditModal since step 9). The
+// move into editReviewModal.js is a clean follow-up but a deliberate,
+// separate decision — see CLAUDE.md's ⚠️ callout #2.
 
 async function saveEdit() {
   if (!editingItemId || !currentUser) return;
@@ -751,12 +666,13 @@ async function deleteReview() {
   }
 }
 
-// Edit Review modal. saveEdit/deleteReview's onclick= call sites are in
-// index.html (the modal's static footer buttons), not here.
+// Edit Review modal. saveEdit/deleteReview's data-onclick call sites are in
+// index.html (the modal's static footer buttons).
 // updateDimDisplay/updateEditSubCategory/closeEditModal/clearEditPhoto/
 // handleEditPhoto registered from src/components/editReviewModal.js now
 // (Phase 2 step 9 / Phase 4 step 18); saveEdit/deleteReview stay
-// registered here — deferred, see CLAUDE.md.
+// registered here — now fully unblocked to move into editReviewModal.js
+// (residual #2 made loadData() importable), a pending separate decision.
 registerActions({ saveEdit, deleteReview });
 
 // ─── CATEGORY MIGRATION ───────────────────────────────────────────────────────
@@ -1404,10 +1320,11 @@ registerActions({ submitFeatureRequest });
 // data-onclick and the location filter's data-onchange — register from
 // src/pages/bakeries.js itself now (Phase 7 step 26), along with
 // geocodeMissingBakeries/populateBakeryLocationFilter/distKmUser and the
-// bakeryViewMode/userGeoCoords state. buildBakeryIndex stays here (reads
-// exploreCache), registered above for getAction() lookups. openBakeryProfile
-// registers from src/components/bakeryModal.js (Phase 5 step 21);
-// toggleBookmark from src/components/profileModal.js (Phase 5 step 22).
+// bakeryViewMode/userGeoCoords state. buildBakeryIndex moved to
+// src/state/appState.js (residual #2) — no longer registered/owned here.
+// openBakeryProfile registers from src/components/bakeryModal.js (Phase 5
+// step 21); toggleBookmark from src/components/profileModal.js (Phase 5
+// step 22).
 
 // People page view toggle + rankings/location-filter onchange handlers now
 // register from src/pages/people.js itself (Phase 3 step 15) — setPeopleView/

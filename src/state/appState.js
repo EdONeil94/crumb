@@ -8,16 +8,22 @@
 //
 // This file is built up in three checkpointed sub-stages (3a identity/roles,
 // 3b core data caches, 3c social state), each its own commit gated on a
-// full test:e2e run — see CLAUDE.md for why. This is 3a + 3b.
+// full test:e2e run — see CLAUDE.md for why. This is 3a + 3b + 3c.
 //
-// 3b note: loadData()/buildBakeryIndex()/loadProfiles() stay in
-// legacy-app.js rather than moving here, unlike 3a's loaders — each has a
-// real dependency legacy-app.js still owns (loadData/loadProfiles call UI
-// render functions like renderRecentGrid()/updateNav()/renderPeople();
-// buildBakeryIndex reads exploreCache, owned by the not-yet-extracted
-// Explore page). Moving them would mean this module importing back from
-// the file that imports it. Only loadItemRecords()/ensureProfileExists()
-// are genuinely self-contained enough to move, same as 3a's cluster.
+// 3b follow-up (Phase 1 residual #2, 2026-08-30): loadData()/loadProfiles()/
+// buildBakeryIndex() (+ exploreCache) finally moved here, completing what
+// 3b left half-done. They stayed in legacy-app.js originally because each
+// touched something legacy-app.js still owned — loadData/loadProfiles call
+// UI render functions (renderRecentGrid/updateStats/updateNav/renderPeople),
+// buildBakeryIndex reads exploreCache (then owned by the not-yet-extracted
+// Explore page). Steps 27-29 gave every one of those a real home; the UI
+// callbacks are now reached via getAction() (this module is a leaf — it
+// must not import a page/component back, standing lesson 5), and exploreCache
+// moved here alongside buildBakeryIndex (its only cross-module reader
+// besides explore.js, which now imports it from here).
+
+import { getAction } from '../events/actions.js';
+import { extractCity } from '../utils/geo.js';
 
 // ─── 3a: Identity / roles ───────────────────────────────────────────────────
 
@@ -77,20 +83,104 @@ export async function loadAllUserRoles() {
 }
 
 // ─── 3b: Core data caches ───────────────────────────────────────────────────
-// allItems/allBakeries are exported as state + setters only (their loaders
-// stay in legacy-app.js — see the note above); allItemRecords/allProfiles
-// have no setter since their sole mutator either moves with them
-// (loadItemRecords) or only ever mutates properties, never reassigns
-// (loadProfiles's `allProfiles[d.id] = ...`, verified via grep — no
-// wholesale `allProfiles = ` reassignment exists anywhere in the codebase).
+// All four caches + their loaders now live here (loadData/loadProfiles/
+// buildBakeryIndex joined at Phase 1 residual #2). No setters are needed
+// any more — every reassignment site is inside this module. Functions
+// elsewhere that touch these (saveReview's `allItems.unshift(...)`,
+// toggleBookmark, …) only ever mutate by property/array method, never
+// reassign — verified via grep across the whole codebase.
 
 export let allItems = [];
 export let allBakeries = {}; // keyed by bakeryName
 export let allProfiles = {}; // uid -> profile data
 export let allItemRecords = []; // cached from Firestore
+export let exploreCache = {}; // Explore-page Places results, cityKey -> results[]
+                              // (populated by src/pages/explore.js; read here
+                              // by buildBakeryIndex to back-fill bakery coords)
 
-export function setAllItems(items) { allItems = items; }
-export function setAllBakeries(bakeries) { allBakeries = bakeries; }
+export async function loadData() {
+  if (!fb) return;
+  const { db, collection, getDocs, query, orderBy, limit } = fb;
+  try {
+    const q = query(collection(db, 'items'));
+    const snap = await getDocs(q);
+    allItems = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => {
+        const ta = a.createdAt?.toMillis?.() || a.createdAt?.seconds || 0;
+        const tb = b.createdAt?.toMillis?.() || b.createdAt?.seconds || 0;
+        return tb - ta;
+      });
+    getAction('renderRecentGrid')();
+    getAction('updateStats')();
+  } catch (e) {
+    console.log('Data load error (likely not configured yet):', e.message);
+  }
+}
+
+export async function loadProfiles() {
+  if (!fb) return;
+  const { db, collection, getDocs } = fb;
+  try {
+    const snap = await getDocs(collection(db, 'profiles'));
+    snap.docs.forEach(d => { allProfiles[d.id] = d.data(); });
+    if (currentUser) getAction('updateNav')();
+    // Re-render People page if visible
+    const peoplePage = document.getElementById('page-people');
+    if (peoplePage && peoplePage.classList.contains('active')) getAction('renderPeople')();
+  } catch(e) { console.log('Profiles load error:', e.message); }
+}
+
+export function buildBakeryIndex() {
+  allBakeries = {};
+  allItems.forEach(item => {
+    const key = item.bakeryName || 'Unknown bakery';
+    if (!allBakeries[key]) {
+      allBakeries[key] = {
+        name: key,
+        address: item.bakeryAddress || '',
+        placeId: item.bakeryPlaceId || null,
+        lat: item.bakeryLat || null,
+        lng: item.bakeryLng || null,
+        city: extractCity(item.bakeryAddress || ''),
+        items: [],
+        totalScore: 0,
+        blurb: ''
+      };
+    }
+    // Grab coords from any item that has them (older reviews may not)
+    if (!allBakeries[key].lat && item.bakeryLat) {
+      allBakeries[key].lat = item.bakeryLat;
+      allBakeries[key].lng = item.bakeryLng;
+    }
+    // Grab placeId from any item that has it
+    if (!allBakeries[key].placeId && item.bakeryPlaceId) {
+      allBakeries[key].placeId = item.bakeryPlaceId;
+    }
+    allBakeries[key].items.push(item);
+    allBakeries[key].totalScore += (item.communityAvg || item.overallRating || 0);
+  });
+
+  // For bakeries still missing coords, try to get them from bakeryProfiles
+  // (bakeryProfiles doesn't store coords, but we can try the Explore cache
+  // which has lat/lng from the Places nearby search)
+  Object.values(allBakeries).forEach(b => {
+    if (!b.lat) {
+      // Try exploreCache across all cities
+      for (const cityResults of Object.values(exploreCache || {})) {
+        const match = cityResults.find(r =>
+          (r.name || '').toLowerCase() === b.name.toLowerCase() ||
+          (b.placeId && r.placeId === b.placeId)
+        );
+        if (match?.lat) {
+          b.lat = match.lat;
+          b.lng = match.lng;
+          break;
+        }
+      }
+    }
+  });
+}
 
 export async function loadItemRecords() {
   if (!fb) return;

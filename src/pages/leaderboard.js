@@ -5,29 +5,28 @@
 // getLbFilters, switchLbTab, renderBakeryLeaderboard, closeLbAndOpenBakery,
 // renderLeaderboard.
 //
-// buildBakeryIndex() did NOT move — it reads exploreCache, owned by the
-// not-yet-extracted Explore page (Phase 7 step 29). renderBakeryLeaderboard
-// reaches it via getAction('buildBakeryIndex')() rather than a forbidden
-// direct import back, the same pattern bakeryModal.js (step 21),
-// adminPanel.js (step 23) and bakeries.js (step 26) already use.
+// buildBakeryIndex() moved to src/state/appState.js at Phase 1 residual #2
+// (2026-08-30) — renderBakeryLeaderboard imports it directly from there
+// now, replacing the getAction('buildBakeryIndex')() indirection this file
+// used while it lived in legacy-app.js.
 //
 // openBakeryProfile is imported one-way from components/bakeryModal.js
 // (used by closeLbAndOpenBakery; the leaderboard rows' data-onclick
 // "openBakeryProfile"/"openDetail" markup resolves via the global action
 // registry regardless). No cycle — bakeryModal.js imports nothing from here.
 //
-// showPage() (legacy-app.js, Phase 7 step 32) reads lbCurrentMode/
+// showPage() (nav.js, Phase 1 residual #1) reads lbCurrentMode/
 // lbCurrentTab and calls populateLbLocationFilter/renderBakeryLeaderboard/
 // renderLeaderboard on nav to this page — normal one-way imports back.
-// saveReview() and deleteReview() (both still in legacy-app.js, deferred to
-// step 29) also call renderLeaderboard(lbCurrentTab) after a write. Neither
-// lbCurrentMode nor lbCurrentTab is ever reassigned outside this file
-// (confirmed via grep) — exported as plain live bindings, no setter needed,
-// same convention as people.js's peopleViewMode (step 15).
+// saveReview() and deleteReview() (both still in legacy-app.js) also call
+// renderLeaderboard(lbCurrentTab) after a write. Neither lbCurrentMode nor
+// lbCurrentTab is ever reassigned outside this file (confirmed via grep) —
+// exported as plain live bindings, no setter needed, same convention as
+// people.js's peopleViewMode (step 15).
 
-import { registerActions, getAction } from '../events/actions.js';
+import { registerActions } from '../events/actions.js';
 import { dataArgs } from '../events/delegate.js';
-import { allItems, allBakeries, allItemRecords } from '../state/appState.js';
+import { allItems, allBakeries, allItemRecords, buildBakeryIndex } from '../state/appState.js';
 import { extractCity } from '../utils/geo.js';
 import { CATEGORY_TREE, getCategoryDisplay } from '../data/categories.js';
 import { openBakeryProfile } from '../components/bakeryModal.js';
@@ -80,7 +79,7 @@ function switchLbTab(tab, btn) {
 }
 
 export function renderBakeryLeaderboard() {
-  getAction('buildBakeryIndex')();
+  buildBakeryIndex();
   const list = document.getElementById('lbList');
   const { location, minRating } = getLbFilters();
 

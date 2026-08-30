@@ -281,4 +281,7 @@ export function renderPeople() {
   }).join('');
 }
 
-registerActions({ setPeopleView, renderRankings, populateRankingLocationFilter });
+// renderPeople is registered for appState.js's loadProfiles() getAction()
+// lookup (it re-renders the People grid if that page is open when fresh
+// profile data lands) — it has no data-onclick call site of its own.
+registerActions({ setPeopleView, renderRankings, populateRankingLocationFilter, renderPeople });

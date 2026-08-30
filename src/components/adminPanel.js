@@ -72,19 +72,13 @@
 // Users tab to see the change. Left as-is, per this extraction's own scope
 // (surface, don't fix).
 //
-// Two genuinely blocked calls, resolved via the `getAction()` pattern from
-// steps 18/21 rather than a forbidden direct import back into
-// `legacy-app.js`: `renderAdminBakeriesHTML()` calls `buildBakeryIndex()`
-// (stays in `legacy-app.js`, still blocked on Explore's `exploreCache` —
-// Phase 0 step 3b / Phase 7 step 29's own already-documented note) —
-// already registered as an action since step 21 (bakeryModal.js's
-// `openBakeryProfile` uses the same lookup), so this reuses that existing
-// registration rather than adding a new one. `removeReviewAndFlag()` calls
-// `loadData()` (also stays in `legacy-app.js`, same Phase 7 step 29
-// blocker) — `loadData` had no existing action registration, so
-// `legacy-app.js` now registers it via a new `registerActions({ loadData })`
-// call for this lookup to resolve, the same treatment `saveReview` got at
-// step 18.
+// `renderAdminBakeriesHTML()` calls `buildBakeryIndex()` and
+// `removeReviewAndFlag()` calls `loadData()` — both moved from
+// `legacy-app.js` into `src/state/appState.js` at Phase 1 residual #2
+// (2026-08-30) and are now ordinary one-way imports from there (this module
+// already imports several caches from `appState.js`). The
+// `getAction('buildBakeryIndex')()` / `getAction('loadData')()` indirection
+// this file used while they lived in `legacy-app.js` is gone.
 //
 // Every other dependency has a real importable home already:
 // `openBakeryProfile` is only ever referenced via this cluster's own
@@ -104,11 +98,12 @@
 // table as permanently out of scope — kept in `legacy-app.js`'s
 // `WINDOW EXPORTS`, imported back one-way). Everything else is markup-only
 // or same-file-internal.
-import { registerActions, getAction } from '../events/actions.js';
+import { registerActions } from '../events/actions.js';
 import { dataArgs } from '../events/delegate.js';
 import {
   SUPER_ADMIN_UID, currentUser, fb, allUserRoles, bakeryProfiles, isAdmin,
   ownsBakery, loadAllUserRoles, allItems, allBakeries, allProfiles,
+  buildBakeryIndex, loadData,
 } from '../state/appState.js';
 import { lockScroll, unlockScroll, showToast } from '../utils/dom.js';
 import { compressImage, compressToDataURL } from './addReviewModal.js';
@@ -223,7 +218,7 @@ async function removeReviewAndFlag(itemId, flagId) {
     deleteDoc(doc(db, 'flaggedReviews', flagId))
   ]);
   showToast('Review removed');
-  await getAction('loadData')();
+  await loadData();
   renderAdminFlags();
 }
 
@@ -347,7 +342,7 @@ function renderAdminUsersHTML() {
 }
 
 function renderAdminBakeriesHTML() {
-  getAction('buildBakeryIndex')();
+  buildBakeryIndex();
   const names = Object.keys(allBakeries);
   if (!names.length) return '<div class="empty-state" style="padding:24px 0;"><div class="empty-state-title">No bakeries yet</div></div>';
 

@@ -4,33 +4,27 @@
 // geocodeMissingBakeries, setBakeryView, populateBakeryLocationFilter,
 // distKmUser, renderBakeries.
 //
-// buildBakeryIndex() did NOT move — it reads exploreCache, owned by the
-// not-yet-extracted Explore page (Phase 7 step 29). It stays in
-// legacy-app.js, and setBakeryView/renderBakeries reach it via
-// getAction('buildBakeryIndex')() rather than a forbidden direct import
-// back — the same action-registry pattern bakeryModal.js (step 21) and
-// adminPanel.js (step 23) already use for it. legacy-app.js registers it
-// via registerActions({ buildBakeryIndex }) (unchanged, pre-existing).
-// The Phase 0 stage 3b deferred follow-up (revisit whether
-// loadData()/buildBakeryIndex() can move into appState.js once Explore's
-// exploreCache has a real home) is unaffected — that decision belongs to
-// step 29, not this one.
+// buildBakeryIndex() moved to src/state/appState.js at Phase 1 residual #2
+// (2026-08-30) — once exploreCache (its only blocker) moved there too.
+// setBakeryView/renderBakeries import it directly from appState.js now,
+// replacing the getAction('buildBakeryIndex')() indirection this file used
+// while it lived in legacy-app.js.
 //
 // distKm is now imported one-way from utils/geo.js (the step-2 note
 // predicted this: distKmUser reads userGeoCoords, this page's own local
 // state, so it was left behind then to move here now).
 //
-// showPage() (legacy-app.js, Phase 7 step 32) resets the view on nav to
+// showPage() (nav.js, Phase 1 residual #1) resets the view on nav to
 // this page — it calls setBakeryViewMode('all') then renderBakeries(),
 // both imported one-way back. Exact pre-existing behavior preserved: the
 // old inline `bakeryViewMode = 'all'; renderBakeries()` did not touch the
 // view-toggle button .active classes, and neither does setBakeryViewMode
 // (setBakeryView, which does toggle them, is only reached from markup).
 
-import { registerActions, getAction } from '../events/actions.js';
+import { registerActions } from '../events/actions.js';
 import { dataArgs } from '../events/delegate.js';
 import { GOOGLE_MAPS_KEY } from '../config.js';
-import { currentUser, allBakeries, allItems, isBookmarked } from '../state/appState.js';
+import { currentUser, allBakeries, allItems, isBookmarked, buildBakeryIndex } from '../state/appState.js';
 import { distKm } from '../utils/geo.js';
 import { showToast } from '../utils/dom.js';
 
@@ -77,7 +71,7 @@ function setBakeryView(mode) {
   });
   if (mode === 'nearest') {
     const doNearest = async () => {
-      getAction('buildBakeryIndex')();
+      buildBakeryIndex();
       const missing = Object.values(allBakeries).filter(b => !b.lat && b.address);
       if (missing.length) {
         document.getElementById('bakeriesGrid').innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:32px;color:var(--text-muted)"><div class="spinner" style="margin:0 auto 12px;"></div>Finding nearby bakeries…</div>';
@@ -123,7 +117,7 @@ function distKmUser(b) {
 }
 
 export function renderBakeries() {
-  getAction('buildBakeryIndex')();
+  buildBakeryIndex();
   populateBakeryLocationFilter();
 
   const grid = document.getElementById('bakeriesGrid');

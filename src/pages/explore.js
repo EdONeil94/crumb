@@ -5,16 +5,15 @@
 // detection, and the trending-bakeries logic that mixes Crumbz reviews with
 // live Google Places results.
 //
-// exploreCache is exported — src/legacy-app.js's buildBakeryIndex() reads it
-// (Object.values(exploreCache)) to back-fill bakery coords, which is the
-// whole reason loadData()/buildBakeryIndex() were deferred (Phase 0 stage
-// 3b) until this page had a real module. Whether those two can now move
-// into appState.js is a deliberate, separate follow-up (CLAUDE.md Phase 7
-// step 29 note) — NOT done here. exploreCache is only ever property-mutated
-// (exploreCache[key] = ...), never reassigned, so the live export binding
-// works for the importer.
+// exploreCache lives in src/state/appState.js (moved there at Phase 1
+// residual #2, 2026-08-30, alongside buildBakeryIndex — its only
+// cross-module reader). This page populates it (exploreCache[key] = ...,
+// property mutation on the imported live binding — never reassigned here).
+// Extracting it from this file was the last thing blocking loadData()/
+// buildBakeryIndex()/loadProfiles() from leaving legacy-app.js (Phase 0
+// stage 3b's deferral).
 //
-// initExplorePage is exported for showPage() (legacy-app.js, step 32).
+// initExplorePage is exported for showPage() (nav.js, Phase 1 residual #1).
 // EXPLORE_COUNTRIES/ALL_CITIES/UK_CITIES live in src/data/exploreCities.js
 // (also imported by Settings + Pre-order discovery, still in legacy-app.js).
 // geocodeBakeryAddress is imported from src/services/places.js (shared with
@@ -26,14 +25,13 @@
 import { registerActions } from '../events/actions.js';
 import { dataArgs } from '../events/delegate.js';
 import { EXPLORE_COUNTRIES, ALL_CITIES, UK_CITIES } from '../data/exploreCities.js';
-import { allItems, currentUser, isBookmarked } from '../state/appState.js';
+import { allItems, currentUser, isBookmarked, exploreCache } from '../state/appState.js';
 import { distKm } from '../utils/geo.js';
 import { showToast } from '../utils/dom.js';
 import { getCategoryDisplay } from '../data/categories.js';
 import { GOOGLE_MAPS_KEY } from '../config.js';
 import { geocodeBakeryAddress } from '../services/places.js';
 
-export let exploreCache = {};
 let exploreActiveCity = null;
 let exploreActiveCountry = 'United Kingdom';
 let exploreSortMode = 'top';
