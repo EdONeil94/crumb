@@ -1,9 +1,11 @@
 # Tier 2 — move the E2E suite off production onto the Firebase Emulator Suite
 
-Status: **IMPLEMENTED 2026-08-30** (branch `feat/e2e-emulator`). Follows
-Tier 1 (commit `045f50e`). The suite now runs against the local emulators
-with a seeded baseline — **zero writes to `crumb-ddeb6`**, verified. Full
-suite: **71 passed / 3 skipped / 0 failed**, skip count stable across runs.
+Status: **IMPLEMENTED & MERGED-PENDING 2026-08-30** (PR #3, branch
+`feat/e2e-emulator`). Follows Tier 1 (#1). The suite now runs against the
+local emulators with a seeded baseline — **zero writes to `crumb-ddeb6`**,
+verified by querying the live project after every run. Full suite: **71
+passed / 3 skipped / 0 failed**, identical across local runs 3–5 and the
+CI run (`.github/workflows/e2e.yml`).
 This document is kept as the design record; what actually shipped differs
 from the plan below in a few places:
 

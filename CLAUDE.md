@@ -1203,9 +1203,14 @@ afterward — no E2E gate needed for this, same reasoning as Phase 0 step 4
     client — confirmed), so it marks them `status: 'cancelled'` instead,
     run after run. They're **invisible to users** (cancelled reservations
     don't render anywhere), just collection bloat (469 of 473 total).
-    Tier 2 stopped new ones (they land in the emulator now). Purging the
-    existing 469 needs the Admin SDK (a service-account key) — deliberately
-    deferred as not worth it
+    Tier 2 stopped new ones (they land in the emulator now). The committed
+    `firestore.rules` show `reservations` delete needs
+    `request.auth.uid == 'KTpBS4yJx2h8LpcryCTfJDFCHlr2'` — the *real*
+    super-admin account (not the E2E account, which is admin only via a
+    `userRoles` doc), so purging the 469 is doable by running
+    `scripts/cleanup-e2e-data.mjs` signed in as that account, or via the
+    Admin SDK with a service-account key. Deliberately deferred as not
+    worth it
     for cosmetic cleanup.
 
 ## E2E tests (Playwright)
@@ -1239,10 +1244,14 @@ pre-existing issues" and `docs/tier2-emulator-scope.md`.)
   re-render instead of reusing a stale locator) — it used to *skip* against
   prod when the E2E account's follow graph didn't have the right shape, and
   the deterministic seed made it run.
-- **Skip count is now stable** (the emulator is reseeded fresh every run):
-  expect ~6 skipped — flagged reviews / opening-hours (Google Places) / the
-  live-Places test / a couple of genuinely-data-shaped cases the MVP seed
-  doesn't cover. 0 failed.
+- **71 passed / 3 skipped / 0 failed** — verified locally (runs 3–5) and in
+  CI, identical every time. The 3 skips: `admin-panel.js:128` (no flagged
+  reviews seeded — wiring-only test), `bakery-profile-management.js:33` +
+  `bakery-search.js:90` (both need live Google Places, which the emulator
+  run doesn't touch). A round of `people-filters.spec.js` /
+  `share-and-saved.spec.js` waits was needed — those grids/modals are built
+  from `allItems`/`allProfiles`, which aren't awaited on load, so a fast CI
+  worker used to race the data and skip.
 
 <details><summary>Earlier status (2026-08-24, against the live project) — historical</summary>
 

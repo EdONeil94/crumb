@@ -82,7 +82,9 @@ Playwright's browser + a couple of Google-Places-backed specs), but **no
 credentials and no production access**. `playwright.config.js` starts the
 Auth/Firestore/Storage emulators (`firebase.json`) and a Vite server on
 5174; `tests/seed-emulator.mjs` seeds a fresh deterministic baseline every
-run. Result: ~65 passed, ~6 skipped, 0 failed.
+run. Result: **71 passed, 3 skipped, 0 failed** (verified locally and in
+CI). The 3 skips are the live-Google-Places test and two Places-backed
+cases the emulator can't cover.
 
 ```bash
 cp .env.example .env       # E2E_EMAIL / E2E_PASSWORD — a real test account
