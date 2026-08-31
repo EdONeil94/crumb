@@ -19,7 +19,6 @@ on:
     paths:
       - 'firestore.rules'
       - 'storage.rules'
-      - '.github/workflows/deploy-rules.yml'
   workflow_dispatch:
 
 permissions:
