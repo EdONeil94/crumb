@@ -21,7 +21,7 @@ src/
   events/               delegated-event system (data-onclick/onchange/oninput)
   app/lifecycle.js      PWA install, update check, pull-to-refresh, keyboard scroll
   components/*.js        reusable modals/widgets (nav, auth, review card, …)
-  pages/*.js            the 9 routed #page-* views
+  pages/*.js            the routed #page-* views (home, bakeries, admin, …)
   legacy-app.js         app bootstrap + a few feature clusters not yet carved out
   styles/main.css        all CSS
 tests/                  Playwright E2E suite (see below)

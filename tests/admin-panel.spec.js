@@ -1,14 +1,15 @@
 import { test, expect } from '@playwright/test';
 
-// Backfills the manually-verified checklists for two clusters that live on
-// the Settings page's Admin Panel section:
+// Backfills the manually-verified checklists for two clusters on the
+// dedicated Admin Panel page (#page-admin — moved out of Settings
+// 2026-08-31, reached from the "🛡️ Admin panel" account-menu entry):
 // - ADMIN PANEL RENDERERS (renderAdminUsersHTML/renderAdminBakeriesHTML)
 // - ADMIN PANEL (showAdminTab — the Users/Bakeries/Flags/Features tab
 //   switcher, and dismissFlag/removeReviewAndFlag on the Flags tab)
 // Only runs anything if the signed-in test account is an admin (isAdmin() —
-// see src/legacy-app.js) — skips with a clear message otherwise, same
-// convention as tests/people-filters.spec.js for data this suite doesn't
-// control.
+// see src/state/appState.js): the "🛡️ Admin panel" menu entry only renders
+// for admins, so its absence is the skip signal — same convention as
+// tests/people-filters.spec.js for data this suite doesn't control.
 //
 // promoteUser/promptAssignBakery/removeUserRole/dismissFlag/
 // removeReviewAndFlag are NOT clicked here, even when a candidate row
@@ -21,11 +22,7 @@ import { test, expect } from '@playwright/test';
 // button in tests/share-and-saved.spec.js). Manually verify an actual
 // promote/assign/remove/dismiss/delete if these need real coverage.
 
-async function gotoSettings(page) {
-  await page.locator('#navAvatar').click();
-  await page.locator('[data-onclick="closeAvatarDropdown,showPage"]', { hasText: 'Settings' }).click();
-  await expect(page.locator('#page-settings')).toHaveClass(/active/);
-}
+const ADMIN_MENU_ITEM = '[data-onclick="closeAvatarDropdown,showPage"]';
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
@@ -34,18 +31,22 @@ test.beforeEach(async ({ page }) => {
     'Not signed in — check E2E_EMAIL/E2E_PASSWORD and tests/auth.setup.js'
   ).toBeVisible({ timeout: 15_000 });
 
-  await gotoSettings(page);
-
-  // openSettingsPage() toggles #settingsAdminCard after an unawaited async
-  // role check (loadUserRole()) for non-super-admin accounts, so a plain
-  // isVisible() right after navigating could race it — give it a moment.
+  // The "🛡️ Admin panel" avatar-dropdown entry only renders for admins
+  // (nav.js toggleUserMenu, gated on isAdmin()). Its absence is the skip
+  // signal. Role is loaded before updateNav() runs (legacy-app.js auth
+  // listener awaits loadUserRole()), but give the check a moment anyway.
+  await page.locator('#navAvatar').click();
+  const adminItem = page.locator(ADMIN_MENU_ITEM, { hasText: 'Admin panel' });
   let isAdminAccount = true;
   try {
-    await expect(page.locator('#settingsAdminCard')).toBeVisible({ timeout: 5_000 });
+    await expect(adminItem).toBeVisible({ timeout: 5_000 });
   } catch {
     isAdminAccount = false;
   }
-  test.skip(!isAdminAccount, 'Signed-in test account is not an admin — Admin Panel is not shown. See this spec\'s module comment.');
+  test.skip(!isAdminAccount, 'Signed-in test account is not an admin — the Admin panel menu entry is not shown. See this spec\'s module comment.');
+
+  await adminItem.click();
+  await expect(page.locator('#page-admin')).toHaveClass(/active/);
 });
 
 test('Users tab renders rows with correctly-wired action buttons (not clicked — see module comment)', async ({ page }) => {
@@ -102,7 +103,7 @@ test('tab bar switches content and highlights the active tab', async ({ page }) 
   const bakeriesTab = page.locator('#adminTabBakeries');
   const content = page.locator('#adminTabContent');
 
-  // openSettingsPage's own admin-account check already lands on Users.
+  // openAdminPage()'s guard already lands on the Users tab.
   await expect(usersTab).toHaveClass(/btn-espresso/);
   await expect(bakeriesTab).toHaveClass(/btn-ghost/);
 

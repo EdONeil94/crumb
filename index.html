@@ -121,6 +121,7 @@
     🗓️ My pre-orders <span id="mobilePreordersBadge" style="display:none;background:#e74c3c;color:white;font-size:0.6rem;font-weight:700;padding:2px 6px;border-radius:100px;margin-left:6px;vertical-align:middle;"></span>
   </button>
   <button class="mobile-menu-item" id="mobileEditProfileBtn" data-onclick="navigateFromMobileMenu" data-args='["settings"]' style="display:none">⚙️ Settings</button>
+  <button class="mobile-menu-item" id="mobileAdminBtn" data-onclick="navigateFromMobileMenu" data-args='["admin"]' style="display:none">🛡️ Admin panel</button>
   <button class="mobile-menu-item" id="mobileSignOutBtn" data-onclick="signOutFromMobileMenu" style="display:none; color:#e07070;">→ Sign out</button>
   <div class="mobile-menu-divider"></div>
   <button class="mobile-menu-item" data-onclick="openFeatureRequestModal,closeMobileMenu">💡 Request a feature</button>
@@ -936,9 +937,23 @@
         </div>
       </div>
     </div>
+  </div>
+</div>
 
-    <!-- Admin section — only shown to admins -->
-    <div class="settings-card" id="settingsAdminCard" style="display:none;">
+<!-- ─── ADMIN PANEL PAGE ────────────────────────────────────────────────────── -->
+<!-- The 4-tab admin content moved here wholesale from #page-settings on
+     2026-08-31. Reached from the "🛡️ Admin panel" entry in the account menu
+     (desktop avatar dropdown + mobile menu), both gated on isAdmin() by
+     nav.js; openAdminPage() (src/pages/admin.js) re-checks isAdmin() and
+     bounces non-admins to #page-home. Tab machinery lives in
+     src/components/adminPanel.js — same #adminTabContent / #adminTab* ids. -->
+<div class="page" id="page-admin">
+  <div class="section" style="max-width:720px;">
+    <div class="section-header">
+      <div class="section-eyebrow">Admin</div>
+      <h2 class="section-title">Admin panel</h2>
+    </div>
+    <div class="settings-card">
       <div class="settings-card-header">
         <div class="settings-card-title">⚙️ Admin Panel</div>
         <div class="settings-card-sub">Manage users, bakeries, flagged reviews and feature requests</div>

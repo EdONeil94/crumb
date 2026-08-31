@@ -6,11 +6,12 @@
 // showPage()/navigateFromMobileMenu()/openMyProfileFromMobileMenu() moved
 // here 2026-08-30 (Phase 1 residual #1), once every one of showPage()'s
 // ~12 cross-page targets finally had a real importable home (the 32-step
-// carving plan completed at step 32). showPage() imports the 9 page
-// renderers/initters + openProfileModal the normal one-way way. The one
-// edge that would have formed a cycle — settings.js needing showPage() /
-// updateNav() — is broken on settings.js's side: it reaches both via
-// getAction() (see settings.js's own header comment). legacy-app.js keeps
+// carving plan completed at step 32). showPage() imports the page
+// renderers/initters + openProfileModal the normal one-way way. The
+// edges that would have formed a cycle — settings.js and pages/admin.js
+// each needing showPage() (and settings.js also updateNav()) — are broken
+// on their side: they reach those via getAction() (see each module's own
+// header comment). legacy-app.js keeps
 // importing showPage back purely for its WINDOW EXPORTS entry
 // (tests/people-filters.spec.js calls window.showPage('people') directly
 // to bypass the signed-out nav-button visibility gate — same precedent as
@@ -34,6 +35,7 @@ import {
   peopleViewMode, populateRankingLocationFilter, renderRankings, renderPeople,
 } from '../pages/people.js';
 import { openSettingsPage } from '../pages/settings.js';
+import { openAdminPage } from '../pages/admin.js';
 
 export function updateNav() {
   const avatar = document.getElementById('navAvatar');
@@ -44,6 +46,7 @@ export function updateNav() {
   const mobileEditProfileBtn = document.getElementById('mobileEditProfileBtn');
   const mobileSignOutBtn = document.getElementById('mobileSignOutBtn');
   const mobileSignInBtn = document.getElementById('mobileSignInBtn');
+  const mobileAdminBtn = document.getElementById('mobileAdminBtn');
   const mobileMenuDivider = document.getElementById('mobileMenuDivider');
 
   const bell = document.getElementById('navBell');
@@ -67,6 +70,7 @@ export function updateNav() {
     }
     if (mobileProfileBtn) mobileProfileBtn.style.display = 'block';
     if (mobileEditProfileBtn) mobileEditProfileBtn.style.display = 'block';
+    if (mobileAdminBtn) mobileAdminBtn.style.display = isAdmin() ? 'block' : 'none';
     if (mobileSignOutBtn) mobileSignOutBtn.style.display = 'block';
     if (mobileSignInBtn) mobileSignInBtn.style.display = 'none';
     if (mobileMenuDivider) mobileMenuDivider.style.display = 'block';
@@ -86,6 +90,7 @@ export function updateNav() {
     if (dFeed2) dFeed2.style.display = 'none';
     if (mobileProfileBtn) mobileProfileBtn.style.display = 'none';
     if (mobileEditProfileBtn) mobileEditProfileBtn.style.display = 'none';
+    if (mobileAdminBtn) mobileAdminBtn.style.display = 'none';
     if (mobileSignOutBtn) mobileSignOutBtn.style.display = 'none';
     if (mobileSignInBtn) mobileSignInBtn.style.display = 'block';
     if (mobileMenuDivider) mobileMenuDivider.style.display = 'none';
@@ -146,6 +151,11 @@ export function toggleUserMenu() {
       onmouseover="this.style.background='var(--parchment)'" onmouseout="this.style.background=''">
       ⚙️ Settings
     </div>
+    ${isAdmin() ? `<div data-onclick="closeAvatarDropdown,showPage" data-args='${dataArgs(['admin'])}'
+      style="padding:11px 16px; font-size:0.85rem; color:var(--text-body); cursor:pointer; display:flex; align-items:center; gap:8px;"
+      onmouseover="this.style.background='var(--parchment)'" onmouseout="this.style.background=''">
+      🛡️ Admin panel
+    </div>` : ''}
     <div data-onclick="closeAvatarDropdown,openFeatureRequestModal"
       style="padding:11px 16px; font-size:0.85rem; color:var(--text-body); cursor:pointer; display:flex; align-items:center; gap:8px;"
       onmouseover="this.style.background='var(--parchment)'" onmouseout="this.style.background=''">
@@ -219,6 +229,7 @@ export function showPage(name) {
     else renderPeople();
   }
   if (name === 'settings') openSettingsPage();
+  if (name === 'admin') openAdminPage();
 }
 
 export function navigateFromMobileMenu(page) {
