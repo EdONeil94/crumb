@@ -19,7 +19,7 @@
 
 import { registerActions } from '../events/actions.js';
 import { dataArgs } from '../events/delegate.js';
-import { currentUser, fb, allProfiles, isAdmin, isBusiness } from '../state/appState.js';
+import { currentUser, fb, allProfiles, isAdmin, isBusiness, setExplicitSignOut } from '../state/appState.js';
 import { showToast } from '../utils/dom.js';
 import { openProfileModal } from './profileModal.js';
 import {
@@ -186,8 +186,15 @@ export function closeAvatarDropdown() {
 // panel, the feed) and would otherwise sit there showing the ex-user's
 // stale data until manual navigation — which for People/Feed is blocked
 // once updateNav() hides their nav buttons.
+//
+// setExplicitSignOut(true) marks this as a deliberate sign-out so
+// legacy-app.js's auth listener doesn't also fire the involuntary-session-end
+// UX (toast + re-auth modal) on top of what these wrappers already do. Only
+// set it when there's actually a session to end, so it can't get stuck true
+// (no transition -> the listener that resets it never runs).
 export async function signOutFromAvatarMenu() {
   closeAvatarDropdown();
+  if (fb.auth.currentUser) setExplicitSignOut(true);
   await fb.signOut(fb.auth);
   showToast('Signed out');
   showPage('home');
@@ -201,6 +208,7 @@ export function closeOnClickOutside(e) {
 
 export async function signOutFromMobileMenu() {
   closeMobileMenu();
+  if (fb.auth.currentUser) setExplicitSignOut(true);
   await fb.signOut(fb.auth);
   showToast('Signed out');
   showPage('home');

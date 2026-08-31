@@ -15,6 +15,7 @@ import {
   loadItemRecords, ensureProfileExists, loadData, loadProfiles,
   myFollowing, myFollowers, loadFollows, loadBookmarks,
   userSavedItems, loadSavedItems,
+  explicitSignOut, setExplicitSignOut, clearUserScopedState,
 } from './state/appState.js';
 // updateNav: initFirebaseApp()'s auth listener + loadProfiles() call it
 // directly. showPage: WINDOW EXPORTS only (window.showPage, used by
@@ -162,13 +163,48 @@ import './app/lifecycle.js';
 // way to guarantee which. Checking directly removes that race entirely; the
 // event listener stays only as a defensive fallback for the unlikely case
 // this module ever ends up running before firebase.js for some future reason.
+
+// Runs only when a live session ended without the sign-out button — see the
+// listener below. Mirrors what the button handlers do (close the ex-user's
+// open modal, drop them off a now-unreachable view) and adds the pieces that
+// only make sense when it wasn't their choice: a toast saying what happened,
+// and the auth modal so they can sign back in.
+const SIGNED_IN_ONLY_PAGES = ['settings', 'admin', 'feed', 'people'];
+function handleInvoluntarySignOut() {
+  const openModals = document.querySelectorAll('.modal-overlay.open');
+  openModals.forEach(m => m.classList.remove('open'));
+  if (openModals.length) unlockScroll();
+
+  const stranded = SIGNED_IN_ONLY_PAGES.some(
+    p => document.getElementById('page-' + p)?.classList.contains('active')
+  );
+  if (stranded) showPage('home');
+
+  showToast('You’ve been signed out');
+  openAuthModal();
+}
+
+let notifListenerUnsubs = [];
+
 function initFirebaseApp() {
   setFb(window._crumb);
   const { onAuthStateChanged, auth } = fb;
   onAuthStateChanged(auth, async (user) => {
+    const wasSignedIn = !!currentUser;
+    const explicit = explicitSignOut;
+    setExplicitSignOut(false); // consume it — one transition only
+
     setCurrentUser(user);
     setCurrentUserRole(null);
     setCurrentUserBakery(null);
+
+    // Tear down the previous session's realtime listeners before anything
+    // else — otherwise they keep firing `loadNotifications()` against a now
+    // null currentUser (a mid-async read throws past its own top guard) and
+    // Firestore drops them with a permission-denied a beat later anyway.
+    notifListenerUnsubs.forEach(unsub => unsub());
+    notifListenerUnsubs = [];
+
     if (user) {
       await ensureProfileExists(user);
       await loadUserRole();
@@ -180,18 +216,32 @@ function initFirebaseApp() {
       // Real-time listeners — refresh notifications the moment new activity arrives,
       // so the bell badge updates live without needing to reopen the app.
       const { db, collection, query, where, onSnapshot } = fb;
-      onSnapshot(
-        query(collection(db, 'follows'), where('followingId', '==', user.uid)),
-        () => loadNotifications()
-      );
-      onSnapshot(
-        query(collection(db, 'sharedReviews'), where('toUserId', '==', user.uid)),
-        () => loadNotifications()
-      );
-      onSnapshot(
-        query(collection(db, 'reactions'), where('targetUserId', '==', user.uid)),
-        () => loadNotifications()
-      );
+      notifListenerUnsubs = [
+        onSnapshot(
+          query(collection(db, 'follows'), where('followingId', '==', user.uid)),
+          () => loadNotifications()
+        ),
+        onSnapshot(
+          query(collection(db, 'sharedReviews'), where('toUserId', '==', user.uid)),
+          () => loadNotifications()
+        ),
+        onSnapshot(
+          query(collection(db, 'reactions'), where('targetUserId', '==', user.uid)),
+          () => loadNotifications()
+        ),
+      ];
+    } else {
+      // Reset per-user caches so a just-signed-out (or the next) user never
+      // sees the previous session's follows/bookmarks/saved items.
+      clearUserScopedState();
+      // A session that ended WITHOUT the sign-out button (token revoked,
+      // account disabled/deleted, sign-out in another tab) leaves the ex-user
+      // stranded — the page router never fired, so a signed-in-only view
+      // (Settings/Admin/Feed/People) just sits there showing stale data with
+      // its nav path now hidden by updateNav(). The button handlers (nav.js)
+      // already do their own cleanup + redirect and set explicitSignOut, so
+      // only handle the involuntary case here.
+      if (wasSignedIn && !explicit) handleInvoluntarySignOut();
     }
     updateNav();
     loadData();

@@ -41,6 +41,16 @@ export function setFb(value) { fb = value; }
 export function setCurrentUserRole(role) { currentUserRole = role; }
 export function setCurrentUserBakery(name) { currentUserBakery = name; }
 
+// Set true by a deliberate in-app sign-out (nav.js's avatar/mobile-menu
+// buttons, and passwordReset.js's post-reset signOut) right before it calls
+// fb.signOut(), so legacy-app.js's onAuthStateChanged listener can tell that
+// transition apart from an involuntary session end (token revoked, account
+// disabled/deleted, sign-out in another tab) and skip the "you've been
+// signed out" toast + re-auth modal + redirect that only make sense for the
+// involuntary case. The listener reads it once and resets it.
+export let explicitSignOut = false;
+export function setExplicitSignOut(v) { explicitSignOut = v; }
+
 export function isAdmin() { return currentUser?.uid === SUPER_ADMIN_UID || currentUserRole === 'admin'; }
 export function isBusiness() { return currentUserRole === 'business' || isAdmin(); }
 export function ownsBakery(name) { return isAdmin() || (isBusiness() && currentUserBakery === name); }
@@ -269,11 +279,12 @@ export async function ensureProfileExists(user) {
 // The cleanest of the three sub-stages: all 5 loaders here are genuinely
 // self-contained (no UI-render calls, no cross-cluster reads), and each of
 // the 4 state variables has exactly one reassignment site — the loader
-// itself, which moves with it — so no setters are needed at all. Functions
-// staying in legacy-app.js that mutate these (toggleFollow/toggleBookmark/
-// toggleSaveItem) only ever mutate by property/Set-method (`.add()`/
-// `.delete()`, `userBookmarks[k] = ...`, `delete userBookmarks[k]`), never
-// reassign wholesale — verified via grep across the whole file.
+// itself, which moves with it. Functions staying in legacy-app.js that
+// mutate these (toggleFollow/toggleBookmark/toggleSaveItem) only ever mutate
+// by property/Set-method (`.add()`/`.delete()`, `userBookmarks[k] = ...`,
+// `delete userBookmarks[k]`), never reassign wholesale — verified via grep
+// across the whole file. (clearUserScopedState, below, is a second
+// reassignment site for all four — added 2026-08-31 for the sign-out reset.)
 
 export let myFollowing = new Set(); // UIDs I follow
 export let myFollowers = new Set(); // UIDs that follow me
@@ -331,4 +342,17 @@ export async function loadSavedItems() {
       userSavedItems[data.itemId] = { docId: d.id, ...data };
     });
   } catch(e) { console.warn('Saved items load error:', e); }
+}
+
+// Reset every per-user cache on sign-out. currentUserRole/currentUserBakery
+// are cleared by the auth listener directly (setCurrentUserRole/Bakery(null));
+// this covers the social-state group, whose loaders only early-return when
+// signed out and otherwise never clear what a prior session left behind —
+// so without this, a just-signed-out (or next) user briefly saw the previous
+// user's follow/bookmark/saved state.
+export function clearUserScopedState() {
+  myFollowing = new Set();
+  myFollowers = new Set();
+  userBookmarks = {};
+  userSavedItems = {};
 }

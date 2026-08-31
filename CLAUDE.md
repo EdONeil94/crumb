@@ -1096,6 +1096,26 @@ afterward — no E2E gate needed for this, same reasoning as Phase 0 step 4
 
 ## Known pre-existing issues (out of scope for this migration)
 
+- 🔽 **Backlog (found 2026-08-31): a revoked/expired ID token isn't noticed
+  until the next scheduled refresh or Firestore call.** The app never
+  proactively calls `getIdToken(true)` anywhere. Firebase auto-refreshes the
+  ID token ~5 min before its 1-hour expiry; if the refresh token has been
+  revoked server-side (admin `revokeRefreshTokens`, account disabled/deleted,
+  password changed elsewhere), the client only finds out at that refresh
+  boundary or on the next Firestore operation, which then fails
+  `permission-denied`. So there's a window — up to ~1 hour — where the user
+  looks signed in, `currentUser` is populated, the UI shows their name, but
+  every write silently fails. The involuntary-sign-out handling added
+  2026-08-31 (`handleInvoluntarySignOut` in `legacy-app.js` — redirect +
+  toast + re-auth modal on `onAuthStateChanged(null)`) fires correctly *once
+  the SDK notices*; this backlog item is only about shortening the "hasn't
+  noticed yet" gap. Fix sketch: a `getIdToken(true)` on `visibilitychange`
+  (tab refocus) and/or a short interval, catching
+  `auth/user-token-expired` / `auth/user-disabled` / `auth/user-not-found` /
+  `auth/id-token-revoked` and calling `fb.signOut()` to trigger the existing
+  handler. Deliberately deferred — the handler is the important half; this is
+  a latency refinement.
+
 - 🔽 **Backlog (found 2026-08-30): `sw.js` 404 on every live page load.**
   `src/app/lifecycle.js:302-306` runs
   `navigator.serviceWorker.register('/sw.js')` whenever `isFirebaseHosting`

@@ -16,7 +16,7 @@
 // registers it, and a leaf component never imports nav.js back.
 
 import { registerActions, getAction } from '../events/actions.js';
-import { fb } from '../state/appState.js';
+import { fb, setExplicitSignOut } from '../state/appState.js';
 import { showToast } from '../utils/dom.js';
 import { openAuthModal, friendlyAuthError } from './authModal.js';
 
@@ -91,8 +91,13 @@ export async function submitNewPassword() {
     activeOobCode = null;
     // If this browser happened to be signed in (they reset their own
     // password while logged in), drop that session so "sign in with the new
-    // password" is the clean, only path forward.
-    try { await fb.signOut(fb.auth); } catch { /* not signed in — fine */ }
+    // password" is the clean, only path forward. Mark it explicit so the
+    // auth listener doesn't treat it as an involuntary session end and yank
+    // them off this success screen with a toast + re-auth modal.
+    if (fb.auth.currentUser) {
+      setExplicitSignOut(true);
+      try { await fb.signOut(fb.auth); } catch { /* fine */ }
+    }
     showState('resetSuccess');
   } catch (err) {
     if (err.code === 'auth/expired-action-code' || err.code === 'auth/invalid-action-code') {
