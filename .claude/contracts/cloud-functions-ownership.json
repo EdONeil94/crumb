@@ -1,0 +1,22 @@
+{
+  "functions/package.json": "backend-lead",
+  "functions/package-lock.json": "backend-lead",
+  "functions/.gitignore": "backend-lead",
+  "functions/index.js": "backend-lead",
+  "functions/shared.js": "backend-lead",
+  "functions/moderation.js": "backend-lead",
+  "functions/roles.js": "backend-lead",
+  "firestore.rules": "backend-lead",
+  "firebase.json": "backend-lead",
+  "package.json": "backend-lead",
+  "playwright.config.js": "backend-lead",
+  ".gitignore": "backend-lead",
+  ".github/workflows/e2e.yml": "backend-lead",
+  "src/services/firebase.js": "backend-lead",
+  "src/services/functions.js": "backend-lead",
+  "src/services/moderation.js": "backend-lead",
+  "src/services/roles.js": "backend-lead",
+  "src/components/adminPanel.js": "frontend-lead",
+  "tests/cloud-functions-admin.spec.js": "qa-engineer",
+  "tests/seed-emulator.mjs": "qa-engineer"
+}
