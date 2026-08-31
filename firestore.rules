@@ -2,6 +2,36 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ── Helpers ──────────────────────────────────────────────────────────
+    // The single hard-coded super-admin (src/state/appState.js
+    // SUPER_ADMIN_UID) — used for actions the app also restricts to that one
+    // account (roles, flag dismissal, reservation cleanup).
+    function isSuperAdmin() {
+      return request.auth != null
+        && request.auth.uid == 'KTpBS4yJx2h8LpcryCTfJDFCHlr2';
+    }
+
+    // Mirrors the app's isAdmin() gate (appState.js): the super-admin, or a
+    // user whose userRoles doc says role == 'admin'. userRoles is itself
+    // super-admin-write-only (below), so 'admin' can't be self-granted.
+    function isAdmin() {
+      return isSuperAdmin()
+        || (
+          request.auth != null
+          && exists(/databases/$(database)/documents/userRoles/$(request.auth.uid))
+          && get(/databases/$(database)/documents/userRoles/$(request.auth.uid)).data.get('role', '') == 'admin'
+        );
+    }
+
+    // The raw (not URL-encoded) bakery name the caller is assigned to as a
+    // business user, from their userRoles doc; '' if they have no role doc.
+    function assignedBakeryName() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/userRoles/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/userRoles/$(request.auth.uid)).data.get('bakeryName', '')
+        : '';
+    }
+
     match /items/{itemId} {
       allow read: if true;
       allow create: if request.auth != null;
@@ -10,7 +40,12 @@ service cloud.firestore {
 
     match /bakeries/{bakeryId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      // Was: any signed-in user could write any bakery's page. Now: only an
+      // admin, or the business user assigned to this bakery. The write must
+      // carry name = the bakery it's for (both write paths already do:
+      // src/components/businessBakeryManagement.js saveBakeryPage).
+      allow write: if isAdmin()
+        || (assignedBakeryName() != '' && assignedBakeryName() == request.resource.data.name);
     }
 
     match /profiles/{userId} {
@@ -32,7 +67,11 @@ service cloud.firestore {
 
     match /bakeryProfiles/{bakeryId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      // Same tightening as /bakeries above — the admin panel's Manage Bakery
+      // modal (src/components/adminPanel.js saveBakeryProfile) writes here
+      // and always sets name = the bakery it's for.
+      allow write: if isAdmin()
+        || (assignedBakeryName() != '' && assignedBakeryName() == request.resource.data.name);
     }
 
     match /flaggedReviews/{flagId} {
@@ -43,7 +82,13 @@ service cloud.firestore {
 
     match /reactions/{reactionId} {
       allow read: if true;
-      allow create: if request.auth != null;
+      // Was: any signed-in user. Now: you can only create a reaction as
+      // yourself — no reacting-as-someone-else, no inflating a third party's
+      // reaction activity. (targetUserId is still client-set; fully binding
+      // it to the item's real owner needs a get() on the item and is left
+      // for the Cloud Functions phase.)
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.userId;
       allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
     }
 
@@ -68,7 +113,13 @@ service cloud.firestore {
     match /featureRequests/{requestId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
-      allow update: if request.auth != null;
+      // Was: any signed-in user could rewrite any field (status, votes,
+      // voterIds, anything). Now: anyone may cast a vote — a diff touching
+      // only votes/voterIds — and admins may change status and the rest.
+      allow update: if request.auth != null && (
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['votes', 'voterIds'])
+        || isAdmin()
+      );
       allow delete: if request.auth != null && request.auth.uid == 'KTpBS4yJx2h8LpcryCTfJDFCHlr2';
     }
 
