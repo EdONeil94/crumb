@@ -1,0 +1,48 @@
+name: Deploy Firebase rules
+# Publishes firestore.rules / storage.rules to the live project
+# (crumb-ddeb6) whenever one of them changes on main. The app deploy
+# (deploy.yml → GitHub Pages) deliberately does NOT touch rules; before
+# this workflow every rules change needed a manual `firebase deploy` and
+# silently protected nothing in production until someone remembered.
+#
+# Auth: Workload Identity Federation — GitHub's OIDC token is exchanged
+# for short-lived Google credentials, scoped to only this repo. No
+# long-lived key or secret involved.
+#
+# Firestore indexes are intentionally not deployed here — rare, riskier,
+# still manual via `firebase deploy --only firestore:indexes`.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'firestore.rules'
+      - 'storage.rules'
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: deploy-rules
+  cancel-in-progress: false
+jobs:
+  deploy-rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - id: auth
+        name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/273733440798/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider'
+          service_account: 'github-rules-deployer@crumb-ddeb6.iam.gserviceaccount.com'
+      - name: Deploy Firestore + Storage rules
+        run: |
+          npx firebase-tools deploy \
+            --only firestore:rules,storage \
+            --project crumb-ddeb6 \
+            --non-interactive
