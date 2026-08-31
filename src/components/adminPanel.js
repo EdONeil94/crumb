@@ -109,6 +109,7 @@ import { lockScroll, unlockScroll, showToast } from '../utils/dom.js';
 import { compressImage, compressToDataURL } from './addReviewModal.js';
 import { openAuthModal } from './authModal.js';
 import { grantAdmin, assignBakery, revokeRole } from '../services/roles.js';
+import { removeFlaggedReview, dismissFlaggedReview } from '../services/moderation.js';
 
 async function refreshAdminUsersPanel() {
   await loadAllUserRoles();
@@ -218,22 +219,31 @@ async function renderAdminFlags() {
   } catch(e) { panel.innerHTML = '<div style="padding:16px;color:var(--text-muted);">Could not load flagged reviews.</div>'; }
 }
 
+// C3 — flag dismissal / review removal go through the moderateFlaggedReview
+// callable (functions/moderation.js). The client can't delete flaggedReviews
+// or another user's items doc; the callable is admin-gated server-side,
+// recomputes the parent itemRecord and writes a moderationLog entry.
+function moderationErrorText(e) {
+  if (e?.code === 'functions/permission-denied') return 'Admin access required.';
+  if (e?.code === 'functions/not-found') return 'That flag is already gone.';
+  return 'Could not update — try again';
+}
+
 async function dismissFlag(flagId) {
-  const { db, doc, deleteDoc } = fb;
-  await deleteDoc(doc(db, 'flaggedReviews', flagId));
-  showToast('Flag dismissed');
+  try {
+    await dismissFlaggedReview(flagId);
+    showToast('Flag dismissed');
+  } catch(e) { showToast(moderationErrorText(e)); console.error(e); }
   renderAdminFlags();
 }
 
 async function removeReviewAndFlag(itemId, flagId) {
   if (!confirm('Permanently remove this review?')) return;
-  const { db, doc, deleteDoc } = fb;
-  await Promise.all([
-    deleteDoc(doc(db, 'items', itemId)),
-    deleteDoc(doc(db, 'flaggedReviews', flagId))
-  ]);
-  showToast('Review removed');
-  await loadData();
+  try {
+    const res = await removeFlaggedReview(flagId);
+    showToast(res.reviewDeleted ? 'Review removed' : 'Flag removed (review was already gone)');
+    await loadData();
+  } catch(e) { showToast(moderationErrorText(e)); console.error(e); }
   renderAdminFlags();
 }
 

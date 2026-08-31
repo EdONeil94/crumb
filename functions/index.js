@@ -3,5 +3,7 @@
 // One module per feature area; see .claude/contracts/cloud-functions-contract.md.
 
 const { setUserRole } = require('./roles');
+const { moderateFlaggedReview } = require('./moderation');
 
 exports.setUserRole = setUserRole;
+exports.moderateFlaggedReview = moderateFlaggedReview;

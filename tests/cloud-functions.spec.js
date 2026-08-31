@@ -106,3 +106,101 @@ test.describe('C5 — setUserRole', () => {
     expect(roleDoc.exists).toBe(false);
   });
 });
+
+// ── C3 — moderateFlaggedReview (via the Admin panel → Flags tab) ───────────
+test.describe('C3 — moderateFlaggedReview', () => {
+  // Build a self-contained itemRecord with two reviews, then flag one — so a
+  // 'remove' leaves the record behind with a recomputed (reviewCount 2 -> 1)
+  // aggregate, and seed data is never touched.
+  async function seedFlaggedReview({ twoReviews } = {}) {
+    const d = await db();
+    const recRef = d.collection('itemRecords').doc();
+    await recRef.set({
+      name: 'E2E Flag Target', category: 'cake', subCategory: '',
+      bakeryName: 'Seed Bakehouse Gamma', bakeryAddress: '', bakeryPlaceId: null,
+      communityAvg: 4, reviewCount: twoReviews ? 2 : 1, avgPrice: 3, priceCount: twoReviews ? 2 : 1,
+      photoURL: null, createdAt: new Date(),
+    });
+    const mkItem = (rating) => d.collection('items').add({
+      itemRecordId: recRef.id, name: 'E2E Flag Target', category: 'cake', subCategory: '',
+      bakeryName: 'Seed Bakehouse Gamma', bakeryAddress: '', bakeryPlaceId: null,
+      bakeryLat: null, bakeryLng: null, price: 3,
+      overallRating: rating, communityAvg: rating, ratingCount: 1,
+      notes: '', photoURL: null,
+      userId: 'seed-user-cal', userName: 'Cal Crust', userPhoto: null, createdAt: new Date(),
+    });
+    const flagged = await mkItem(4);
+    if (twoReviews) await mkItem(4);
+    const flagRef = await d.collection('flaggedReviews').add({
+      itemId: flagged.id,
+      bakeryName: 'Seed Bakehouse Gamma',
+      flaggedByName: 'E2E Flagger',
+      reason: 'E2E moderation test',
+      createdAt: new Date(),
+    });
+    return { flagId: flagRef.id, itemId: flagged.id, itemRecordId: recRef.id };
+  }
+
+  async function openFlagsTab(page) {
+    await page.goto('/');
+    await expect(page.locator('#navAvatar')).toBeVisible({ timeout: 15_000 });
+    await page.locator('#navAvatar').click();
+    await page.locator('[data-onclick="closeAvatarDropdown,showPage"]', { hasText: 'Admin panel' }).click();
+    await expect(page.locator('#page-admin')).toHaveClass(/active/);
+    await page.locator('#adminTabFlags').click();
+    await expect(page.locator('#adminTabContent .spinner')).toHaveCount(0);
+  }
+
+  test.afterEach(async () => {
+    const d = await db();
+    for (const coll of ['flaggedReviews', 'items']) {
+      const stale = await d.collection(coll).where(
+        coll === 'flaggedReviews' ? 'flaggedByName' : 'name',
+        '==', coll === 'flaggedReviews' ? 'E2E Flagger' : 'E2E Flag Target').get();
+      await Promise.all(stale.docs.map((x) => x.ref.delete()));
+    }
+    const recs = await d.collection('itemRecords').where('name', '==', 'E2E Flag Target').get();
+    await Promise.all(recs.docs.map((x) => x.ref.delete()));
+  });
+
+  test('dismiss deletes the flag, keeps the review, writes a moderationLog entry', async ({ page }) => {
+    const { flagId, itemId } = await seedFlaggedReview();
+    await openFlagsTab(page);
+
+    const flagItem = page.locator('.flag-item', { hasText: 'E2E moderation test' });
+    await expect(flagItem).toBeVisible();
+    await flagItem.locator('[data-onclick="dismissFlag"]').click();
+    await expect(page.locator('#toast')).toContainText(/flag dismissed/i);
+
+    const d = await db();
+    expect((await d.collection('flaggedReviews').doc(flagId).get()).exists).toBe(false);
+    expect((await d.collection('items').doc(itemId).get()).exists).toBe(true);
+
+    const log = await d.collection('moderationLog').where('flagId', '==', flagId).get();
+    expect(log.empty).toBe(false);
+    expect(log.docs[0].data()).toMatchObject({ action: 'dismiss', itemId: null });
+  });
+
+  test('remove deletes the review + flag, recomputes the itemRecord, writes a moderationLog entry', async ({ page }) => {
+    const { flagId, itemId, itemRecordId } = await seedFlaggedReview({ twoReviews: true });
+
+    await openFlagsTab(page);
+    const flagItem = page.locator('.flag-item', { hasText: 'E2E moderation test' });
+    page.once('dialog', (dlg) => dlg.accept());
+    await flagItem.locator('[data-onclick="removeReviewAndFlag"]').click();
+    await expect(page.locator('#toast')).toContainText(/review removed/i);
+
+    const d = await db();
+    expect((await d.collection('items').doc(itemId).get()).exists).toBe(false);
+    expect((await d.collection('flaggedReviews').doc(flagId).get()).exists).toBe(false);
+
+    const after = await d.collection('itemRecords').doc(itemRecordId).get();
+    expect(after.exists).toBe(true);
+    expect(after.data().reviewCount).toBe(1);
+
+    // moderationLog shape is frozen by the contract: no `reviewDeleted` field.
+    // The review deletion itself is asserted above (items/{itemId} is gone).
+    const log = await d.collection('moderationLog').where('flagId', '==', flagId).get();
+    expect(log.docs[0].data()).toMatchObject({ action: 'remove', itemId });
+  });
+});
