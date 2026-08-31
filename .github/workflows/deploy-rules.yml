@@ -1,0 +1,65 @@
+name: Deploy Firebase rules
+
+# Publishes firestore.rules / storage.rules to the live project
+# (crumb-ddeb6) whenever one of them changes on main. The app deploy
+# (deploy.yml → GitHub Pages) deliberately does NOT touch rules; before
+# this workflow every rules change needed a manual `firebase deploy` and
+# silently protected nothing in production until someone remembered.
+#
+# Auth: repo secret FIREBASE_SERVICE_ACCOUNT — a GCP service-account key
+# JSON scoped to ONLY roles/firebaserules.admin (publish rules, nothing
+# else). Settings → Secrets and variables → Actions.
+#
+# Firestore indexes are intentionally not deployed here — rare, riskier,
+# still manual via `firebase deploy --only firestore:indexes`.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'firestore.rules'
+      - 'storage.rules'
+      - '.github/workflows/deploy-rules.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-rules
+  cancel-in-progress: false
+
+jobs:
+  deploy-rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Write service-account key
+        env:
+          SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$SA_KEY" ]; then
+            echo "::error::FIREBASE_SERVICE_ACCOUNT secret is not set"; exit 1
+          fi
+          printf '%s' "$SA_KEY" > "$RUNNER_TEMP/sa.json"
+
+      - name: Deploy Firestore + Storage rules
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+        run: |
+          npx firebase-tools deploy \
+            --only firestore:rules,storage \
+            --project crumb-ddeb6 \
+            --non-interactive
+
+      - name: Shred key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json"
