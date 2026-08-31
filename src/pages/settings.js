@@ -1,12 +1,13 @@
 // ─── SETTINGS PAGE ──────────────────────────────────────────────────────────
 // The #page-settings routed view (pages/components carving, Phase 7
 // step 32 — the LAST step of the 32-step plan; see CLAUDE.md):
-// openSettingsPage (fills the profile form + shows/hides the business,
-// admin and password sub-cards), handleSettingsPhoto, saveSettingsProfile,
+// openSettingsPage (fills the profile form + shows/hides the business
+// and password sub-cards), handleSettingsPhoto, saveSettingsProfile,
 // changePassword, and the settingsPhotoFile compression buffer.
 // (signOutFromSettings + the Settings "Danger zone" card that called it
 // were removed 2026-08-30 — sign-out stays available via the nav avatar
-// dropdown and the mobile menu, both in nav.js.)
+// dropdown and the mobile menu, both in nav.js. The Admin Panel card
+// moved to its own #page-admin route 2026-08-31 — see src/pages/admin.js.)
 //
 // The photo/profile handlers were NEVER in scope for the handler-delegation
 // migration — index.html's #page-settings still has two RAW inline handlers
@@ -25,19 +26,18 @@
 // itself imports openSettingsPage from here (for showPage()'s settings
 // branch), so a direct import back would form a cycle. Same registry-lookup
 // pattern used for loadData / buildBakeryIndex / renderPreorderPage /
-// loadMyPreorders. showAdminTab (adminPanel.js) and renderBusinessSection
-// (businessBakeryManagement.js) import one-way — neither imports back here.
+// loadMyPreorders. renderBusinessSection (businessBakeryManagement.js)
+// imports one-way — it doesn't import back here.
 
 import { registerActions, getAction } from '../events/actions.js';
 import {
   currentUser, currentUserRole, SUPER_ADMIN_UID, loadUserRole,
-  allProfiles, isBusiness, isAdmin, fb,
+  allProfiles, isBusiness, fb,
 } from '../state/appState.js';
 import { openAuthModal, friendlyAuthError } from '../components/authModal.js';
 import { EXPLORE_COUNTRIES } from '../data/exploreCities.js';
 import { CATEGORY_TREE } from '../data/categories.js';
 import { renderBusinessSection } from '../components/businessBakeryManagement.js';
-import { showAdminTab } from '../components/adminPanel.js';
 import { compressImage } from '../components/addReviewModal.js';
 import { showToast } from '../utils/dom.js';
 
@@ -91,14 +91,8 @@ export async function openSettingsPage() {
     bizCard.style.display = 'none';
   }
 
-  // Show/hide admin section
-  const adminCard = document.getElementById('settingsAdminCard');
-  if (isAdmin()) {
-    adminCard.style.display = 'block';
-    showAdminTab('users');
-  } else {
-    adminCard.style.display = 'none';
-  }
+  // (The admin panel moved to its own #page-admin route on 2026-08-31 —
+  // see src/pages/admin.js. Settings no longer shows/hides it.)
 
   // Password card — only for accounts that actually have an email/password
   // credential. Google-only users manage their password with Google; they
