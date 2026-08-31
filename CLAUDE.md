@@ -1,12 +1,87 @@
 # Crumbz — working notes
 
 See `README.md` for the phase-1 modularization overview (Vite build, file
-layout, deploy steps). This file covers three things that change often
-enough to need a living doc: the **handler delegation migration** (complete
-as of 2026-08-24 — see milestone note below), the **carving of
-`src/legacy-app.js` into `src/pages/`/`src/components/`** (in progress, see
-its own section below), and the **E2E test workflow** — all done on
-`phase-1-modularize`.
+layout, deploy steps). This file covers things that change often enough to
+need a living doc: the **roadmap** (phase order + platform decisions, below),
+the **handler delegation migration** (complete as of 2026-08-24 — see
+milestone note below), the **carving of `src/legacy-app.js` into
+`src/pages/`/`src/components/`** (in progress, see its own section below),
+and the **E2E test workflow** — all done on `phase-1-modularize`.
+
+## Roadmap
+
+Forward-looking sequencing and platform decisions. Recorded here (not only in
+README's "What's next") so a fresh session — or one of the `.claude/agents/`
+subagents, all of which are told to read this file in full — has the *why*,
+not just the *what*.
+
+### Phase order: Cloud Functions before the React rewrite
+
+**Decision (2026-08-31):** the Cloud Functions phase comes **before** the
+React rewrite (Phase 2), reversing the earlier "React first" assumption.
+
+Why:
+- **Smaller, incremental, contained.** Standing up `functions/` and moving a
+  handful of operations server-side is bounded work with a clear finish line.
+  The React rewrite is open-ended and touches everything.
+- **It closes a real gap.** Security-sensitive logic currently runs
+  client-side, where it can be inspected or bypassed — the bakery/reviewer
+  **leaderboard calculation** is the clearest case (the client computes its
+  own ranking inputs). That belongs behind a Cloud Function.
+- **It is the first genuine backend/frontend boundary in this repo.**
+  Everything under `src/` is one shared Vite project; any "backend vs
+  frontend" split there is imposed, not real (the Layer 0 audit run when the
+  `.claude/` multi-agent scaffold landed confirmed this — direct Firestore
+  access via the `fb` facade is pervasive across `src/pages/` and
+  `src/components/`, ~55 sites). `functions/` is a physically separate,
+  independently-deployed directory. That makes the Cloud Functions work the
+  right **first trial** for the `/build-team` multi-agent flow: the
+  file-ownership contract would be enforcing a boundary that actually exists,
+  not one drawn on top of a single codebase.
+
+### Staying on Firebase / Firestore
+
+**Decision (2026-08-31):** stay on Firebase + Firestore. Not migrating to
+Supabase or any other provider.
+
+Why:
+- **Current scale doesn't justify the migration cost.** A move means
+  rewriting the whole data layer, re-expressing every Firestore security rule
+  as Postgres RLS, and rebuilding the E2E harness around a different
+  emulator — a large, risky project against a benefit the app doesn't
+  currently need.
+- **Revisit only on a concrete trigger** — a real cost problem, or a
+  relational-querying pain point that actually shows up in practice — never
+  preemptively. Until then Firestore is the assumption the rest of the
+  roadmap builds on: staying on it is part of what keeps the Cloud Functions
+  phase above a clean, contained task rather than a data-layer migration in
+  disguise.
+
+### Deferred backlog (from the 2026-08-31 Layer 0 audit)
+
+Two findings from the `.claude/` multi-agent scaffold's one-time `src/`
+split audit. **Deliberately not being fixed now** — recorded here so they
+don't get rediscovered from scratch. Order: Cloud Functions phase first,
+then these.
+
+1. **Route the ~76 direct-Firestore call sites through `src/services/`.**
+   `src/pages/` and `src/components/` query and write Firestore directly via
+   the `fb` facade (`const { db, collection, getDocs } = fb` →
+   `getDocs(collection(db, …))`) — ~55 destructure sites, ~76 CRUD/Storage
+   calls across 13 component files + `people`/`preorders`/`shop`/`settings`.
+   The data layer isn't isolated; `src/services/` today is just
+   `firebase.js` (init) + `places.js`. A follow-up refactor should give each
+   collection a `src/services/*.js` module and have the UI call those. This
+   is the separate refactor that makes a real `src/`-internal
+   backend/frontend boundary exist — until it lands, `/build-team` is only
+   appropriate for `functions/` work (a boundary that's already real).
+2. **`appState.js`'s 3 DOM reads** (`:127`, `:130`, `:187` — the
+   `document.getElementById('page-X')?.classList.contains('active')` checks
+   that gate `refreshActiveDataView()` / `loadProfiles()`'s re-render). A
+   backend-owned module reading view state from the DOM. Small, isolated;
+   fix is to move the "is this page active?" check behind a `getAction()`
+   the way those functions' re-render calls already are, keeping
+   `appState.js` a true leaf.
 
 ## Carving src/legacy-app.js into src/pages/ and src/components/
 
