@@ -62,7 +62,19 @@ service cloud.firestore {
 
     match /userRoles/{userId} {
       allow read: if request.auth != null;
+      // C5: role writes now go through the setUserRole Cloud Function (Admin
+      // SDK, bypasses rules). The direct-client write stays open to the
+      // super-admin only until every current role-holder has been re-granted
+      // through the callable and this fallback can be dropped — see
+      // .claude/contracts/cloud-functions-contract.md.
       allow write: if request.auth != null && request.auth.uid == 'KTpBS4yJx2h8LpcryCTfJDFCHlr2';
+    }
+
+    // C5: immutable audit trail for setUserRole. Written only by the Cloud
+    // Function (Admin SDK); readable by admins for review.
+    match /roleAudit/{entryId} {
+      allow read: if isAdmin();
+      allow write: if false;
     }
 
     match /bakeryProfiles/{bakeryId} {

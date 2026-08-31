@@ -108,6 +108,7 @@ import {
 import { lockScroll, unlockScroll, showToast } from '../utils/dom.js';
 import { compressImage, compressToDataURL } from './addReviewModal.js';
 import { openAuthModal } from './authModal.js';
+import { grantAdmin, assignBakery, revokeRole } from '../services/roles.js';
 
 async function refreshAdminUsersPanel() {
   await loadAllUserRoles();
@@ -115,39 +116,53 @@ async function refreshAdminUsersPanel() {
   if (panel) panel.innerHTML = renderAdminUsersHTML();
 }
 
+// C5 — role grants/revokes go through the `setUserRole` callable (see
+// functions/roles.js). The client can no longer write userRoles directly;
+// the callable is admin-gated server-side, writes a roleAudit entry, and
+// updates the target's custom auth claims. `claimsUpdated` on the result
+// means the target must sign out/in (or wait for a token refresh) before
+// rules honour the new role — surfaced in the toast.
+function roleErrorText(e) {
+  const code = e?.details?.code;
+  if (code === 'CANNOT_DEMOTE_SUPER_ADMIN') return 'The super-admin role cannot be changed.';
+  if (code === 'CANNOT_DEMOTE_SELF') return 'You cannot remove your own admin role.';
+  if (e?.code === 'functions/permission-denied') return 'Admin access required.';
+  if (e?.code === 'functions/not-found') return 'That account no longer exists.';
+  return 'Could not update role';
+}
+
 async function promoteUser(uid, role, bakeryName) {
-  if (!isAdmin() || !fb) return;
+  if (!isAdmin()) return;
   if (!confirm(`Make this user an admin? They will get full admin access.`)) return;
-  const { db, doc, setDoc } = fb;
   try {
-    await setDoc(doc(db, 'userRoles', uid), { role, bakeryName: bakeryName || '' }, { merge: true });
-    showToast('✅ User promoted to admin');
+    const res = await grantAdmin(uid);
+    showToast(res.claimsUpdated
+      ? '✅ User promoted to admin — they may need to sign out and back in'
+      : '✅ User promoted to admin');
     await refreshAdminUsersPanel();
-  } catch(e) { showToast('Could not update role'); console.error(e); }
+  } catch(e) { showToast(roleErrorText(e)); console.error(e); }
 }
 
 async function promptAssignBakery(uid, name) {
-  if (!isAdmin() || !fb) return;
+  if (!isAdmin()) return;
   const bakeryName = prompt(`Assign which bakery to ${name}? (Enter the exact bakery name as it appears on Crumbz)`);
   if (bakeryName === null) return; // cancelled
   if (!bakeryName.trim()) { showToast('Bakery name cannot be empty'); return; }
-  const { db, doc, setDoc } = fb;
   try {
-    await setDoc(doc(db, 'userRoles', uid), { role: 'business', bakeryName: bakeryName.trim() }, { merge: true });
+    await assignBakery(uid, bakeryName.trim());
     showToast(`✅ ${name} assigned to ${bakeryName.trim()}`);
     await refreshAdminUsersPanel();
-  } catch(e) { showToast('Could not assign bakery'); console.error(e); }
+  } catch(e) { showToast(e?.details?.code === 'CANNOT_DEMOTE_SUPER_ADMIN' ? roleErrorText(e) : 'Could not assign bakery'); console.error(e); }
 }
 
 async function removeUserRole(uid) {
-  if (!isAdmin() || !fb) return;
+  if (!isAdmin()) return;
   if (!confirm('Remove this user\'s admin/business role? They will go back to being a regular member.')) return;
-  const { db, doc, deleteDoc } = fb;
   try {
-    await deleteDoc(doc(db, 'userRoles', uid));
+    await revokeRole(uid);
     showToast('Role removed');
     await refreshAdminUsersPanel();
-  } catch(e) { showToast('Could not remove role'); console.error(e); }
+  } catch(e) { showToast(roleErrorText(e)); console.error(e); }
 }
 
 // ─── ADMIN PANEL ──────────────────────────────────────────────────────────────

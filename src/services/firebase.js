@@ -26,6 +26,7 @@ import {
   getStorage, connectStorageEmulator,
   ref, uploadBytes, getDownloadURL, deleteObject, listAll
 } from 'firebase/storage';
+import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
 
 // ─── FIREBASE CONFIG ────────────────────────────────────────────────────────
 const firebaseConfig = {
@@ -41,6 +42,10 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
+// Cloud Functions callables (us-central1 default region — do not set one here
+// or on the server, or every call 404s). src/services/functions.js is the
+// single httpsCallable transport built on top of this.
+export const functions = getFunctions(app);
 const googleProvider = new GoogleAuthProvider();
 
 // ─── EMULATORS (E2E only) ──────────────────────────────────────────────────
@@ -53,12 +58,13 @@ if (import.meta.env.VITE_USE_EMULATOR) {
   connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
   connectFirestoreEmulator(db, '127.0.0.1', 8080);
   connectStorageEmulator(storage, '127.0.0.1', 9199);
+  connectFunctionsEmulator(functions, '127.0.0.1', 5001);
 }
 
 // Expose to global scope — the legacy app code (still one big module for now)
 // reads this exactly the same way it always has.
 window._crumb = {
-  auth, db, storage, googleProvider,
+  auth, db, storage, functions, googleProvider,
   signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword,
   onAuthStateChanged, signOut, updateProfile,
   sendPasswordResetEmail, verifyPasswordResetCode, confirmPasswordReset,
