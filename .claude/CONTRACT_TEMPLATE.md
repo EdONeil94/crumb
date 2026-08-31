@@ -68,8 +68,8 @@ export async function submitReview(bakeryId: string, rating: number): Promise<vo
   leaking data onto production (87 leaked reviews, 469 stuck reservations) —
   this rule exists because of that, not as a precaution.
 - Every new cross-module reference goes through the existing `getAction()`
-  delegated-action pattern (see `src/components/events/actions.js`), never a
-  direct import that could create a cycle. Run `madge --circular src/` before
+  delegated-action pattern (see `src/events/actions.js`), never a direct
+  import that could create a cycle. Run `madge --circular src/` before
   reporting anything as done — this has been a recurring lesson in this repo.
 - `showPage()` is the only way pages become visible. No new code should
   toggle `.page` / `.active` classes directly.

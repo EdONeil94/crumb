@@ -57,6 +57,32 @@ Why:
   phase above a clean, contained task rather than a data-layer migration in
   disguise.
 
+### Deferred backlog (from the 2026-08-31 Layer 0 audit)
+
+Two findings from the `.claude/` multi-agent scaffold's one-time `src/`
+split audit. **Deliberately not being fixed now** — recorded here so they
+don't get rediscovered from scratch. Order: Cloud Functions phase first,
+then these.
+
+1. **Route the ~76 direct-Firestore call sites through `src/services/`.**
+   `src/pages/` and `src/components/` query and write Firestore directly via
+   the `fb` facade (`const { db, collection, getDocs } = fb` →
+   `getDocs(collection(db, …))`) — ~55 destructure sites, ~76 CRUD/Storage
+   calls across 13 component files + `people`/`preorders`/`shop`/`settings`.
+   The data layer isn't isolated; `src/services/` today is just
+   `firebase.js` (init) + `places.js`. A follow-up refactor should give each
+   collection a `src/services/*.js` module and have the UI call those. This
+   is the separate refactor that makes a real `src/`-internal
+   backend/frontend boundary exist — until it lands, `/build-team` is only
+   appropriate for `functions/` work (a boundary that's already real).
+2. **`appState.js`'s 3 DOM reads** (`:127`, `:130`, `:187` — the
+   `document.getElementById('page-X')?.classList.contains('active')` checks
+   that gate `refreshActiveDataView()` / `loadProfiles()`'s re-render). A
+   backend-owned module reading view state from the DOM. Small, isolated;
+   fix is to move the "is this page active?" check behind a `getAction()`
+   the way those functions' re-render calls already are, keeping
+   `appState.js` a true leaf.
+
 ## Carving src/legacy-app.js into src/pages/ and src/components/
 
 **Status as of 2026-08-28: the 32-step carving plan is COMPLETE.**
