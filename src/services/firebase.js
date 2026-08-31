@@ -26,7 +26,7 @@ import {
   getStorage, connectStorageEmulator,
   ref, uploadBytes, getDownloadURL, deleteObject, listAll
 } from 'firebase/storage';
-import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
+import { getFunctions, connectFunctionsEmulator, httpsCallable } from 'firebase/functions';
 
 // ─── FIREBASE CONFIG ────────────────────────────────────────────────────────
 const firebaseConfig = {
@@ -64,7 +64,7 @@ if (import.meta.env.VITE_USE_EMULATOR) {
 // Expose to global scope — the legacy app code (still one big module for now)
 // reads this exactly the same way it always has.
 window._crumb = {
-  auth, db, storage, functions, googleProvider,
+  auth, db, storage, functions, httpsCallable, googleProvider,
   signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword,
   onAuthStateChanged, signOut, updateProfile,
   sendPasswordResetEmail, verifyPasswordResetCode, confirmPasswordReset,

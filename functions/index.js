@@ -4,6 +4,8 @@
 
 const { setUserRole } = require('./roles');
 const { moderateFlaggedReview } = require('./moderation');
+const { markReservationCollected } = require('./reservations');
 
 exports.setUserRole = setUserRole;
 exports.moderateFlaggedReview = moderateFlaggedReview;
+exports.markReservationCollected = markReservationCollected;

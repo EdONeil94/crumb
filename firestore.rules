@@ -163,10 +163,18 @@ service cloud.firestore {
     match /reservations/{id} {
       allow read: if request.auth != null;
       allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
-      allow update: if request.auth != null && (
-        request.auth.uid == resource.data.userId ||
-        request.auth.uid == 'KTpBS4yJx2h8LpcryCTfJDFCHlr2'
-      );
+      // C9: status:'collected' is set ONLY by the markReservationCollected
+      // Cloud Function (Admin SDK, bypasses rules) — an admin or the assigned
+      // business user, never the customer. A client may no longer transition a
+      // reservation *into* 'collected'; the owner keeps update access for
+      // cancellation until C8b moves that server-side too, at which point this
+      // whole rule closes to `false`.
+      allow update: if request.auth != null
+        && (request.resource.data.status != 'collected' || resource.data.status == 'collected')
+        && (
+          request.auth.uid == resource.data.userId ||
+          request.auth.uid == 'KTpBS4yJx2h8LpcryCTfJDFCHlr2'
+        );
       allow delete: if request.auth != null && request.auth.uid == 'KTpBS4yJx2h8LpcryCTfJDFCHlr2';
     }
 

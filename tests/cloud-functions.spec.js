@@ -34,6 +34,13 @@ async function db() {
   return adminDb;
 }
 
+async function adminAuth() {
+  const { initializeApp, getApps } = await import('firebase-admin/app');
+  const { getAuth } = await import('firebase-admin/auth');
+  const app = getApps()[0] || initializeApp({ projectId: 'crumb-ddeb6' });
+  return getAuth(app);
+}
+
 // ── C5 — setUserRole (via the Admin panel → Users tab) ─────────────────────
 test.describe('C5 — setUserRole', () => {
   const TARGET_NAME = 'Dot Dough';        // seeded, in nobody's follow graph
@@ -202,5 +209,119 @@ test.describe('C3 — moderateFlaggedReview', () => {
     // The review deletion itself is asserted above (items/{itemId} is gone).
     const log = await d.collection('moderationLog').where('flagId', '==', flagId).get();
     expect(log.docs[0].data()).toMatchObject({ action: 'remove', itemId });
+  });
+});
+
+// ── C9 — markReservationCollected ─────────────────────────────────────────
+// The admin + happy-path UI flow (open Manage pre-orders → click "Collected")
+// is already covered by tests/manage-offerings.spec.js:200. What's specific
+// to C9 and covered here: the closed Firestore rule (a client can no longer
+// set status:'collected'), and the callable's server-side gate — the caller
+// must be an admin or the *assigned* business user, never the customer.
+test.describe('C9 — markReservationCollected', () => {
+  // A business user assigned to a seeded bakery — created here rather than in
+  // the global seed so the baseline suite's counts stay untouched.
+  const MOE = {
+    uid: 'seed-user-moe-c9', email: 'moe-c9@crumb.test', pw: 'crumb-e2e-pw',
+    name: 'Moe Muffin', bakery: 'Seed Bakehouse Alpha',
+  };
+  const E2E_OFFERING_ID = 'E2E_c9_offering';
+
+  test.beforeAll(async () => {
+    const auth = await adminAuth();
+    await auth.createUser({
+      uid: MOE.uid, email: MOE.email, password: MOE.pw, displayName: MOE.name,
+    }).catch((e) => { if (!/already-exists/.test(e.errorInfo?.code || e.code || '')) throw e; });
+    await (await db()).collection('userRoles').doc(MOE.uid).set({
+      role: 'business', bakeryName: MOE.bakery, displayName: MOE.name,
+    });
+  });
+
+  test.afterAll(async () => {
+    await (await db()).collection('userRoles').doc(MOE.uid).delete().catch(() => {});
+    await (await adminAuth()).deleteUser(MOE.uid).catch(() => {});
+  });
+
+  test.afterEach(async () => {
+    const stale = await (await db()).collection('reservations')
+      .where('offeringId', '==', E2E_OFFERING_ID).get();
+    await Promise.all(stale.docs.map((x) => x.ref.delete()));
+  });
+
+  async function seedReservation({ bakeryName = MOE.bakery, status = 'pending' } = {}) {
+    const ref = await (await db()).collection('reservations').add({
+      userId: 'seed-user-dot', userName: 'Dot Dough', userEmail: 'dot@crumb.test',
+      bakeryName, offeringId: E2E_OFFERING_ID, offeringName: 'E2E C9 Bun',
+      slot: '9:00am', collectDate: '2099-01-01',
+      quantity: 1, status, price: 3, totalPrice: 3, createdAt: new Date(),
+    });
+    return ref.id;
+  }
+
+  test('a client can no longer transition a reservation into status:collected', async ({ page }) => {
+    const resId = await seedReservation();
+    await page.goto('/');
+    await expect(page.locator('#navAvatar')).toBeVisible({ timeout: 15_000 });
+
+    // The signed-in E2E user is the super-admin; the rule now blocks the
+    // 'collected' transition regardless of who's writing.
+    const outcome = await page.evaluate(async (id) => {
+      const { db, doc, updateDoc } = window._crumb;
+      try {
+        await updateDoc(doc(db, 'reservations', id), { status: 'collected', collectedAt: new Date().toISOString() });
+        return 'allowed';
+      } catch (e) { return e.code || 'rejected'; }
+    }, resId);
+    expect(outcome).toMatch(/permission-denied|rejected/);
+
+    const snap = await (await db()).collection('reservations').doc(resId).get();
+    expect(snap.data().status).toBe('pending');
+  });
+
+  test('the callable refuses the customer and accepts the assigned business user', async ({ page }) => {
+    const resId = await seedReservation();
+    await page.goto('/');
+    await expect(page.locator('#navAvatar')).toBeVisible({ timeout: 15_000 });
+
+    // Dot owns the reservation but is a plain customer — refused.
+    const asCustomer = await page.evaluate(async (id) => {
+      await window._crumb.signInWithEmailAndPassword(window._crumb.auth, 'dot@crumb.test', 'crumb-e2e-pw');
+      const call = window._crumb.httpsCallable(window._crumb.functions, 'markReservationCollected');
+      try { await call({ reservationId: id }); return 'allowed'; }
+      catch (e) { return e.code || 'rejected'; }
+    }, resId);
+    expect(asCustomer).toBe('functions/permission-denied');
+
+    // Moe is the business user assigned to this bakery — accepted.
+    const asBusiness = await page.evaluate(async ({ id, email, pw }) => {
+      await window._crumb.signInWithEmailAndPassword(window._crumb.auth, email, pw);
+      const call = window._crumb.httpsCallable(window._crumb.functions, 'markReservationCollected');
+      const res = await call({ reservationId: id });
+      return res.data;
+    }, { id: resId, email: MOE.email, pw: MOE.pw });
+    expect(asBusiness).toMatchObject({ status: 'collected', bakeryName: MOE.bakery });
+    expect(typeof asBusiness.collectedAt).toBe('string');
+
+    const snap = await (await db()).collection('reservations').doc(resId).get();
+    expect(snap.data().status).toBe('collected');
+    // Written as a real Firestore Timestamp, not the old client ISO string.
+    expect(snap.data().collectedAt.constructor.name).toBe('Timestamp');
+  });
+
+  test('the callable refuses a business user from a different bakery', async ({ page }) => {
+    const resId = await seedReservation({ bakeryName: 'Seed Bakehouse Beta' });
+    await page.goto('/');
+    await expect(page.locator('#navAvatar')).toBeVisible({ timeout: 15_000 });
+
+    const outcome = await page.evaluate(async ({ id, email, pw }) => {
+      await window._crumb.signInWithEmailAndPassword(window._crumb.auth, email, pw);
+      const call = window._crumb.httpsCallable(window._crumb.functions, 'markReservationCollected');
+      try { await call({ reservationId: id }); return 'allowed'; }
+      catch (e) { return e.code || 'rejected'; }
+    }, { id: resId, email: MOE.email, pw: MOE.pw });
+    expect(outcome).toBe('functions/permission-denied');
+
+    const snap = await (await db()).collection('reservations').doc(resId).get();
+    expect(snap.data().status).toBe('pending');
   });
 });
