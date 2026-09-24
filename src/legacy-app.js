@@ -43,9 +43,8 @@ import {
   handleSettingsPhoto, saveSettingsProfile,
 } from './pages/settings.js';
 import { renderPeople } from './pages/people.js';
-import {
-  parseSlotStartTime, renderOrdersTab,
-} from './components/reservations.js';
+import { renderOrdersTab } from './components/reservations.js';
+import { cancelReservation as cancelReservationCallable } from './services/reservations.js';
 import {
   openAddModal, closeAddModal, buildTastingDims, buildCategoryChips,
   compressImage, compressToDataURL, showKnownBakeries, selectManualBakery,
@@ -1028,33 +1027,31 @@ registerActions({ removeSavedItem });
 // cancelReservation itself stays here — see reservations.js's own header
 // comment for why (its own blocker, loadMyPreorders, is unrelated to this
 // step's reserveOffering move).
+// C8b — cancellation goes through the cancelReservation callable
+// (functions/reservations.js). The stock return is now server-side and
+// transactional, and returns the reservation's REAL quantity (the client
+// path this replaces added a hardcoded +1, leaking a unit per multi-item
+// cancel). The 12-hour cutoff stays a client-side UX guardrail —
+// renderOrdersTab hides the Cancel button inside 12h (see the decision note
+// in functions/reservations.js).
+function cancelReservationErrorText(e) {
+  const code = e?.details?.code;
+  if (code === 'ALREADY_COLLECTED') return 'That reservation has already been collected';
+  if (code === 'ALREADY_CANCELLED') return 'That reservation is already cancelled';
+  if (e?.code === 'functions/permission-denied') return 'You can only cancel your own reservation';
+  if (e?.code === 'functions/not-found') return 'That reservation no longer exists';
+  return 'Could not cancel';
+}
+
 async function cancelReservation(reservationId, offeringId) {
   if (!confirm('Cancel this reservation? This cannot be undone.')) return;
-  if (!fb) return;
-  const { db, doc, updateDoc, getDoc } = fb;
   try {
-    // Check 12hr rule
-    const resSnap = await getDoc(doc(db, 'reservations', reservationId));
-    const r = resSnap.data();
-    const collect = new Date(r.collectDate + 'T' + (parseSlotStartTime(r.slot) || '09:00'));
-    if ((collect - new Date()) < 12 * 60 * 60 * 1000) {
-      showToast('Cannot cancel within 12 hours of collection time');
-      return;
-    }
-    await updateDoc(doc(db, 'reservations', reservationId), { status: 'cancelled' });
-    // Return qty to offering
-    if (offeringId) {
-      const oSnap = await getDoc(doc(db, 'preorderOfferings', offeringId));
-      if (oSnap.exists()) {
-        const curr = oSnap.data().remaining ?? 0;
-        await updateDoc(doc(db, 'preorderOfferings', offeringId), { remaining: curr + 1 });
-      }
-    }
+    await cancelReservationCallable(reservationId);
     showToast('Reservation cancelled');
     loadMyPreorders(); // Update burger menu badge
     const content = document.getElementById('profileTabContent');
     if (content) await renderOrdersTab(content);
-  } catch(e) { showToast('Could not cancel'); console.error(e); }
+  } catch(e) { showToast(cancelReservationErrorText(e)); console.error(e); }
 }
 
 // generateOrderQRCodes/expandQR/closeExpandedQR/openQRScanner/scanFrame/

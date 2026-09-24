@@ -149,10 +149,14 @@ service cloud.firestore {
       allow read: if true;
       allow create: if request.auth != null
         && request.auth.uid == request.resource.data.createdBy;
+      // C8 / C8b: the `remaining` stock count is now written only by the
+      // createReservation / cancelReservation Cloud Functions (Admin SDK,
+      // transactional — the fix for the read-then-write race). The old
+      // hasOnly(['remaining']) clause that let ANY signed-in user decrement
+      // stock is gone. Offering owners still edit their own offerings.
       allow update: if request.auth != null && (
         request.auth.uid == resource.data.createdBy ||
-        request.auth.uid == 'KTpBS4yJx2h8LpcryCTfJDFCHlr2' ||
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['remaining'])
+        request.auth.uid == 'KTpBS4yJx2h8LpcryCTfJDFCHlr2'
       );
       allow delete: if request.auth != null && (
         request.auth.uid == resource.data.createdBy ||
@@ -162,19 +166,13 @@ service cloud.firestore {
 
     match /reservations/{id} {
       allow read: if request.auth != null;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
-      // C9: status:'collected' is set ONLY by the markReservationCollected
-      // Cloud Function (Admin SDK, bypasses rules) — an admin or the assigned
-      // business user, never the customer. A client may no longer transition a
-      // reservation *into* 'collected'; the owner keeps update access for
-      // cancellation until C8b moves that server-side too, at which point this
-      // whole rule closes to `false`.
-      allow update: if request.auth != null
-        && (request.resource.data.status != 'collected' || resource.data.status == 'collected')
-        && (
-          request.auth.uid == resource.data.userId ||
-          request.auth.uid == 'KTpBS4yJx2h8LpcryCTfJDFCHlr2'
-        );
+      // C8 / C8b / C9: reservations are created, cancelled and marked
+      // collected only by Cloud Functions (Admin SDK). createReservation
+      // does the stock decrement transactionally; cancelReservation returns
+      // the real quantity to stock; markReservationCollected is bakery-side
+      // only. No client write path remains. Delete stays super-admin-only
+      // for the E2E cleanup safety net.
+      allow create, update: if false;
       allow delete: if request.auth != null && request.auth.uid == 'KTpBS4yJx2h8LpcryCTfJDFCHlr2';
     }
 

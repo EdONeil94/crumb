@@ -82,17 +82,23 @@ teardown('remove E2E-prefixed test data', async ({ page }) => {
       where('offeringName', '>=', prefix),
       where('offeringName', '<', upperBound)
     ));
-    let deleted = 0, cancelledInstead = 0;
+    let deleted = 0, cancelledInstead = 0, stuck = 0;
     await Promise.all(resSnap.docs.map(async d => {
       try {
         await deleteDoc(doc(db, 'reservations', d.id));
         deleted++;
       } catch {
-        await updateDoc(doc(db, 'reservations', d.id), { status: 'cancelled' });
-        cancelledInstead++;
+        // C8b closed `reservations` update to false — the mark-cancelled
+        // fallback (only ever reached under test:e2e:prod, where the E2E
+        // account isn't the real super-admin) now fails too. Nothing more
+        // the client can do; count it and move on.
+        try {
+          await updateDoc(doc(db, 'reservations', d.id), { status: 'cancelled' });
+          cancelledInstead++;
+        } catch { stuck++; }
       }
     }));
-    result.reservations = { deleted, cancelledInstead };
+    result.reservations = { deleted, cancelledInstead, stuck };
 
     const listing = await listAll(ref(storage, 'offerings'));
     const e2eFiles = listing.items.filter(item => item.name.startsWith('E2E_'));

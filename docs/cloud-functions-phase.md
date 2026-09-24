@@ -16,16 +16,16 @@ Execution: **single-agent, sequential, one callable per commit**, order
 | Pre-flight: delete `src/firebase.js` | `76cb054` | ✅ done |
 | **C5** `setUserRole` | `f4b2148` | ✅ done |
 | **C3** `moderateFlaggedReview` | `03845c1` | ✅ done |
-| **C9** `markReservationCollected` | (this commit) | ✅ done |
-| **C8 / C8b** `createReservation` / `cancelReservation` | — | ⬜ not started (server draft exists, unwired) |
+| **C9** `markReservationCollected` | `f769d30` | ✅ done |
+| **C8 / C8b** `createReservation` / `cancelReservation` | (this commit) | ✅ done |
 | **C1 / C1b** `submitReview` / `updateReview` / `deleteReview` | — | ⬜ not started (server draft exists, unwired) |
 
-Server drafts for C8/C8b/C1/C1b were written ahead of the sequential
-workflow and sit untracked in the tree (`functions/reviews.js`,
-`functions/reservations.js` had all three reservation callables, `functions/tasting.js`).
-Treat them as unverified starting points, not finished work — read critically
-at each item's turn. `functions/reservations.js` was trimmed to C9-only when
-C9 landed; C8/C8b get re-added there.
+Server drafts for C1/C1b were written ahead of the sequential workflow and
+sit untracked in the tree (`functions/reviews.js`, `functions/tasting.js`).
+Treat them as unverified starting points, not finished work — read critically.
+The C8/C8b draft (`createReservation` / `cancelReservation` in the original
+`functions/reservations.js`) turned out to have two real bugs, both fixed
+when C8/C8b landed — see the per-commit note below.
 
 ## Outstanding before the phase is "done"
 
@@ -42,14 +42,18 @@ These are deliberately deferred, not forgotten. None may be dropped.
    section this is the *goal* of C5, reached one commit after every current
    role-holder has been re-granted through `setUserRole` and confirmed — not
    part of C5's own diff. Still open.
-3. **Fully close the `reservations` update rule to `false`.** C9 only blocked
-   the `status:'collected'` transition; the owner keeps update access for
-   client-side cancellation until C8b moves that server-side. C8b closes it.
+3. ✅ **CLOSED by C8b.** `reservations` `create` and `update` are now both
+   `if false` (C8/C8b/C9 all server-side); `delete` stays super-admin-only
+   for the E2E cleanup net. `preorderOfferings` lost its
+   `hasOnly(['remaining'])` update clause too (that was the "any signed-in
+   user can decrement stock" hole).
 4. **Close `items` / `itemRecords` write rules.** Gated by C1 / C1b — not yet
    started.
 5. **Re-verify `tests/cleanup.teardown.js` + `scripts/cleanup-e2e-data.mjs`**
    against the closed `items` / `itemRecords` rules (contract "Rules changes"
    note 1) — they delete those collections from the client. Do this with C1/C1b.
+   (`cleanup.teardown.js`'s reservation handling was already re-checked for
+   C8b — it now swallows the now-impossible mark-cancelled fallback.)
 6. **Emulator teardown bug (found during C3 verification, 2026-08-31).**
    Playwright's teardown doesn't kill the Firestore emulator's Java child
    process — it reparents to PID 1 and keeps port 8080, breaking the *next*
@@ -57,6 +61,21 @@ These are deliberately deferred, not forgotten. None may be dropped.
    `npm run test:e2e` from a fresh shell is unaffected. Fix belongs in
    `playwright.config.js`'s emulator `webServer` teardown. Low priority,
    not a blocker, but should be fixed before the phase closes.
+
+## Contract deviations (accepted)
+
+- **C8 / C8b collection-time checks are client-side only** (Ed's decision,
+  2026-08-31). The contract lists `NOT_YET_LIVE` / `PAST_COLLECTION` (C8) and
+  `WITHIN_CUTOFF` (C8b) as error codes; the callables do **not** enforce
+  them. Rationale: they're not a security boundary (no incentive to
+  reserve/cancel a past offering, no no-show penalty), and enforcing them
+  server-side pits the Functions emulator's real clock against the E2E
+  suite's mocked browser clock (5 specs create UI offerings dated to a fixed
+  mock past). The client keeps them as UX guardrails — `renderPreorderTab`
+  only shows Reserve for live/upcoming offerings, `renderOrdersTab` hides
+  Cancel inside 12h. Revisit if a real threat model appears.
+- **C3 `moderationLog` shape** — no `reviewDeleted` field (matches the
+  frozen shape; a test over-asserted it and was corrected).
 
 ## Per-commit notes
 
@@ -91,3 +110,32 @@ Tests: the admin happy path is already covered by
 server gate (customer refused, assigned business accepted, wrong-bakery
 business refused) using a spec-local business user rather than a global-seed
 change.
+
+### C8 / C8b — `createReservation` / `cancelReservation`
+`functions/reservations.js` gains both callables (all three reservation
+callables now live there). `src/services/reservations.js` grows
+`createReservation` / `cancelReservation` wrappers. Client:
+`bakeryModal.js reserveOffering()` and `legacy-app.js cancelReservation()`
+call the wrappers; the reserve/cancel UI (qty picker, confirm, toasts,
+`renderPreorderTab` / `renderOrdersTab` re-render) is unchanged.
+
+**Two real bugs found in the pre-draft and fixed:**
+- `slotStartTime` matched `"5:00"` inside `"5:00pm"` before its am/pm branch,
+  so any PM slot was read 12h early. (Now moot — the only consumer was the
+  server `WITHIN_CUTOFF` check, which was dropped per the deviation above —
+  but the helper was corrected before that decision and then removed.)
+- **The stock-leak bug the contract flagged**: client cancel did
+  `remaining + 1` regardless of `quantity`. The callable returns
+  `remaining + reservation.quantity`. Covered by a dedicated test.
+
+Rules: `preorderOfferings` update drops `hasOnly(['remaining'])`;
+`reservations` `create, update` → `if false` (see Outstanding #3, now closed).
+`tests/cleanup.teardown.js` reservation cleanup guarded against the
+now-impossible mark-cancelled fallback.
+
+Tests: C8/C8b block in `tests/cloud-functions.spec.js` — price/stock
+transaction, `SOLD_OUT`, `OVER_MAX_PER_PERSON`, `DUPLICATE_RESERVATION`,
+cancel real-quantity restock + `ALREADY_CANCELLED`, cancel permission gate,
+and the closed client write rules (no direct reservation create, no direct
+stock decrement). All offerings seeded via admin SDK (far-future dates, so
+no clock dependency).

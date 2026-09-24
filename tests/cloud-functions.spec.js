@@ -325,3 +325,163 @@ test.describe('C9 — markReservationCollected', () => {
     expect(snap.data().status).toBe('pending');
   });
 });
+
+// ── C8 / C8b — createReservation / cancelReservation ──────────────────────
+// Collection-time preconditions (NOT_YET_LIVE / PAST_COLLECTION /
+// WITHIN_CUTOFF) are deliberately client-side only — see the header of
+// functions/reservations.js and docs/cloud-functions-phase.md. What's tested
+// here is the security-critical half: the transactional stock decrement /
+// restock (by REAL quantity — the bug this replaces leaked a unit), the
+// server-set price, the duplicate/sold-out/max-per-person guards, cancel
+// ownership, and the closed client write rules.
+test.describe('C8 / C8b — createReservation / cancelReservation', () => {
+  const OFFERING_PREFIX = 'E2E_c8_';
+  const CUST = { email: 'dot@crumb.test', pw: 'crumb-e2e-pw' };      // seeded customer
+  const OTHER = { email: 'cal@crumb.test', pw: 'crumb-e2e-pw' };     // a different customer
+
+  async function seedOffering({ remaining = 5, price = 3, maxPerPerson = 3 } = {}) {
+    const ref = await (await db()).collection('preorderOfferings').add({
+      bakeryName: 'Seed Bakehouse Alpha',
+      name: `${OFFERING_PREFIX}Bun`, description: '',
+      price, quantity: remaining, remaining, maxPerPerson,
+      slot: '9:00am–11:00am', collectDate: '2099-01-01',
+      goLiveAt: '2000-01-01T00:00:00.000Z', photoURL: null,
+      createdBy: 'KTpBS4yJx2h8LpcryCTfJDFCHlr2', active: true,
+      createdAt: new Date(),
+    });
+    return ref.id;
+  }
+
+  async function seedReservation(offeringId, { quantity = 2, status = 'pending', userId = 'seed-user-dot' } = {}) {
+    const ref = await (await db()).collection('reservations').add({
+      userId, userName: 'Dot Dough', userEmail: 'dot@crumb.test',
+      bakeryName: 'Seed Bakehouse Alpha', offeringId, offeringName: `${OFFERING_PREFIX}Bun`,
+      slot: '9:00am–11:00am', collectDate: '2099-01-01',
+      quantity, status, price: 3, totalPrice: 3 * quantity, createdAt: new Date(),
+    });
+    return ref.id;
+  }
+
+  test.afterEach(async () => {
+    const d = await db();
+    for (const [coll, field] of [['preorderOfferings', 'name'], ['reservations', 'offeringName']]) {
+      const stale = await d.collection(coll).where(field, '==', `${OFFERING_PREFIX}Bun`).get();
+      await Promise.all(stale.docs.map((x) => x.ref.delete()));
+    }
+  });
+
+  // callable invoked in-page as a specific signed-in user
+  async function callInPage(page, { email, pw }, name, payload) {
+    return page.evaluate(async ({ email, pw, name, payload }) => {
+      await window._crumb.signInWithEmailAndPassword(window._crumb.auth, email, pw);
+      const call = window._crumb.httpsCallable(window._crumb.functions, name);
+      try { return { ok: true, data: (await call(payload)).data }; }
+      catch (e) { return { ok: false, code: e.code || 'rejected', detail: e.details?.code || null }; }
+    }, { email, pw, name, payload });
+  }
+
+  test('createReservation: server sets price, decrements stock transactionally', async ({ page }) => {
+    const offeringId = await seedOffering({ remaining: 5, price: 3, maxPerPerson: 3 });
+    await page.goto('/');
+    await expect(page.locator('#navAvatar')).toBeVisible({ timeout: 15_000 });
+
+    const res = await callInPage(page, CUST, 'createReservation', { offeringId, quantity: 2 });
+    expect(res.ok).toBe(true);
+    expect(res.data.remaining).toBe(3);
+    expect(res.data.reservation).toMatchObject({
+      quantity: 2, price: 3, totalPrice: 6, status: 'pending',
+      bakeryName: 'Seed Bakehouse Alpha', userId: 'seed-user-dot',
+    });
+    expect(typeof res.data.reservation.createdAt).toBe('string');
+
+    const d = await db();
+    expect((await d.collection('preorderOfferings').doc(offeringId).get()).data().remaining).toBe(3);
+    const written = await d.collection('reservations').doc(res.data.reservationId).get();
+    expect(written.data()).toMatchObject({ quantity: 2, totalPrice: 6, status: 'pending' });
+    expect(written.data().createdAt.constructor.name).toBe('Timestamp');
+  });
+
+  test('createReservation: SOLD_OUT when quantity exceeds remaining, stock untouched', async ({ page }) => {
+    const offeringId = await seedOffering({ remaining: 1 });
+    await page.goto('/');
+    await expect(page.locator('#navAvatar')).toBeVisible({ timeout: 15_000 });
+
+    const res = await callInPage(page, CUST, 'createReservation', { offeringId, quantity: 2 });
+    expect(res).toMatchObject({ ok: false, code: 'functions/failed-precondition', detail: 'SOLD_OUT' });
+    expect((await (await db()).collection('preorderOfferings').doc(offeringId).get()).data().remaining).toBe(1);
+  });
+
+  test('createReservation: OVER_MAX_PER_PERSON and DUPLICATE_RESERVATION', async ({ page }) => {
+    const offeringId = await seedOffering({ remaining: 10, maxPerPerson: 2 });
+    await page.goto('/');
+    await expect(page.locator('#navAvatar')).toBeVisible({ timeout: 15_000 });
+
+    const over = await callInPage(page, CUST, 'createReservation', { offeringId, quantity: 3 });
+    expect(over).toMatchObject({ ok: false, detail: 'OVER_MAX_PER_PERSON' });
+
+    const first = await callInPage(page, CUST, 'createReservation', { offeringId, quantity: 1 });
+    expect(first.ok).toBe(true);
+    const dup = await callInPage(page, CUST, 'createReservation', { offeringId, quantity: 1 });
+    expect(dup).toMatchObject({ ok: false, detail: 'DUPLICATE_RESERVATION' });
+  });
+
+  test('cancelReservation: returns the REAL quantity to stock (not a hardcoded +1)', async ({ page }) => {
+    const offeringId = await seedOffering({ remaining: 3 });
+    const resId = await seedReservation(offeringId, { quantity: 2 });
+    await page.goto('/');
+    await expect(page.locator('#navAvatar')).toBeVisible({ timeout: 15_000 });
+
+    const res = await callInPage(page, CUST, 'cancelReservation', { reservationId: resId });
+    expect(res.ok).toBe(true);
+    expect(res.data).toMatchObject({ status: 'cancelled', remaining: 5 }); // 3 + 2, the bug fix
+
+    const d = await db();
+    expect((await d.collection('reservations').doc(resId).get()).data().status).toBe('cancelled');
+    expect((await d.collection('preorderOfferings').doc(offeringId).get()).data().remaining).toBe(5);
+
+    const again = await callInPage(page, CUST, 'cancelReservation', { reservationId: resId });
+    expect(again).toMatchObject({ ok: false, detail: 'ALREADY_CANCELLED' });
+  });
+
+  test('cancelReservation: refuses a caller who is neither the owner nor an admin', async ({ page }) => {
+    const offeringId = await seedOffering({ remaining: 3 });
+    const resId = await seedReservation(offeringId, { quantity: 1 });
+    await page.goto('/');
+    await expect(page.locator('#navAvatar')).toBeVisible({ timeout: 15_000 });
+
+    const res = await callInPage(page, OTHER, 'cancelReservation', { reservationId: resId });
+    expect(res).toMatchObject({ ok: false, code: 'functions/permission-denied' });
+    expect((await (await db()).collection('reservations').doc(resId).get()).data().status).toBe('pending');
+  });
+
+  test('the client can no longer create a reservation or decrement another bakery\'s stock directly', async ({ page }) => {
+    // Offering owned by the super-admin; the attacker is a plain customer.
+    const offeringId = await seedOffering({ remaining: 5 });
+    await page.goto('/');
+    await expect(page.locator('#navAvatar')).toBeVisible({ timeout: 15_000 });
+
+    const outcome = await page.evaluate(async ({ offId, email, pw }) => {
+      await window._crumb.signInWithEmailAndPassword(window._crumb.auth, email, pw);
+      const { db, doc, updateDoc, collection, addDoc, auth } = window._crumb;
+      const out = {};
+      try {
+        await addDoc(collection(db, 'reservations'), {
+          userId: auth.currentUser.uid, offeringId: offId,
+          bakeryName: 'Seed Bakehouse Alpha', quantity: 1, status: 'pending',
+        });
+        out.create = 'allowed';
+      } catch (e) { out.create = e.code || 'rejected'; }
+      try {
+        // This is exactly what the removed hasOnly(['remaining']) clause used
+        // to permit for any signed-in user.
+        await updateDoc(doc(db, 'preorderOfferings', offId), { remaining: 0 });
+        out.decrement = 'allowed';
+      } catch (e) { out.decrement = e.code || 'rejected'; }
+      return out;
+    }, { offId: offeringId, email: OTHER.email, pw: OTHER.pw });
+
+    expect(outcome.create).toMatch(/permission-denied|rejected/);
+    expect(outcome.decrement).toMatch(/permission-denied|rejected/);
+    expect((await (await db()).collection('preorderOfferings').doc(offeringId).get()).data().remaining).toBe(5);
+  });
+});
