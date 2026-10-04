@@ -18,7 +18,7 @@ Execution: **single-agent, sequential, one callable per commit**, order
 | **C3** `moderateFlaggedReview` | `03845c1` | ✅ done |
 | **C9** `markReservationCollected` | `f769d30` | ✅ done |
 | **C8 / C8b** `createReservation` / `cancelReservation` | `6b5cc70` | ✅ done |
-| **C1 / C1b** `submitReview` / `updateReview` / `deleteReview` | (this commit) | ✅ done — not yet deployed, see "Deployment" |
+| **C1 / C1b** `submitReview` / `updateReview` / `deleteReview` | `32f3c30` (WIP backup) + verification commit | ✅ done — full suite 104/3/0 (2026-10-04); not yet deployed, see "Deployment" |
 
 The C1/C1b server draft (`functions/reviews.js`, `functions/tasting.js`) was
 written ahead of the sequential workflow; it had several real bugs, fixed
@@ -76,6 +76,25 @@ These are deliberately deferred, not forgotten. None may be dropped.
   `feat/cloud-functions`), and the branch both closes rules (C8b/C9/C1) and
   ships a client that calls the callables. Order must be: functions deployed
   + verified live → client (rules unchanged) → rules closures last.
+
+### Rollout plan (Ed, 2026-10-04)
+
+1. **Functions** — `firebase deploy --only functions` (manual, Ed approves
+   the exact command first), then verify every callable answers live.
+2. **Client PR** — `feat/cloud-functions`. `firestore.rules` is *identical
+   to main* on this branch, so merging it does not trigger
+   `deploy-rules.yml`. The three closed-rule tests (C9 mark-collected, C8
+   direct create/decrement, C1 direct items/itemRecords writes) are skipped
+   behind `RULES_CLOSED = false` in `tests/cloud-functions.spec.js`.
+   Merging also points the nightly `cleanup-e2e.yml` cron at the
+   `deleteReview` callable — so step 1 must be live first.
+3. **Rules PR** — `feat/cloud-functions-rules`, a revert of the split
+   commit: restores every C5/C3/C9/C8b/C1 rules change and un-gates the
+   three tests. Merged last; `deploy-rules.yml` publishes it.
+
+Then, separately: the role re-grant + dropping the hardcoded super-admin
+UID (Outstanding #1/#2) — Ed's go-ahead required; re-grant Ed's own account
+and a break-glass second admin first.
 
 ## Contract deviations (accepted)
 
