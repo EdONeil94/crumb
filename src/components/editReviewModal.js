@@ -27,7 +27,6 @@ import { CATEGORY_TREE, getTastingDims } from '../data/categories.js';
 import { lockScroll, unlockScroll, showToast } from '../utils/dom.js';
 import { compressImage, compressToDataURL } from './addReviewModal.js';
 import { renderLeaderboard, lbCurrentTab } from '../pages/leaderboard.js';
-import { updateReview, deleteReview as deleteReviewCallable } from '../services/reviews.js';
 
 let editingItemId = null;
 let editPhotoFile = null;
@@ -177,25 +176,12 @@ export function clearEditPhoto() {
   if (wrap) wrap.innerHTML = `<div style="background:var(--parchment-dark);border-radius:var(--radius);height:80px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:0.85rem;">No photo</div>`;
 }
 
-// C1b — saveEdit()/deleteReview() go through the updateReview/deleteReview
-// callables (functions/reviews.js): the permission check (owner or admin)
-// and every itemRecords aggregate recompute now happen server-side. Photo
-// upload/removal stays client-side (Storage rules already scope
-// items/{uid}/** to that uid, and deleting the old Storage object is a
-// separate concern from the Firestore write).
-function editReviewErrorText(e) {
-  if (e?.code === 'functions/permission-denied') return 'You can only edit your own review.';
-  if (e?.code === 'functions/not-found') return 'That review no longer exists.';
-  if (e?.code === 'functions/invalid-argument') return 'Please check the review details and try again.';
-  return 'Could not save — check your connection';
-}
-
 async function saveEdit() {
   if (!editingItemId || !currentUser) return;
   const btn = document.getElementById('editSaveBtn');
   btn.disabled = true; btn.textContent = 'Saving…';
   try {
-    const { storage, ref, uploadBytes, getDownloadURL } = fb;
+    const { db, storage, doc, updateDoc, ref, uploadBytes, getDownloadURL } = fb;
     let photoURL = editPhotoDataURL && !editPhotoFile ? editPhotoDataURL : null;
     if (editPhotoFile) {
       const storageRef = ref(storage, `items/${currentUser.uid}/${Date.now()}_edit.jpg`);
@@ -212,25 +198,23 @@ async function saveEdit() {
       const el = document.getElementById('edit_' + d.key);
       dimData[d.key] = el ? parseFloat(el.value) : 0;
     });
-    const { item: updatedItem } = await updateReview(editingItemId, {
+    const updates = {
       name: document.getElementById('editName').value,
       category: newCategory,
       subCategory: newSubCategory,
       price: document.getElementById('editPrice').value ? parseFloat(document.getElementById('editPrice').value) : null,
       overallRating,
-      dims: dimData,
+      communityAvg: overallRating,
       notes: document.getElementById('editNotes').value,
-      ...(photoURL !== null ? { photoURL } : {}),
-    });
-    const idx = allItems.findIndex(i => i.id === editingItemId);
-    // Keep the cached createdAt (a Firestore Timestamp) — the callable's is an
-    // ISO string, and reviewCard/feed sorting expect the Timestamp shape.
-    if (idx >= 0) allItems[idx] = { ...allItems[idx], ...updatedItem, createdAt: allItems[idx].createdAt };
+      ...dimData,
+      ...(photoURL !== null ? { photoURL } : {})
+    };
+    await updateDoc(doc(db, 'items', editingItemId), updates);
     closeEditModal();
     showToast('Review updated ✓');
     await loadData();
   } catch(e) {
-    showToast(editReviewErrorText(e));
+    showToast('Could not save — check your connection');
     console.error(e);
   } finally {
     btn.disabled = false; btn.textContent = 'Save changes';
@@ -243,13 +227,44 @@ async function deleteReview() {
   if (!item || item.userId !== currentUser.uid) return;
   if (!confirm(`Delete your review of "${item.name || 'this item'}"? This cannot be undone.`)) return;
   try {
-    await deleteReviewCallable(editingItemId);
-
-    // Photo cleanup only once the review is actually gone — a refused or
-    // failed callable must not leave the review pointing at a deleted image.
-    const { storage, ref, deleteObject } = fb;
+    const { db, storage, doc, deleteDoc, updateDoc, ref, deleteObject } = fb;
     if (item.photoURL && item.photoURL.includes('firebasestorage')) {
       try { await deleteObject(ref(storage, item.photoURL)); } catch(e) {}
+    }
+
+    const itemRecordId = item.itemRecordId;
+    await deleteDoc(doc(db, 'items', editingItemId));
+
+    // Clean up the shared itemRecord so a deleted review doesn't leave stale
+    // orphaned data lingering on the leaderboard / bakery pages.
+    if (itemRecordId) {
+      const remaining = allItems.filter(i => i.itemRecordId === itemRecordId && i.id !== editingItemId);
+      try {
+        if (!remaining.length) {
+          // That was the only review for this item — remove the record entirely
+          await deleteDoc(doc(db, 'itemRecords', itemRecordId));
+        } else {
+          // Recalculate every aggregate fresh from whatever reviews remain,
+          // rather than trying to subtract the deleted one incrementally
+          const reviewCount = remaining.length;
+          const communityAvg = remaining.reduce((s, r) => s + (r.overallRating || 0), 0) / reviewCount;
+          const withPrice = remaining.filter(r => r.price !== null && r.price !== undefined);
+          const avgPrice = withPrice.length ? withPrice.reduce((s, r) => s + r.price, 0) / withPrice.length : null;
+          const dims = getTastingDims(item.category || 'other');
+          const dimData = {};
+          dims.forEach(d => {
+            const vals = remaining.map(r => r[d.key] || 0);
+            dimData[d.key] = vals.reduce((s, v) => s + v, 0) / vals.length;
+          });
+          await updateDoc(doc(db, 'itemRecords', itemRecordId), {
+            communityAvg: Math.round(communityAvg * 10) / 10,
+            reviewCount,
+            avgPrice: avgPrice !== null ? Math.round(avgPrice * 100) / 100 : null,
+            priceCount: withPrice.length,
+            ...dimData
+          });
+        }
+      } catch(e) { console.warn('Could not clean up itemRecord after delete:', e); }
     }
 
     closeEditModal();

@@ -108,8 +108,6 @@ import {
 import { lockScroll, unlockScroll, showToast } from '../utils/dom.js';
 import { compressImage, compressToDataURL } from './addReviewModal.js';
 import { openAuthModal } from './authModal.js';
-import { grantAdmin, assignBakery, revokeRole } from '../services/roles.js';
-import { removeFlaggedReview, dismissFlaggedReview } from '../services/moderation.js';
 
 async function refreshAdminUsersPanel() {
   await loadAllUserRoles();
@@ -117,53 +115,39 @@ async function refreshAdminUsersPanel() {
   if (panel) panel.innerHTML = renderAdminUsersHTML();
 }
 
-// C5 — role grants/revokes go through the `setUserRole` callable (see
-// functions/roles.js). The client can no longer write userRoles directly;
-// the callable is admin-gated server-side, writes a roleAudit entry, and
-// updates the target's custom auth claims. `claimsUpdated` on the result
-// means the target must sign out/in (or wait for a token refresh) before
-// rules honour the new role — surfaced in the toast.
-function roleErrorText(e) {
-  const code = e?.details?.code;
-  if (code === 'CANNOT_DEMOTE_SUPER_ADMIN') return 'The super-admin role cannot be changed.';
-  if (code === 'CANNOT_DEMOTE_SELF') return 'You cannot remove your own admin role.';
-  if (e?.code === 'functions/permission-denied') return 'Admin access required.';
-  if (e?.code === 'functions/not-found') return 'That account no longer exists.';
-  return 'Could not update role';
-}
-
 async function promoteUser(uid, role, bakeryName) {
-  if (!isAdmin()) return;
+  if (!isAdmin() || !fb) return;
   if (!confirm(`Make this user an admin? They will get full admin access.`)) return;
+  const { db, doc, setDoc } = fb;
   try {
-    const res = await grantAdmin(uid);
-    showToast(res.claimsUpdated
-      ? '✅ User promoted to admin — they may need to sign out and back in'
-      : '✅ User promoted to admin');
+    await setDoc(doc(db, 'userRoles', uid), { role, bakeryName: bakeryName || '' }, { merge: true });
+    showToast('✅ User promoted to admin');
     await refreshAdminUsersPanel();
-  } catch(e) { showToast(roleErrorText(e)); console.error(e); }
+  } catch(e) { showToast('Could not update role'); console.error(e); }
 }
 
 async function promptAssignBakery(uid, name) {
-  if (!isAdmin()) return;
+  if (!isAdmin() || !fb) return;
   const bakeryName = prompt(`Assign which bakery to ${name}? (Enter the exact bakery name as it appears on Crumbz)`);
   if (bakeryName === null) return; // cancelled
   if (!bakeryName.trim()) { showToast('Bakery name cannot be empty'); return; }
+  const { db, doc, setDoc } = fb;
   try {
-    await assignBakery(uid, bakeryName.trim());
+    await setDoc(doc(db, 'userRoles', uid), { role: 'business', bakeryName: bakeryName.trim() }, { merge: true });
     showToast(`✅ ${name} assigned to ${bakeryName.trim()}`);
     await refreshAdminUsersPanel();
-  } catch(e) { showToast(e?.details?.code === 'CANNOT_DEMOTE_SUPER_ADMIN' ? roleErrorText(e) : 'Could not assign bakery'); console.error(e); }
+  } catch(e) { showToast('Could not assign bakery'); console.error(e); }
 }
 
 async function removeUserRole(uid) {
-  if (!isAdmin()) return;
+  if (!isAdmin() || !fb) return;
   if (!confirm('Remove this user\'s admin/business role? They will go back to being a regular member.')) return;
+  const { db, doc, deleteDoc } = fb;
   try {
-    await revokeRole(uid);
+    await deleteDoc(doc(db, 'userRoles', uid));
     showToast('Role removed');
     await refreshAdminUsersPanel();
-  } catch(e) { showToast(roleErrorText(e)); console.error(e); }
+  } catch(e) { showToast('Could not remove role'); console.error(e); }
 }
 
 // ─── ADMIN PANEL ──────────────────────────────────────────────────────────────
@@ -219,31 +203,22 @@ async function renderAdminFlags() {
   } catch(e) { panel.innerHTML = '<div style="padding:16px;color:var(--text-muted);">Could not load flagged reviews.</div>'; }
 }
 
-// C3 — flag dismissal / review removal go through the moderateFlaggedReview
-// callable (functions/moderation.js). The client can't delete flaggedReviews
-// or another user's items doc; the callable is admin-gated server-side,
-// recomputes the parent itemRecord and writes a moderationLog entry.
-function moderationErrorText(e) {
-  if (e?.code === 'functions/permission-denied') return 'Admin access required.';
-  if (e?.code === 'functions/not-found') return 'That flag is already gone.';
-  return 'Could not update — try again';
-}
-
 async function dismissFlag(flagId) {
-  try {
-    await dismissFlaggedReview(flagId);
-    showToast('Flag dismissed');
-  } catch(e) { showToast(moderationErrorText(e)); console.error(e); }
+  const { db, doc, deleteDoc } = fb;
+  await deleteDoc(doc(db, 'flaggedReviews', flagId));
+  showToast('Flag dismissed');
   renderAdminFlags();
 }
 
 async function removeReviewAndFlag(itemId, flagId) {
   if (!confirm('Permanently remove this review?')) return;
-  try {
-    const res = await removeFlaggedReview(flagId);
-    showToast(res.reviewDeleted ? 'Review removed' : 'Flag removed (review was already gone)');
-    await loadData();
-  } catch(e) { showToast(moderationErrorText(e)); console.error(e); }
+  const { db, doc, deleteDoc } = fb;
+  await Promise.all([
+    deleteDoc(doc(db, 'items', itemId)),
+    deleteDoc(doc(db, 'flaggedReviews', flagId))
+  ]);
+  showToast('Review removed');
+  await loadData();
   renderAdminFlags();
 }
 

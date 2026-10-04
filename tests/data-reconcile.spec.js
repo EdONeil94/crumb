@@ -82,13 +82,14 @@ test('the mergeLocal reconcile keeps a locally-present, server-absent review; a 
   const rCard = page.locator('#recentGrid .card').filter({ hasText: nameR });
   await expect(rCard).toBeVisible();
 
-  // 2. Delete R server-side (bypassing the UI, so allItems isn't touched),
-  //    and wait until a fresh read confirms it's gone — R is now local-only
-  //    in allItems. Via the deleteReview callable: C1b closed client writes
-  //    to items, and the callable also removes R's now-empty itemRecord.
-  await page.evaluate(async (id) => {
-    const { functions, httpsCallable } = window._crumb;
-    await httpsCallable(functions, 'deleteReview')({ itemId: id });
+  // 2. Delete R server-side directly, and wait until a fresh read confirms
+  //    it's gone — R is now local-only in allItems.
+  const recIdR = await page.evaluate(async (id) => {
+    const { db, doc, getDoc, deleteDoc } = window._crumb;
+    const snap = await getDoc(doc(db, 'items', id));
+    const recId = snap.exists() ? snap.data().itemRecordId : null;
+    await deleteDoc(doc(db, 'items', id));
+    return recId;
   }, idR);
   await expect
     .poll(async () => page.evaluate(
@@ -114,11 +115,11 @@ test('the mergeLocal reconcile keeps a locally-present, server-absent review; a 
 
   // 4. A plain reconcile (fresh auth on reload → loadData() with no mergeLocal)
   //    must drop R — the property deleteReview()/removeReviewAndFlag() rely on.
-  const { id: idS } = await page.evaluate(async (name) => {
+  const { id: idS, recId: recIdS } = await page.evaluate(async (name) => {
     const { db, collection, getDocs, query, where } = window._crumb;
     const snap = await getDocs(query(collection(db, 'items'), where('name', '==', name)));
     const d = snap.docs[0];
-    return { id: d?.id ?? null };
+    return { id: d?.id ?? null, recId: d?.data()?.itemRecordId ?? null };
   }, nameS);
 
   await page.reload();
@@ -128,10 +129,12 @@ test('the mergeLocal reconcile keeps a locally-present, server-absent review; a 
     'A plain reconcile failed to drop a server-absent review — mergeLocal leaked into the default path.'
   ).toHaveCount(0);
 
-  // Cleanup — R (and its itemRecord) are already gone; S goes through the
-  // same callable (which also removes its itemRecord).
-  await page.evaluate(async (id) => {
-    const { functions, httpsCallable } = window._crumb;
-    if (id) await httpsCallable(functions, 'deleteReview')({ itemId: id }).catch(() => {});
-  }, idS);
+  // Cleanup — R's item doc is already gone; remove its itemRecord and all of S.
+  await page.evaluate(async ({ recIdR, idS, recIdS }) => {
+    const { db, doc, deleteDoc } = window._crumb;
+    const del = (col, id) => id && deleteDoc(doc(db, col, id)).catch(() => {});
+    await del('itemRecords', recIdR);
+    await del('items', idS);
+    await del('itemRecords', recIdS);
+  }, { recIdR, idS, recIdS });
 });

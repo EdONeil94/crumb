@@ -10,22 +10,15 @@
 
 import { initializeApp } from 'firebase/app';
 import {
-  getAuth, connectAuthEmulator,
-  signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword,
-  createUserWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile,
-  sendPasswordResetEmail, verifyPasswordResetCode, confirmPasswordReset,
-  EmailAuthProvider, reauthenticateWithCredential, updatePassword
+  getAuth, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword,
+  createUserWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile
 } from 'firebase/auth';
 import {
-  getFirestore, connectFirestoreEmulator,
-  collection, addDoc, getDocs, doc, updateDoc, deleteDoc,
+  getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc,
   query, orderBy, where, getDoc, setDoc, increment, onSnapshot,
   serverTimestamp, limit, runTransaction
 } from 'firebase/firestore';
-import {
-  getStorage, connectStorageEmulator,
-  ref, uploadBytes, getDownloadURL, deleteObject, listAll
-} from 'firebase/storage';
+import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
 // ─── FIREBASE CONFIG ────────────────────────────────────────────────────────
 const firebaseConfig = {
@@ -43,28 +36,18 @@ const db = getFirestore(app);
 const storage = getStorage(app);
 const googleProvider = new GoogleAuthProvider();
 
-// ─── EMULATORS (E2E only) ──────────────────────────────────────────────────
-// Point at the local Firebase Emulator Suite when VITE_USE_EMULATOR is set —
-// which ONLY the Playwright test webServer does (see playwright.config.js).
-// `npm run dev` and the production build never set it, so this block is dead
-// code Vite strips from `dist/` — the shipped app can't reach a localhost
-// emulator. Ports match firebase.json.
-if (import.meta.env.VITE_USE_EMULATOR) {
-  connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
-  connectFirestoreEmulator(db, '127.0.0.1', 8080);
-  connectStorageEmulator(storage, '127.0.0.1', 9199);
-}
-
 // Expose to global scope — the legacy app code (still one big module for now)
 // reads this exactly the same way it always has.
 window._crumb = {
   auth, db, storage, googleProvider,
   signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword,
   onAuthStateChanged, signOut, updateProfile,
-  sendPasswordResetEmail, verifyPasswordResetCode, confirmPasswordReset,
-  EmailAuthProvider, reauthenticateWithCredential, updatePassword,
   collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy,
   where, getDoc, setDoc, increment, onSnapshot, serverTimestamp, limit,
-  runTransaction, ref, uploadBytes, getDownloadURL, deleteObject, listAll
+  runTransaction, ref, uploadBytes, getDownloadURL, deleteObject
 };
+
+// legacy-app.js checks window._crumb directly on load rather than solely
+// waiting for this event (see the INIT section there for why) — this event
+// dispatch is kept only as a defensive fallback for that same code path.
 window.dispatchEvent(new Event('crumb-firebase-ready'));

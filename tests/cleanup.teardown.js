@@ -36,16 +36,6 @@ import { test as teardown } from '@playwright/test';
 // only ever updates its status) — rules may not allow an outright delete
 // there even though they allow it for the other two collections.
 //
-// items go through the deleteReview callable (C1b closed items/itemRecords
-// to `if false` for every direct client write, admin included — the
-// callable is now the only way to delete either, and it handles the
-// itemRecord recompute/delete as part of the same server-side transaction).
-// A leftover itemRecords doc with no matching item (only possible from data
-// that predates C1b, or a crash strictly between the callable committing and
-// this teardown running) can no longer be deleted client-side at all — that
-// sweep is now read-only, reported as `itemRecordsOrphaned` rather than
-// silently dropped.
-//
 // Storage: the "catalogue picker" test (manage-offerings.spec.js) uploads a
 // real file via tests/utils/preorders.js's uploadE2EOfferingPhoto(), which
 // deliberately names it `offerings/E2E_{uid}_{timestamp}.png` — unlike the
@@ -63,7 +53,7 @@ teardown('remove E2E-prefixed test data', async ({ page }) => {
   const summary = await page.evaluate(async (prefix) => {
     const {
       db, collection, query, where, getDocs, deleteDoc, updateDoc, doc,
-      storage, ref, listAll, deleteObject, functions, httpsCallable,
+      storage, ref, listAll, deleteObject,
     } = window._crumb;
     // Firestore's documented prefix-range trick: appending U+F8FF (a very
     // high Unicode private-use codepoint — renders as invisible in most
@@ -73,7 +63,11 @@ teardown('remove E2E-prefixed test data', async ({ page }) => {
     const upperBound = prefix + '';
     const result = {};
 
-    for (const col of ['preorderOfferings', 'bakeryCatalogue']) {
+    // items/itemRecords use `name` too. deleteReview() in the app deletes an
+    // item + its itemRecord, so the E2E (super-admin) account's rules permit
+    // this; sweeping itemRecords by name independently also catches any left
+    // orphaned (e.g. an item deleted mid-test but its record not).
+    for (const col of ['preorderOfferings', 'bakeryCatalogue', 'items', 'itemRecords']) {
       const snap = await getDocs(query(
         collection(db, col),
         where('name', '>=', prefix),
@@ -83,57 +77,22 @@ teardown('remove E2E-prefixed test data', async ({ page }) => {
       result[col] = snap.size;
     }
 
-    // items — via deleteReview (C1b closed items/itemRecords to `if false`
-    // for every direct client write, admin included — the callable is now
-    // the only way to delete either, and it handles the itemRecord
-    // recompute/delete as part of the same server-side transaction).
-    {
-      const deleteReviewFn = httpsCallable(functions, 'deleteReview');
-      const snap = await getDocs(query(
-        collection(db, 'items'),
-        where('name', '>=', prefix),
-        where('name', '<', upperBound)
-      ));
-      const outcomes = await Promise.all(snap.docs.map((d) =>
-        deleteReviewFn({ itemId: d.id }).then(() => true).catch(() => false)));
-      result.items = outcomes.filter(Boolean).length;
-      result.itemsFailed = outcomes.length - result.items;
-    }
-
-    // itemRecords — read-only now: a leftover doc with no matching item can
-    // no longer be deleted client-side at all under the closed rules. Report
-    // it as a genuine orphan rather than silently dropping the sweep.
-    {
-      const snap = await getDocs(query(
-        collection(db, 'itemRecords'),
-        where('name', '>=', prefix),
-        where('name', '<', upperBound)
-      ));
-      result.itemRecordsOrphaned = snap.size;
-    }
-
     const resSnap = await getDocs(query(
       collection(db, 'reservations'),
       where('offeringName', '>=', prefix),
       where('offeringName', '<', upperBound)
     ));
-    let deleted = 0, cancelledInstead = 0, stuck = 0;
+    let deleted = 0, cancelledInstead = 0;
     await Promise.all(resSnap.docs.map(async d => {
       try {
         await deleteDoc(doc(db, 'reservations', d.id));
         deleted++;
       } catch {
-        // C8b closed `reservations` update to false — the mark-cancelled
-        // fallback (only ever reached under test:e2e:prod, where the E2E
-        // account isn't the real super-admin) now fails too. Nothing more
-        // the client can do; count it and move on.
-        try {
-          await updateDoc(doc(db, 'reservations', d.id), { status: 'cancelled' });
-          cancelledInstead++;
-        } catch { stuck++; }
+        await updateDoc(doc(db, 'reservations', d.id), { status: 'cancelled' });
+        cancelledInstead++;
       }
     }));
-    result.reservations = { deleted, cancelledInstead, stuck };
+    result.reservations = { deleted, cancelledInstead };
 
     const listing = await listAll(ref(storage, 'offerings'));
     const e2eFiles = listing.items.filter(item => item.name.startsWith('E2E_'));
