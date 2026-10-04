@@ -9,7 +9,11 @@
 //    where `details.code` is a SCREAMING_SNAKE string for the cases the UI
 //    branches on
 //  - timestamps cross the wire as ISO-8601 strings, never Firestore Timestamps
-//  - region is the Firebase default (us-central1); no region is set anywhere
+//  - region is europe-west2 (London), co-located with Firestore. It is set
+//    ONCE, here, via the `onCall` export below — every callable must be
+//    declared with that, never functions.https.onCall directly (which would
+//    silently fall back to us-central1). The client pins the same region in
+//    src/services/firebase.js; the two must match or every call 404s.
 
 const functions = require('firebase-functions/v1');
 const admin = require('firebase-admin');
@@ -18,6 +22,9 @@ const { FieldValue, Timestamp } = require('firebase-admin/firestore');
 if (!admin.apps.length) admin.initializeApp();
 
 const db = admin.firestore();
+
+const REGION = 'europe-west2';
+const onCall = functions.region(REGION).https.onCall;
 
 // Mirrors src/state/appState.js SUPER_ADMIN_UID. Kept until every role-holder
 // has been re-granted through setUserRole and the fallback in firestore.rules
@@ -89,7 +96,7 @@ const isFiniteNumber = (v) => typeof v === 'number' && Number.isFinite(v);
 const isNonEmptyString = (v) => typeof v === 'string' && v.trim().length > 0;
 
 module.exports = {
-  functions, admin, db, FieldValue, Timestamp, SUPER_ADMIN_UID,
+  onCall, REGION, admin, db, FieldValue, Timestamp, SUPER_ADMIN_UID,
   requireAuth, requireAdmin, isAdminUid, getRoleRecord, displayNameFor,
   invalid, precondition, notFound, permissionDenied, resourceExhausted,
   isFiniteNumber, isNonEmptyString,

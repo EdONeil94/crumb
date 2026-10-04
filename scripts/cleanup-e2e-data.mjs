@@ -50,7 +50,7 @@ const auth = getAuth(app);
 const { user } = await signInWithEmailAndPassword(auth, E2E_EMAIL, E2E_PASSWORD);
 const db = getFirestore(app);
 const storage = getStorage(app);
-const functions = getFunctions(app);
+const functions = getFunctions(app, 'europe-west2'); // must match functions/shared.js REGION
 const summary = {};
 
 // items — via the deleteReview callable (C1b closed items/itemRecords to

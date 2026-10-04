@@ -98,6 +98,15 @@ and a break-glass second admin first.
 
 ## Contract deviations (accepted)
 
+- **Region is `europe-west2`, not `us-central1`** (Ed's decision,
+  2026-10-04). The contract said "us-central1 (Firebase default), set no
+  region". But production Firestore is in `europe-west2` (confirmed via
+  `firestore:databases:get`), so default-region callables would make every
+  transaction read/write cross the Atlantic. Pinned before the first deploy
+  (nothing was ever deployed to us-central1): server once in
+  `functions/shared.js` (`REGION` + the `onCall` export every callable uses),
+  client in `src/services/firebase.js` (`getFunctions(app, 'europe-west2')`),
+  and `scripts/cleanup-e2e-data.mjs` (the nightly cron's own client).
 - **C8 / C8b collection-time checks are client-side only** (Ed's decision,
   2026-08-31). The contract lists `NOT_YET_LIVE` / `PAST_COLLECTION` (C8) and
   `WITHIN_CUTOFF` (C8b) as error codes; the callables do **not** enforce

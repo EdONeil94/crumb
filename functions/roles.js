@@ -4,12 +4,12 @@
 // matching custom auth claims.
 
 const {
-  functions, admin, db, FieldValue, SUPER_ADMIN_UID,
+  onCall, admin, db, FieldValue, SUPER_ADMIN_UID,
   requireAdmin, getRoleRecord, displayNameFor, invalid, precondition, notFound,
   isNonEmptyString,
 } = require('./shared');
 
-const setUserRole = functions.https.onCall(async (data, context) => {
+const setUserRole = onCall(async (data, context) => {
   const actorUid = await requireAdmin(context);
   const { targetUid, role, bakeryName } = data || {};
 

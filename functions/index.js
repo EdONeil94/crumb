@@ -1,5 +1,6 @@
 // Crumbz Cloud Functions — entry point.
-// Every export here is an httpsCallable (v1 API, us-central1 default region).
+// Every export here is an httpsCallable (v1 API, region europe-west2 — set once
+// in shared.js via its `onCall` export, matched by src/services/firebase.js).
 // One module per feature area; see .claude/contracts/cloud-functions-contract.md.
 
 const { setUserRole } = require('./roles');

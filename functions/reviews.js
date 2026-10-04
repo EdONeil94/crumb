@@ -11,7 +11,7 @@
 // See .claude/contracts/cloud-functions-contract.md.
 
 const {
-  functions, db, FieldValue, Timestamp,
+  onCall, db, FieldValue, Timestamp,
   requireAuth, isAdminUid, invalid, notFound, permissionDenied, resourceExhausted,
   isFiniteNumber,
 } = require('./shared');
@@ -168,7 +168,7 @@ function recordShapeFrom(fields) {
 }
 
 // ─── C1 ────────────────────────────────────────────────────────────────────
-const submitReview = functions.https.onCall(async (data, context) => {
+const submitReview = onCall(async (data, context) => {
   const uid = requireAuth(context);
   const d = data || {};
 
@@ -274,7 +274,7 @@ const submitReview = functions.https.onCall(async (data, context) => {
 });
 
 // ─── C1b — updateReview ────────────────────────────────────────────────────
-const updateReview = functions.https.onCall(async (data, context) => {
+const updateReview = onCall(async (data, context) => {
   const uid = requireAuth(context);
   const d = data || {};
   const itemId = reqString(d.itemId, 'itemId', { min: 1 });
@@ -367,7 +367,7 @@ const updateReview = functions.https.onCall(async (data, context) => {
 });
 
 // ─── C1b — deleteReview ────────────────────────────────────────────────────
-const deleteReview = functions.https.onCall(async (data, context) => {
+const deleteReview = onCall(async (data, context) => {
   const uid = requireAuth(context);
   const itemId = reqString((data || {}).itemId, 'itemId', { min: 1 });
   const itemRef = db.collection('items').doc(itemId);
