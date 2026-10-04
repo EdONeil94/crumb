@@ -20,13 +20,13 @@
 // Tracked in docs/cloud-functions-phase.md.
 
 const {
-  functions, db, FieldValue, Timestamp, admin,
+  onCall, db, FieldValue, Timestamp, admin,
   requireAuth, isAdminUid, getRoleRecord,
   invalid, precondition, notFound, permissionDenied,
 } = require('./shared');
 
 // ─── C8 ────────────────────────────────────────────────────────────────────
-const createReservation = functions.https.onCall(async (data, context) => {
+const createReservation = onCall(async (data, context) => {
   const uid = requireAuth(context);
   const { offeringId, quantity } = data || {};
 
@@ -107,7 +107,7 @@ const createReservation = functions.https.onCall(async (data, context) => {
 });
 
 // ─── C8b ───────────────────────────────────────────────────────────────────
-const cancelReservation = functions.https.onCall(async (data, context) => {
+const cancelReservation = onCall(async (data, context) => {
   const uid = requireAuth(context);
   const { reservationId } = data || {};
   if (typeof reservationId !== 'string' || !reservationId.trim()) invalid('reservationId');
@@ -151,7 +151,7 @@ const cancelReservation = functions.https.onCall(async (data, context) => {
 });
 
 // ─── C9 ────────────────────────────────────────────────────────────────────
-const markReservationCollected = functions.https.onCall(async (data, context) => {
+const markReservationCollected = onCall(async (data, context) => {
   const uid = requireAuth(context);
   const { reservationId } = data || {};
   if (typeof reservationId !== 'string' || !reservationId.trim()) invalid('reservationId');

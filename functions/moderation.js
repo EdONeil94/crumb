@@ -5,11 +5,11 @@
 // another user's items doc). Admin-gated; writes a moderationLog entry.
 
 const {
-  functions, db, FieldValue, requireAdmin, displayNameFor, invalid, notFound,
+  onCall, db, FieldValue, requireAdmin, displayNameFor, invalid, notFound,
 } = require('./shared');
 const { aggregateFromReviews, staleDimKeys } = require('./reviewsAgg');
 
-const moderateFlaggedReview = functions.https.onCall(async (data, context) => {
+const moderateFlaggedReview = onCall(async (data, context) => {
   const actorUid = await requireAdmin(context);
   const { flagId, action } = data || {};
 

@@ -42,10 +42,11 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
-// Cloud Functions callables (us-central1 default region — do not set one here
-// or on the server, or every call 404s). src/services/functions.js is the
-// single httpsCallable transport built on top of this.
-export const functions = getFunctions(app);
+// Cloud Functions callables, region europe-west2 (London, co-located with
+// Firestore). Must match the server's region (functions/shared.js REGION) —
+// a mismatch makes every call 404. src/services/functions.js is the single
+// httpsCallable transport built on top of this.
+export const functions = getFunctions(app, 'europe-west2');
 const googleProvider = new GoogleAuthProvider();
 
 // ─── EMULATORS (E2E only) ──────────────────────────────────────────────────
