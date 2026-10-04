@@ -34,13 +34,24 @@ function aggregateFromReviews(items) {
     ? round2(withPrice.reduce((s, r) => s + r.price, 0) / priceCount)
     : null;
 
+  // Each dim is averaged only over the reviews that actually carry it. Zero-
+  // filling the others (the old client maths) dragged a bread record's
+  // dim_crust toward 0 whenever a review of a different category — or an
+  // older review missing that key — shared the record.
   const dims = {};
   for (const key of dimKeysIn(items)) {
-    const vals = items.map((r) => Number(r[key]) || 0);
-    dims[key] = vals.reduce((s, v) => s + v, 0) / vals.length;
+    const vals = items.map((r) => r[key]).filter((v) => typeof v === 'number' && Number.isFinite(v));
+    if (vals.length) dims[key] = vals.reduce((s, v) => s + v, 0) / vals.length;
   }
 
   return { communityAvg, reviewCount, avgPrice, priceCount, ...dims };
 }
 
-module.exports = { round1, round2, aggregateFromReviews };
+// A record's dim_* keys that the fresh aggregate no longer produces (every
+// review carrying that key was deleted or recategorized) — set to
+// FieldValue.delete() by the caller so stale averages don't linger.
+function staleDimKeys(record, aggregate) {
+  return Object.keys(record || {}).filter((k) => k.startsWith('dim_') && !(k in aggregate));
+}
+
+module.exports = { round1, round2, aggregateFromReviews, staleDimKeys };

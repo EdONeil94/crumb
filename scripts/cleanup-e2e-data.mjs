@@ -23,6 +23,7 @@ import {
   getFirestore, collection, getDocs, query, where, deleteDoc, doc,
 } from 'firebase/firestore';
 import { getStorage, ref, listAll, deleteObject } from 'firebase/storage';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 try { process.loadEnvFile('.env'); } catch { /* CI supplies these as env vars */ }
 
@@ -49,38 +50,51 @@ const auth = getAuth(app);
 const { user } = await signInWithEmailAndPassword(auth, E2E_EMAIL, E2E_PASSWORD);
 const db = getFirestore(app);
 const storage = getStorage(app);
+const functions = getFunctions(app);
 const summary = {};
 
-// items — delete only E2E-prefixed AND owned by this account, then their
-// itemRecords. (deleteReview() in the app proves the rules allow both.)
+// items — via the deleteReview callable (C1b closed items/itemRecords to
+// `if false` for every direct client write, admin included — deleteReview
+// is now the only way to delete either, and it handles the itemRecord
+// recompute/delete as part of the same server-side transaction). Still
+// skips anything not owned by this account, same as before — the callable
+// itself also enforces that (owner or admin) and would reject it anyway.
 {
+  const deleteReview = httpsCallable(functions, 'deleteReview');
   const snap = await getDocs(query(
     collection(db, 'items'), where('name', '>=', PREFIX), where('name', '<', UPPER),
   ));
-  const recIds = new Set();
-  let deleted = 0, skipped = 0;
+  let deleted = 0, skipped = 0, failed = 0;
   for (const d of snap.docs) {
     if (d.data().userId && d.data().userId !== user.uid) { skipped++; continue; }
-    if (d.data().itemRecordId) recIds.add(d.data().itemRecordId);
-    await deleteDoc(doc(db, 'items', d.id));
-    deleted++;
+    try {
+      await deleteReview({ itemId: d.id });
+      deleted++;
+    } catch { failed++; }
   }
   summary.items = deleted;
   if (skipped) summary.itemsSkippedNotOwned = skipped;
-  let recs = 0;
-  for (const id of recIds) {
-    try { await deleteDoc(doc(db, 'itemRecords', id)); recs++; } catch { /* already gone */ }
-  }
-  summary.itemRecordsViaItems = recs;
+  if (failed) summary.itemsFailed = failed;
 }
 
-// name-prefixed collections that delete cleanly.
-for (const col of ['itemRecords', 'preorderOfferings', 'bakeryCatalogue']) {
+// name-prefixed collections that still delete cleanly from the client.
+for (const col of ['preorderOfferings', 'bakeryCatalogue']) {
   const snap = await getDocs(query(
     collection(db, col), where('name', '>=', PREFIX), where('name', '<', UPPER),
   ));
   await Promise.all(snap.docs.map(d => deleteDoc(doc(db, col, d.id)).catch(() => {})));
   summary[col] = (summary[col] || 0) + snap.size;
+}
+
+// itemRecords — read-only now. A leftover doc with no matching item can no
+// longer be deleted client-side at all under the closed rules; report it as
+// a genuine orphan (only possible from data predating C1b) rather than
+// silently dropping the sweep.
+{
+  const snap = await getDocs(query(
+    collection(db, 'itemRecords'), where('name', '>=', PREFIX), where('name', '<', UPPER),
+  ));
+  summary.itemRecordsOrphaned = snap.size;
 }
 
 // reservations — rules forbid deleting these from the client (the app only

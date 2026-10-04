@@ -17,13 +17,12 @@ Execution: **single-agent, sequential, one callable per commit**, order
 | **C5** `setUserRole` | `f4b2148` | ✅ done |
 | **C3** `moderateFlaggedReview` | `03845c1` | ✅ done |
 | **C9** `markReservationCollected` | `f769d30` | ✅ done |
-| **C8 / C8b** `createReservation` / `cancelReservation` | (this commit) | ✅ done |
-| **C1 / C1b** `submitReview` / `updateReview` / `deleteReview` | — | ⬜ not started (server draft exists, unwired) |
+| **C8 / C8b** `createReservation` / `cancelReservation` | `6b5cc70` | ✅ done |
+| **C1 / C1b** `submitReview` / `updateReview` / `deleteReview` | (this commit) | ✅ done — not yet deployed, see "Deployment" |
 
-Server drafts for C1/C1b were written ahead of the sequential workflow and
-sit untracked in the tree (`functions/reviews.js`, `functions/tasting.js`).
-Treat them as unverified starting points, not finished work — read critically.
-The C8/C8b draft (`createReservation` / `cancelReservation` in the original
+The C1/C1b server draft (`functions/reviews.js`, `functions/tasting.js`) was
+written ahead of the sequential workflow; it had several real bugs, fixed
+when C1/C1b landed — see its per-commit note below. The C8/C8b draft (`createReservation` / `cancelReservation` in the original
 `functions/reservations.js`) turned out to have two real bugs, both fixed
 when C8/C8b landed — see the per-commit note below.
 
@@ -47,13 +46,15 @@ These are deliberately deferred, not forgotten. None may be dropped.
    for the E2E cleanup net. `preorderOfferings` lost its
    `hasOnly(['remaining'])` update clause too (that was the "any signed-in
    user can decrement stock" hole).
-4. **Close `items` / `itemRecords` write rules.** Gated by C1 / C1b — not yet
-   started.
-5. **Re-verify `tests/cleanup.teardown.js` + `scripts/cleanup-e2e-data.mjs`**
-   against the closed `items` / `itemRecords` rules (contract "Rules changes"
-   note 1) — they delete those collections from the client. Do this with C1/C1b.
-   (`cleanup.teardown.js`'s reservation handling was already re-checked for
-   C8b — it now swallows the now-impossible mark-cancelled fallback.)
+4. ✅ **CLOSED by C1/C1b (in the repo — see "Deployment" for production).**
+   `items` / `itemRecords` `create, update, delete` → `if false`;
+   `reviewRateLimits` explicit deny.
+5. ✅ **CLOSED by C1/C1b.** `tests/cleanup.teardown.js` +
+   `scripts/cleanup-e2e-data.mjs` delete items through the `deleteReview`
+   callable (the agreed approach); the `itemRecords` sweep is now report-only
+   (`itemRecordsOrphaned`). **The nightly `cleanup-e2e.yml` cron runs this
+   script against production — it needs `deleteReview` deployed before this
+   lands on `main`.**
 6. **Emulator teardown bug (found during C3 verification, 2026-08-31).**
    Playwright's teardown doesn't kill the Firestore emulator's Java child
    process — it reparents to PID 1 and keeps port 8080, breaking the *next*
@@ -61,6 +62,20 @@ These are deliberately deferred, not forgotten. None may be dropped.
    `npm run test:e2e` from a fresh shell is unaffected. Fix belongs in
    `playwright.config.js`'s emulator `webServer` teardown. Low priority,
    not a blocker, but should be fixed before the phase closes.
+
+## Deployment (production)
+
+- **Rules** auto-deploy: `.github/workflows/deploy-rules.yml` runs
+  `firebase deploy --only firestore:rules,storage` on any push to `main` that
+  touches `firestore.rules` / `storage.rules`.
+- **Client** auto-deploys: `.github/workflows/deploy.yml` → GitHub Pages on
+  every push to `main`.
+- **Functions are NOT in any pipeline** — manual
+  `npx firebase deploy --only functions --project crumb-ddeb6`.
+- As of C1, **none of this phase is on `main`** (C5 → C1 all on
+  `feat/cloud-functions`), and the branch both closes rules (C8b/C9/C1) and
+  ships a client that calls the callables. Order must be: functions deployed
+  + verified live → client (rules unchanged) → rules closures last.
 
 ## Contract deviations (accepted)
 
@@ -139,3 +154,49 @@ cancel real-quantity restock + `ALREADY_CANCELLED`, cancel permission gate,
 and the closed client write rules (no direct reservation create, no direct
 stock decrement). All offerings seeded via admin SDK (far-future dates, so
 no clock dependency).
+
+### C1 / C1b — `submitReview` / `updateReview` / `deleteReview`
+`functions/reviews.js` + `functions/tasting.js` (server mirror of the
+category → tasting-dim keys; checked against `src/data/categories.js`, and
+every category in production `items`/`itemRecords` is valid) +
+`src/services/reviews.js`. Client: `legacy-app.js saveReview()`,
+`editReviewModal.js saveEdit()` / `deleteReview()`. Photo upload stays
+client-side. Every aggregate is recomputed from the full review set inside
+the same transaction as the write — old rating out / new rating in on edit is
+automatic, and `reviewCount` is a length, so it can't go negative.
+
+**Bugs found in the pre-draft and fixed:**
+- **Dim averages zero-filled across mixed keys** (`reviewsAgg.js`): a record
+  whose reviews don't all carry the same `dim_*` keys averaged the missing
+  ones as 0 — a cake review linked to a bread record dragged `dim_crust` from
+  4 to 2. Now each dim averages only over reviews that carry it. Shared with
+  C3's remove path.
+- **Linked submit accepted a different category** than the record's, mixing
+  foreign dims into it. Now `invalid-argument`.
+- **Category change on edit left the old 5th dim on the review**
+  (`tx.update` merges) → it kept being averaged in. Now deleted.
+- **Ghost records**: update/delete of a review whose `itemRecordId` points at
+  a missing record merge-set a nameless aggregate-only record into existence.
+  Now the record is read in the transaction and left alone if absent. Stale
+  `dim_*` keys on a record are removed too.
+- **Every edit of a review with a photo not under the caller's uid failed**
+  (the form sends back the existing `photoURL`; an admin editing someone's
+  review, or any non-`items/{uid}/` photo). An unchanged `photoURL` is now
+  always accepted; a new one must be a Storage download URL under
+  `items/{caller uid}/` (parsed, not substring-matched).
+- **Timestamps leaked through the callable response** (`updateReview`'s
+  `item.createdAt`, `submitReview`'s new-record `createdAt` sentinel) →
+  now ISO strings; the edit modal keeps its cached `createdAt`.
+- Client `deleteReview()` deleted the Storage photo *before* the callable —
+  a refused delete left the review pointing at a deleted image. Now after.
+
+**C3 follow-up in the same commit:** `moderateFlaggedReview`'s remove path
+read the sibling reviews outside any transaction and wrote the aggregate in
+a batch — a concurrent `submitReview` could be dropped from the count. Now a
+transaction, matching C1/C1b.
+
+Tests: C1 block in `tests/cloud-functions.spec.js` (10 tests incl. mixed-
+category dims, category-change edit, unchanged-photo admin edit, ghost
+record). `tests/data-reconcile.spec.js` switched its server-side delete to
+the `deleteReview` callable (its direct `deleteDoc` on `items` is now
+correctly refused).

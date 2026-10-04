@@ -34,8 +34,12 @@ service cloud.firestore {
 
     match /items/{itemId} {
       allow read: if true;
-      allow create: if request.auth != null;
-      allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+      // C1 / C1b: reviews are created, edited and deleted only through the
+      // submitReview / updateReview / deleteReview Cloud Functions (Admin
+      // SDK, bypasses rules) — validation, the per-user rate limit, the
+      // owner/admin permission check, and every itemRecords aggregate are
+      // all computed server-side now, not trusted from the client.
+      allow create, update, delete: if false;
     }
 
     match /bakeries/{bakeryId} {
@@ -55,9 +59,19 @@ service cloud.firestore {
 
     match /itemRecords/{recordId} {
       allow read: if true;
-      allow create: if request.auth != null;
-      allow update: if request.auth != null;
-      allow delete: if request.auth != null;
+      // C1 / C1b: same as items above — every write (upsert on submit,
+      // aggregate recompute on edit/delete, record deletion when a review
+      // was its last) happens inside the Cloud Functions' own transactions.
+      allow create, update, delete: if false;
+    }
+
+    // C1: per-user review rate-limit counters, read/written only by
+    // submitReview (Admin SDK). Explicit deny here for the same reason
+    // roleAudit/moderationLog are explicit rather than relying on Firestore's
+    // default-deny — self-documenting, and safe if a match ever gets added
+    // for this collection by mistake elsewhere in this file.
+    match /reviewRateLimits/{uid} {
+      allow read, write: if false;
     }
 
     match /userRoles/{userId} {

@@ -7,7 +7,7 @@
 const {
   functions, db, FieldValue, requireAdmin, displayNameFor, invalid, notFound,
 } = require('./shared');
-const { aggregateFromReviews } = require('./reviewsAgg');
+const { aggregateFromReviews, staleDimKeys } = require('./reviewsAgg');
 
 const moderateFlaggedReview = functions.https.onCall(async (data, context) => {
   const actorUid = await requireAdmin(context);
@@ -26,46 +26,57 @@ const moderateFlaggedReview = functions.https.onCall(async (data, context) => {
   const itemId = flag.itemId || null;
 
   const actorDisplayName = await displayNameFor(actorUid);
-  const batch = db.batch();
-  batch.delete(flagRef);
-
+  // One transaction for the review's siblings read + the record write, so a
+  // review submitted concurrently (submitReview also runs in a transaction
+  // over the same query) can't be dropped from the recomputed aggregate.
   let reviewDeleted = false;
-
-  if (action === 'remove' && itemId) {
-    const itemRef = db.collection('items').doc(itemId);
-    const itemSnap = await itemRef.get();
-    if (itemSnap.exists) {
-      const item = itemSnap.data();
-      batch.delete(itemRef);
-      reviewDeleted = true;
-
-      const recordId = item.itemRecordId;
-      if (recordId) {
-        const remainingSnap = await db.collection('items')
-          .where('itemRecordId', '==', recordId).get();
-        const remaining = remainingSnap.docs
-          .filter((d) => d.id !== itemId)
-          .map((d) => d.data());
-        const recordRef = db.collection('itemRecords').doc(recordId);
-        if (remaining.length === 0) {
-          batch.delete(recordRef);
-        } else {
-          batch.set(recordRef, aggregateFromReviews(remaining), { merge: true });
+  await db.runTransaction(async (tx) => {
+    reviewDeleted = false;
+    let item = null;
+    let remaining = [];
+    let record = null;
+    const itemRef = itemId ? db.collection('items').doc(itemId) : null;
+    if (action === 'remove' && itemRef) {
+      const itemSnap = await tx.get(itemRef);
+      if (itemSnap.exists) {
+        item = itemSnap.data();
+        if (item.itemRecordId) {
+          const [remainingSnap, recSnap] = await Promise.all([
+            tx.get(db.collection('items').where('itemRecordId', '==', item.itemRecordId)),
+            tx.get(db.collection('itemRecords').doc(item.itemRecordId)),
+          ]);
+          remaining = remainingSnap.docs.filter((d) => d.id !== itemId).map((d) => d.data());
+          record = recSnap.exists ? recSnap.data() : null;
         }
       }
     }
-  }
 
-  batch.set(db.collection('moderationLog').doc(), {
-    flagId: id,
-    itemId: action === 'remove' ? itemId : null,
-    action,
-    actorUid,
-    actorDisplayName,
-    createdAt: FieldValue.serverTimestamp(),
+    tx.delete(flagRef);
+    if (item) {
+      tx.delete(itemRef);
+      reviewDeleted = true;
+      if (record) {
+        const recordRef = db.collection('itemRecords').doc(item.itemRecordId);
+        if (remaining.length === 0) {
+          tx.delete(recordRef);
+        } else {
+          const aggregate = aggregateFromReviews(remaining);
+          const write = { ...aggregate };
+          for (const k of staleDimKeys(record, aggregate)) write[k] = FieldValue.delete();
+          tx.set(recordRef, write, { merge: true });
+        }
+      }
+    }
+
+    tx.set(db.collection('moderationLog').doc(), {
+      flagId: id,
+      itemId: action === 'remove' ? itemId : null,
+      action,
+      actorUid,
+      actorDisplayName,
+      createdAt: FieldValue.serverTimestamp(),
+    });
   });
-
-  await batch.commit();
 
   return {
     flagId: id,

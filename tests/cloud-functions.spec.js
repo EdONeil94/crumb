@@ -485,3 +485,346 @@ test.describe('C8 / C8b — createReservation / cancelReservation', () => {
     expect((await (await db()).collection('preorderOfferings').doc(offeringId).get()).data().remaining).toBe(5);
   });
 });
+
+// ── C1 / C1b — submitReview / updateReview / deleteReview ──────────────────
+// The security-critical half: validation, the per-user rate limit, the
+// server-computed aggregates (communityAvg/reviewCount/avgPrice/priceCount/
+// dim_*), the update/delete ownership gate, and the closed client write
+// rules. Not re-tested here: the full add/edit/delete review UI flows —
+// those are covered end-to-end by tests/edit-review.spec.js and every other
+// spec that creates a review via tests/utils/reviews.js's createReview
+// fixture, which now exercises this exact path.
+test.describe('C1 / C1b — submitReview / updateReview / deleteReview', () => {
+  const NAME_PREFIX = 'E2E_c1_';
+  const CUST = { email: 'dot@crumb.test', pw: 'crumb-e2e-pw' };      // seeded customer
+  const OTHER = { email: 'cal@crumb.test', pw: 'crumb-e2e-pw' };     // a different customer
+  const ADMIN = { email: 'e2e@crumb.test', pw: 'crumb-e2e-pw' };     // seeded super-admin
+
+  const DIMS = { dim_appearance: 4, dim_texture: 4, dim_flavour: 4, dim_value: 4, dim_crust: 4 };
+
+  test.afterEach(async () => {
+    const d = await db();
+    // '\uf8ff' (a high Unicode private-use codepoint) as the upper bound is
+    // Firestore's documented prefix-range trick — matches exactly the
+    // strings starting with NAME_PREFIX.
+    const upperBound = NAME_PREFIX + '\uf8ff';
+    const itemsSnap = await d.collection('items').where('name', '>=', NAME_PREFIX)
+      .where('name', '<', upperBound).get();
+    const recordIds = new Set(itemsSnap.docs.map((x) => x.data().itemRecordId).filter(Boolean));
+    await Promise.all(itemsSnap.docs.map((x) => x.ref.delete()));
+    const recsSnap = await d.collection('itemRecords').where('name', '>=', NAME_PREFIX)
+      .where('name', '<', upperBound).get();
+    for (const r of recsSnap.docs) recordIds.add(r.id);
+    await Promise.all([...recordIds].map((id) => d.collection('itemRecords').doc(id).delete().catch(() => {})));
+    await d.collection('reviewRateLimits').doc('seed-user-dot').delete().catch(() => {});
+  });
+
+  // callable invoked in-page as a specific signed-in user
+  async function callInPage(page, { email, pw }, name, payload) {
+    return page.evaluate(async ({ email, pw, name, payload }) => {
+      await window._crumb.signInWithEmailAndPassword(window._crumb.auth, email, pw);
+      const call = window._crumb.httpsCallable(window._crumb.functions, name);
+      try { return { ok: true, data: (await call(payload)).data }; }
+      catch (e) { return { ok: false, code: e.code || 'rejected', detail: e.details?.code || null, message: e.message }; }
+    }, { email, pw, name, payload });
+  }
+
+  function baseFields(overrides = {}) {
+    return {
+      itemName: `${NAME_PREFIX}Loaf`, bakeryName: 'Seed Bakehouse Alpha',
+      bakeryAddress: '', bakeryPlaceId: null, bakeryLat: null, bakeryLng: null,
+      category: 'bread', subCategory: '', overallRating: 4, dims: DIMS,
+      price: 3.5, notes: 'Tasty', photoURL: null,
+      ...overrides,
+    };
+  }
+
+  test('submitReview: creates a new item + itemRecord with server-computed aggregate', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('#navAvatar')).toBeVisible({ timeout: 15_000 });
+
+    const res = await callInPage(page, CUST, 'submitReview', baseFields());
+    expect(res.ok).toBe(true);
+    expect(res.data.item).toMatchObject({ name: `${NAME_PREFIX}Loaf`, overallRating: 4, userId: 'seed-user-dot' });
+    expect(res.data.itemRecord).toMatchObject({ communityAvg: 4, reviewCount: 1, avgPrice: 3.5, priceCount: 1 });
+
+    const d = await db();
+    const written = await d.collection('items').doc(res.data.itemId).get();
+    expect(written.data()).toMatchObject({ name: `${NAME_PREFIX}Loaf`, userId: 'seed-user-dot' });
+    const record = await d.collection('itemRecords').doc(res.data.itemRecordId).get();
+    expect(record.data()).toMatchObject({ communityAvg: 4, reviewCount: 1 });
+  });
+
+  test("submitReview linking to an existing record recomputes the aggregate but never rewrites the record's identity", async ({ page }) => {
+    const d = await db();
+    const recRef = await d.collection('itemRecords').add({
+      name: `${NAME_PREFIX}Sourdough`, category: 'bread', subCategory: 'sourdough',
+      bakeryName: 'Seed Bakehouse Alpha', bakeryAddress: '', bakeryPlaceId: null,
+      communityAvg: 5, reviewCount: 1, avgPrice: 4, priceCount: 1, photoURL: null,
+      ...DIMS, createdAt: new Date(),
+    });
+    await d.collection('items').add({
+      itemRecordId: recRef.id, name: `${NAME_PREFIX}Sourdough`, category: 'bread', subCategory: 'sourdough',
+      bakeryName: 'Seed Bakehouse Alpha', overallRating: 5, communityAvg: 5, userId: 'seed-user-cal',
+      userName: 'Cal Crust', price: 4, notes: '', photoURL: null, createdAt: new Date(), ...DIMS,
+    });
+
+    await page.goto('/');
+    await expect(page.locator('#navAvatar')).toBeVisible({ timeout: 15_000 });
+
+    // A category that doesn't match the linked record is refused outright —
+    // it would mix another category's dims into the shared record.
+    const mismatched = await callInPage(page, CUST, 'submitReview', baseFields({
+      itemName: `${NAME_PREFIX}Hijacked Name`, category: 'cake', overallRating: 3, price: 2,
+      dims: { dim_appearance: 3, dim_texture: 3, dim_flavour: 3, dim_value: 3, dim_moistness: 3 },
+      itemRecordId: recRef.id,
+    }));
+    expect(mismatched).toMatchObject({ ok: false, code: 'functions/invalid-argument' });
+    expect((await recRef.get()).data()).toMatchObject({ communityAvg: 5, reviewCount: 1 });
+
+    // Submits under a DIFFERENT name than the record's own — the record's
+    // identity must not change (the bug this fix closes).
+    const res = await callInPage(page, CUST, 'submitReview', baseFields({
+      itemName: `${NAME_PREFIX}Hijacked Name`, overallRating: 3, price: 2,
+      dims: { dim_appearance: 3, dim_texture: 3, dim_flavour: 3, dim_value: 3, dim_crust: 2 },
+      itemRecordId: recRef.id,
+    }));
+    expect(res.ok).toBe(true);
+    expect(res.data.itemRecord).toMatchObject({ communityAvg: 4, reviewCount: 2, dim_crust: 3 }); // avg of 5/3, 4/2
+
+    const record = await recRef.get();
+    expect(record.data()).toMatchObject({
+      name: `${NAME_PREFIX}Sourdough`, category: 'bread', subCategory: 'sourdough', // unchanged
+      communityAvg: 4, reviewCount: 2, avgPrice: 3, priceCount: 2, // recomputed
+    });
+    // The new review itself keeps its own submitted name.
+    const item = await (await db()).collection('items').doc(res.data.itemId).get();
+    expect(item.data()).toMatchObject({ name: `${NAME_PREFIX}Hijacked Name`, category: 'bread' });
+  });
+
+  test('submitReview rejects an invalid rating, mismatched dims keys, and a photoURL not under the caller\'s own uid', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('#navAvatar')).toBeVisible({ timeout: 15_000 });
+
+    const badRating = await callInPage(page, CUST, 'submitReview', baseFields({ overallRating: 3.3 }));
+    expect(badRating).toMatchObject({ ok: false, code: 'functions/invalid-argument' });
+
+    const badDims = await callInPage(page, CUST, 'submitReview', baseFields({ dims: { dim_appearance: 4 } }));
+    expect(badDims).toMatchObject({ ok: false, code: 'functions/invalid-argument' });
+
+    const badPhoto = await callInPage(page, CUST, 'submitReview', baseFields({
+      photoURL: 'https://firebasestorage.example/v0/b/x/o/items%2Fseed-user-cal%2F1_photo.jpg?alt=media',
+    }));
+    expect(badPhoto).toMatchObject({ ok: false, code: 'functions/invalid-argument' });
+  });
+
+  test('submitReview: RATE_LIMITED after 10 reviews in the last hour', async ({ page }) => {
+    const d = await db();
+    await d.collection('reviewRateLimits').doc('seed-user-dot').set({
+      timestamps: Array.from({ length: 10 }, (_, i) => Date.now() - i * 1000),
+    });
+
+    await page.goto('/');
+    await expect(page.locator('#navAvatar')).toBeVisible({ timeout: 15_000 });
+
+    const res = await callInPage(page, CUST, 'submitReview', baseFields());
+    expect(res).toMatchObject({ ok: false, code: 'functions/resource-exhausted', detail: 'RATE_LIMITED' });
+  });
+
+  test('updateReview: owner can edit (name, rating, dims); aggregate recomputes; non-owner is refused; admin is allowed', async ({ page }) => {
+    const d = await db();
+    const recRef = await d.collection('itemRecords').add({
+      name: `${NAME_PREFIX}Baguette`, category: 'bread', subCategory: '',
+      bakeryName: 'Seed Bakehouse Alpha', bakeryAddress: '', bakeryPlaceId: null,
+      communityAvg: 3, reviewCount: 1, avgPrice: 2, priceCount: 1, photoURL: null,
+      ...DIMS, createdAt: new Date(),
+    });
+    const itemRef = await d.collection('items').add({
+      itemRecordId: recRef.id, name: `${NAME_PREFIX}Baguette`, category: 'bread', subCategory: '',
+      bakeryName: 'Seed Bakehouse Alpha', overallRating: 3, communityAvg: 3, userId: 'seed-user-dot',
+      userName: 'Dot Dough', price: 2, notes: '', photoURL: null, createdAt: new Date(), ...DIMS,
+    });
+
+    await page.goto('/');
+    await expect(page.locator('#navAvatar')).toBeVisible({ timeout: 15_000 });
+
+    const refused = await callInPage(page, OTHER, 'updateReview', {
+      itemId: itemRef.id, name: `${NAME_PREFIX}Baguette`, category: 'bread', subCategory: '',
+      overallRating: 5, dims: DIMS, price: 2, notes: '',
+    });
+    expect(refused).toMatchObject({ ok: false, code: 'functions/permission-denied' });
+
+    const res = await callInPage(page, CUST, 'updateReview', {
+      itemId: itemRef.id, name: `${NAME_PREFIX}Baguette Deluxe`, category: 'bread', subCategory: '',
+      overallRating: 5, dims: DIMS, price: 2, notes: 'Even better now',
+    });
+    expect(res.ok).toBe(true);
+    expect(res.data.item).toMatchObject({ name: `${NAME_PREFIX}Baguette Deluxe`, overallRating: 5 });
+    expect(res.data.itemRecord).toMatchObject({ communityAvg: 5, reviewCount: 1 });
+
+    const asAdmin = await callInPage(page, ADMIN, 'updateReview', {
+      itemId: itemRef.id, name: `${NAME_PREFIX}Baguette Deluxe`, category: 'bread', subCategory: '',
+      overallRating: 2, dims: DIMS, price: 2, notes: 'Admin correction',
+    });
+    expect(asAdmin.ok).toBe(true);
+    expect((await recRef.get()).data().communityAvg).toBe(2);
+  });
+
+  test('deleteReview: recomputes the aggregate when siblings remain, deletes the record when it was the last review, and refuses a non-owner/non-admin', async ({ page }) => {
+    const d = await db();
+    const recRef = await d.collection('itemRecords').add({
+      name: `${NAME_PREFIX}Croissant`, category: 'pastry', subCategory: '',
+      bakeryName: 'Seed Bakehouse Alpha', bakeryAddress: '', bakeryPlaceId: null,
+      communityAvg: 4, reviewCount: 2, avgPrice: 3, priceCount: 2,
+      dim_appearance: 4, dim_texture: 4, dim_flavour: 4, dim_value: 4, dim_lamination: 4,
+      photoURL: null, createdAt: new Date(),
+    });
+    const dims = { dim_appearance: 4, dim_texture: 4, dim_flavour: 4, dim_value: 4, dim_lamination: 4 };
+    const dotItem = await d.collection('items').add({
+      itemRecordId: recRef.id, name: `${NAME_PREFIX}Croissant`, category: 'pastry', subCategory: '',
+      bakeryName: 'Seed Bakehouse Alpha', overallRating: 3, communityAvg: 4, userId: 'seed-user-dot',
+      userName: 'Dot Dough', price: 3, notes: '', photoURL: null, createdAt: new Date(), ...dims,
+    });
+    const calItem = await d.collection('items').add({
+      itemRecordId: recRef.id, name: `${NAME_PREFIX}Croissant`, category: 'pastry', subCategory: '',
+      bakeryName: 'Seed Bakehouse Alpha', overallRating: 5, communityAvg: 4, userId: 'seed-user-cal',
+      userName: 'Cal Crust', price: 3, notes: '', photoURL: null, createdAt: new Date(), ...dims,
+    });
+
+    await page.goto('/');
+    await expect(page.locator('#navAvatar')).toBeVisible({ timeout: 15_000 });
+
+    const refused = await callInPage(page, OTHER, 'deleteReview', { itemId: dotItem.id });
+    expect(refused).toMatchObject({ ok: false, code: 'functions/permission-denied' });
+
+    const first = await callInPage(page, CUST, 'deleteReview', { itemId: dotItem.id });
+    expect(first).toMatchObject({ ok: true, data: { itemRecordDeleted: false } });
+    expect((await dotItem.get()).exists).toBe(false);
+    expect((await recRef.get()).data()).toMatchObject({ communityAvg: 5, reviewCount: 1 }); // Cal's review only
+
+    const second = await callInPage(page, CUST, 'deleteReview', { itemId: calItem.id }); // admin-equivalent not needed: Cal owns it, but Dot (CUST) isn't — use OTHER (Cal) instead
+    expect(second).toMatchObject({ ok: false, code: 'functions/permission-denied' });
+    const asOwner = await callInPage(page, OTHER, 'deleteReview', { itemId: calItem.id });
+    expect(asOwner).toMatchObject({ ok: true, data: { itemRecordDeleted: true } });
+    expect((await recRef.get()).exists).toBe(false);
+  });
+
+  test('updateReview: a category change drops the old 5th dim from the review and the record averages each dim only over reviews that carry it', async ({ page }) => {
+    const d = await db();
+    const recRef = await d.collection('itemRecords').add({
+      name: `${NAME_PREFIX}Bloomer`, category: 'bread', subCategory: '',
+      bakeryName: 'Seed Bakehouse Alpha', bakeryAddress: '', bakeryPlaceId: null,
+      communityAvg: 4, reviewCount: 2, avgPrice: null, priceCount: 0, photoURL: null,
+      ...DIMS, createdAt: new Date(),
+    });
+    const dotItem = await d.collection('items').add({
+      itemRecordId: recRef.id, name: `${NAME_PREFIX}Bloomer`, category: 'bread', subCategory: '',
+      bakeryName: 'Seed Bakehouse Alpha', overallRating: 4, communityAvg: 4, userId: 'seed-user-dot',
+      userName: 'Dot Dough', price: null, notes: '', photoURL: null, createdAt: new Date(), ...DIMS,
+    });
+    await d.collection('items').add({
+      itemRecordId: recRef.id, name: `${NAME_PREFIX}Bloomer`, category: 'bread', subCategory: '',
+      bakeryName: 'Seed Bakehouse Alpha', overallRating: 4, communityAvg: 4, userId: 'seed-user-cal',
+      userName: 'Cal Crust', price: null, notes: '', photoURL: null, createdAt: new Date(), ...DIMS,
+    });
+
+    await page.goto('/');
+    await expect(page.locator('#navAvatar')).toBeVisible({ timeout: 15_000 });
+
+    const res = await callInPage(page, CUST, 'updateReview', {
+      itemId: dotItem.id, name: `${NAME_PREFIX}Bloomer`, category: 'pastry', subCategory: '',
+      overallRating: 2, price: null, notes: '',
+      dims: { dim_appearance: 2, dim_texture: 2, dim_flavour: 2, dim_value: 2, dim_lamination: 2 },
+    });
+    expect(res.ok).toBe(true);
+    expect(res.data.item.dim_crust).toBeUndefined();
+    expect(typeof res.data.item.createdAt).toBe('string'); // serialized, not a raw Timestamp
+
+    const item = (await dotItem.get()).data();
+    expect(item.dim_crust).toBeUndefined();
+    expect(item.dim_lamination).toBe(2);
+
+    // dim_crust now comes only from Cal's review (4) — not (4 + 0) / 2.
+    expect((await recRef.get()).data()).toMatchObject({
+      communityAvg: 3, reviewCount: 2, dim_appearance: 3, dim_crust: 4, dim_lamination: 2,
+    });
+  });
+
+  test('updateReview: an unchanged photoURL is accepted even when it is not under the caller\'s uid (admin edit); a new foreign one is refused', async ({ page }) => {
+    const d = await db();
+    const bucketPath = 'http://127.0.0.1:9199/v0/b/crumb-ddeb6.firebasestorage.app/o/';
+    const dotPhoto = `${bucketPath}items%2Fseed-user-dot%2F1_photo.jpg?alt=media`;
+    const itemRef = await d.collection('items').add({
+      name: `${NAME_PREFIX}Photo Bun`, category: 'bread', subCategory: '',
+      bakeryName: 'Seed Bakehouse Alpha', overallRating: 3, communityAvg: 3, userId: 'seed-user-dot',
+      userName: 'Dot Dough', price: null, notes: '', photoURL: dotPhoto, createdAt: new Date(), ...DIMS,
+    });
+    const fields = { itemId: itemRef.id, name: `${NAME_PREFIX}Photo Bun`, category: 'bread', subCategory: '',
+      overallRating: 4, dims: DIMS, price: null, notes: '' };
+
+    await page.goto('/');
+    await expect(page.locator('#navAvatar')).toBeVisible({ timeout: 15_000 });
+
+    const unchanged = await callInPage(page, ADMIN, 'updateReview', { ...fields, photoURL: dotPhoto });
+    expect(unchanged.ok).toBe(true);
+    expect((await itemRef.get()).data()).toMatchObject({ overallRating: 4, photoURL: dotPhoto });
+
+    const foreign = await callInPage(page, CUST, 'updateReview', {
+      ...fields, photoURL: `${bucketPath}items%2Fseed-user-cal%2F2_photo.jpg?alt=media`,
+    });
+    expect(foreign).toMatchObject({ ok: false, code: 'functions/invalid-argument' });
+
+    const own = await callInPage(page, CUST, 'updateReview', {
+      ...fields, photoURL: `${bucketPath}items%2Fseed-user-dot%2F3_photo.jpg?alt=media`,
+    });
+    expect(own.ok).toBe(true);
+  });
+
+  test('updateReview / deleteReview on a review whose itemRecord is gone never recreate a ghost record', async ({ page }) => {
+    const d = await db();
+    const ghostId = `${NAME_PREFIX}ghost_record`;
+    const itemRef = await d.collection('items').add({
+      itemRecordId: ghostId, name: `${NAME_PREFIX}Orphan`, category: 'bread', subCategory: '',
+      bakeryName: 'Seed Bakehouse Alpha', overallRating: 3, communityAvg: 3, userId: 'seed-user-dot',
+      userName: 'Dot Dough', price: null, notes: '', photoURL: null, createdAt: new Date(), ...DIMS,
+    });
+
+    await page.goto('/');
+    await expect(page.locator('#navAvatar')).toBeVisible({ timeout: 15_000 });
+
+    const upd = await callInPage(page, CUST, 'updateReview', {
+      itemId: itemRef.id, name: `${NAME_PREFIX}Orphan`, category: 'bread', subCategory: '',
+      overallRating: 5, dims: DIMS, price: null, notes: '',
+    });
+    expect(upd).toMatchObject({ ok: true, data: { itemRecord: null } });
+    expect((await d.collection('itemRecords').doc(ghostId).get()).exists).toBe(false);
+
+    const del = await callInPage(page, CUST, 'deleteReview', { itemId: itemRef.id });
+    expect(del).toMatchObject({ ok: true, data: { itemRecordDeleted: false } });
+    expect((await itemRef.get()).exists).toBe(false);
+    expect((await d.collection('itemRecords').doc(ghostId).get()).exists).toBe(false);
+  });
+
+  test('the client can no longer write to items or itemRecords directly', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('#navAvatar')).toBeVisible({ timeout: 15_000 });
+
+    const outcome = await page.evaluate(async ({ email, pw }) => {
+      await window._crumb.signInWithEmailAndPassword(window._crumb.auth, email, pw);
+      const { db, doc, addDoc, updateDoc, deleteDoc, collection } = window._crumb;
+      const out = {};
+      try {
+        await addDoc(collection(db, 'items'), { name: 'x', userId: 'seed-user-dot' });
+        out.itemCreate = 'allowed';
+      } catch (e) { out.itemCreate = e.code || 'rejected'; }
+      try {
+        await addDoc(collection(db, 'itemRecords'), { name: 'x' });
+        out.recordCreate = 'allowed';
+      } catch (e) { out.recordCreate = e.code || 'rejected'; }
+      return out;
+    }, CUST);
+
+    expect(outcome.itemCreate).toMatch(/permission-denied|rejected/);
+    expect(outcome.recordCreate).toMatch(/permission-denied|rejected/);
+  });
+});
