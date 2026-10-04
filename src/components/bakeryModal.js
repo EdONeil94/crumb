@@ -58,7 +58,6 @@ import { lockScroll, unlockScroll, showToast } from '../utils/dom.js';
 import { allBakeries, allItems, allItemRecords, currentUser, fb, ownsBakery, isBookmarked, buildBakeryIndex } from '../state/appState.js';
 import { openAuthModal } from './authModal.js';
 import { allProducts, loadProducts, productCardHTML } from '../pages/shop.js';
-import { createReservation } from '../services/reservations.js';
 
 async function fetchPlaceDetails(placeId) {
   if (!placeId || !GOOGLE_MAPS_KEY) return null;
@@ -529,36 +528,48 @@ function closeReserveModal() {
   document.getElementById('reserveModalOverlay')?.remove();
 }
 
-// C8 — the reservation write goes through the createReservation callable
-// (functions/reservations.js): the stock read + precondition checks + the
-// decrement all happen in one server transaction (the actual fix for the
-// read-then-write race), and price / totalPrice / the reservation fields are
-// all set server-side from the offering doc. openReserveModal's own
-// remaining/maxPerPerson checks stay as a client UX pre-filter only.
-function reserveErrorText(e) {
-  const code = e?.details?.code;
-  if (code === 'SOLD_OUT') return '😔 Sorry — not enough stock. Someone got there first.';
-  if (code === 'DUPLICATE_RESERVATION') return 'You already have a reservation for this item';
-  if (code === 'OVER_MAX_PER_PERSON') return e?.message || 'Over the per-person limit';
-  if (e?.code === 'functions/not-found') return 'That offering is no longer available';
-  return 'Could not complete reservation';
-}
-
 async function reserveOffering(offeringId, bakeryName, offeringName, slot, collectDate, quantity) {
   quantity = quantity || 1;
   if (!currentUser || !fb) { openAuthModal(); return; }
+  const { db, doc, getDoc, updateDoc, collection, addDoc, serverTimestamp, query, where, getDocs } = fb;
   try {
-    const { reservation } = await createReservation(offeringId, quantity);
-    const q = reservation.quantity;
-    showToast(`🎉 Reserved ${q > 1 ? q + '× ' : ''}${reservation.offeringName}! Collect ${reservation.slot}. Pay in store.`);
+    const offeringRef = doc(db, 'preorderOfferings', offeringId);
+    const offeringSnap = await getDoc(offeringRef);
+    if (!offeringSnap.exists()) throw new Error('Offering no longer exists');
+    const data = offeringSnap.data();
+    const remaining = data.remaining ?? data.quantity ?? 0;
+    const maxPerPerson = data.maxPerPerson || 2;
+    if (remaining <= 0 || quantity > remaining) throw new Error('SOLD_OUT');
+    if (quantity > maxPerPerson) { showToast(`Maximum ${maxPerPerson} per person`); return; }
+    const existingSnap = await getDocs(query(
+      collection(db, 'reservations'),
+      where('userId', '==', currentUser.uid),
+      where('offeringId', '==', offeringId),
+      where('status', '==', 'pending')
+    ));
+    if (!existingSnap.empty) { showToast('You already have a reservation for this item'); return; }
+    await updateDoc(offeringRef, { remaining: remaining - quantity });
+    // Note: this updateDoc requires the Firestore rule to allow authenticated users to update 'remaining'
+    // Make sure your rules allow: allow update: if request.auth != null && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['remaining']);
+    await addDoc(collection(db, 'reservations'), {
+      userId: currentUser.uid,
+      userName: currentUser.displayName || currentUser.email?.split('@')[0] || 'Customer',
+      userEmail: currentUser.email || '',
+      bakeryName, offeringId, offeringName, slot, collectDate,
+      quantity, status: 'pending',
+      price: data.price,
+      totalPrice: (data.price || 0) * quantity,
+      createdAt: serverTimestamp()
+    });
+    showToast(`🎉 Reserved ${quantity > 1 ? quantity + '× ' : ''}${offeringName}! Collect ${slot}. Pay in store.`);
     getAction('loadMyPreorders')(); // Update burger menu badge
     const bakeryContent = document.getElementById('bakeryTabContent');
     if (bakeryContent) await renderPreorderTab(bakeryContent, bakeryName);
     const poResults = document.getElementById('preorderPageResults');
     if (poResults) await getAction('renderPreorderPage')();
   } catch(e) {
-    showToast(reserveErrorText(e));
-    if (!['functions/failed-precondition', 'functions/not-found'].includes(e?.code)) console.error(e);
+    if (e.message === 'SOLD_OUT') showToast('😔 Sorry — not enough stock. Someone got there first.');
+    else if (e.message !== 'Offering no longer exists') { showToast('Could not complete reservation'); console.error(e); }
   }
 }
 

@@ -1171,25 +1171,6 @@ afterward — no E2E gate needed for this, same reasoning as Phase 0 step 4
 
 ## Known pre-existing issues (out of scope for this migration)
 
-- 🔽 **Backlog (logged 2026-10-04): custom SMTP for Firebase Auth emails.**
-  Password-reset emails (`sendPasswordResetEmail`, `authModal.js`) go out
-  through Firebase's default sender (`noreply@crumb-ddeb6.firebaseapp.com`),
-  not the `ohcrumbz.co.uk` domain — unbranded, and more likely to land in
-  spam. Fix is console-side: Authentication → Templates → SMTP settings,
-  pointing at a transactional mail provider with SPF/DKIM set up on
-  `ohcrumbz.co.uk`. No code change expected.
-
-- 🔽 **Backlog (logged 2026-10-04): extra sign-in providers — Apple,
-  Facebook, Microsoft.** Today only Google (`signInWithPopup` +
-  `GoogleAuthProvider`, `src/services/firebase.js`) and email/password are
-  enabled. Each new provider needs console enablement + its own developer-
-  account config (Apple: Services ID + key; Facebook: app id/secret;
-  Microsoft: Entra app registration), a button in the auth modal, and
-  `ohcrumbz.co.uk` in each provider's allowed redirect domains. Also decide
-  how to handle `auth/account-exists-with-different-credential` (same email
-  already registered via Google or a password) — account linking vs. a
-  "sign in with your original method" message.
-
 - 🔽 **Backlog (found 2026-08-31): a revoked/expired ID token isn't noticed
   until the next scheduled refresh or Firestore call.** The app never
   proactively calls `getIdToken(true)` anywhere. Firebase auto-refreshes the
