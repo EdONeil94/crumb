@@ -34,12 +34,8 @@ service cloud.firestore {
 
     match /items/{itemId} {
       allow read: if true;
-      // C1 / C1b: reviews are created, edited and deleted only through the
-      // submitReview / updateReview / deleteReview Cloud Functions (Admin
-      // SDK, bypasses rules) — validation, the per-user rate limit, the
-      // owner/admin permission check, and every itemRecords aggregate are
-      // all computed server-side now, not trusted from the client.
-      allow create, update, delete: if false;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
     }
 
     match /bakeries/{bakeryId} {
@@ -59,36 +55,14 @@ service cloud.firestore {
 
     match /itemRecords/{recordId} {
       allow read: if true;
-      // C1 / C1b: same as items above — every write (upsert on submit,
-      // aggregate recompute on edit/delete, record deletion when a review
-      // was its last) happens inside the Cloud Functions' own transactions.
-      allow create, update, delete: if false;
-    }
-
-    // C1: per-user review rate-limit counters, read/written only by
-    // submitReview (Admin SDK). Explicit deny here for the same reason
-    // roleAudit/moderationLog are explicit rather than relying on Firestore's
-    // default-deny — self-documenting, and safe if a match ever gets added
-    // for this collection by mistake elsewhere in this file.
-    match /reviewRateLimits/{uid} {
-      allow read, write: if false;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null;
     }
 
     match /userRoles/{userId} {
       allow read: if request.auth != null;
-      // C5: role writes now go through the setUserRole Cloud Function (Admin
-      // SDK, bypasses rules). The direct-client write stays open to the
-      // super-admin only until every current role-holder has been re-granted
-      // through the callable and this fallback can be dropped — see
-      // .claude/contracts/cloud-functions-contract.md.
       allow write: if request.auth != null && request.auth.uid == 'KTpBS4yJx2h8LpcryCTfJDFCHlr2';
-    }
-
-    // C5: immutable audit trail for setUserRole. Written only by the Cloud
-    // Function (Admin SDK); readable by admins for review.
-    match /roleAudit/{entryId} {
-      allow read: if isAdmin();
-      allow write: if false;
     }
 
     match /bakeryProfiles/{bakeryId} {
@@ -103,17 +77,7 @@ service cloud.firestore {
     match /flaggedReviews/{flagId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null;
-      // C3: dismissal/removal now go through the moderateFlaggedReview Cloud
-      // Function (Admin SDK). This super-admin-only client delete is dead in
-      // the app already and a later commit closes it entirely.
       allow delete: if request.auth != null && request.auth.uid == 'KTpBS4yJx2h8LpcryCTfJDFCHlr2';
-    }
-
-    // C3: immutable audit trail for moderateFlaggedReview. Written only by
-    // the Cloud Function (Admin SDK); readable by admins.
-    match /moderationLog/{entryId} {
-      allow read: if isAdmin();
-      allow write: if false;
     }
 
     match /reactions/{reactionId} {
@@ -163,14 +127,10 @@ service cloud.firestore {
       allow read: if true;
       allow create: if request.auth != null
         && request.auth.uid == request.resource.data.createdBy;
-      // C8 / C8b: the `remaining` stock count is now written only by the
-      // createReservation / cancelReservation Cloud Functions (Admin SDK,
-      // transactional — the fix for the read-then-write race). The old
-      // hasOnly(['remaining']) clause that let ANY signed-in user decrement
-      // stock is gone. Offering owners still edit their own offerings.
       allow update: if request.auth != null && (
         request.auth.uid == resource.data.createdBy ||
-        request.auth.uid == 'KTpBS4yJx2h8LpcryCTfJDFCHlr2'
+        request.auth.uid == 'KTpBS4yJx2h8LpcryCTfJDFCHlr2' ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['remaining'])
       );
       allow delete: if request.auth != null && (
         request.auth.uid == resource.data.createdBy ||
@@ -180,13 +140,11 @@ service cloud.firestore {
 
     match /reservations/{id} {
       allow read: if request.auth != null;
-      // C8 / C8b / C9: reservations are created, cancelled and marked
-      // collected only by Cloud Functions (Admin SDK). createReservation
-      // does the stock decrement transactionally; cancelReservation returns
-      // the real quantity to stock; markReservationCollected is bakery-side
-      // only. No client write path remains. Delete stays super-admin-only
-      // for the E2E cleanup safety net.
-      allow create, update: if false;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow update: if request.auth != null && (
+        request.auth.uid == resource.data.userId ||
+        request.auth.uid == 'KTpBS4yJx2h8LpcryCTfJDFCHlr2'
+      );
       allow delete: if request.auth != null && request.auth.uid == 'KTpBS4yJx2h8LpcryCTfJDFCHlr2';
     }
 

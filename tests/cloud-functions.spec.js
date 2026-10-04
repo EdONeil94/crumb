@@ -14,6 +14,14 @@ import { test, expect } from '@playwright/test';
 const EMULATOR = process.env.E2E_MODE === 'emulator';
 test.skip(!EMULATOR, 'Cloud Functions callables run only against the emulator.');
 
+// The client-write closures in firestore.rules (C9 mark-collected, C8/C8b
+// reservations + stock, C1 items/itemRecords) ship in a separate follow-up
+// PR (feat/cloud-functions-rules), merged only after the Functions and the
+// client are live — see docs/cloud-functions-phase.md "Rollout plan". Until
+// then this branch's rules match main and the three closed-rule tests skip.
+const RULES_CLOSED = false;
+const RULES_PENDING = 'Rule closure ships in the follow-up rules PR.';
+
 process.env.FIREBASE_AUTH_EMULATOR_HOST ||= '127.0.0.1:9099';
 process.env.FIRESTORE_EMULATOR_HOST ||= '127.0.0.1:8080';
 
@@ -259,6 +267,7 @@ test.describe('C9 — markReservationCollected', () => {
   }
 
   test('a client can no longer transition a reservation into status:collected', async ({ page }) => {
+    test.skip(!RULES_CLOSED, RULES_PENDING);
     const resId = await seedReservation();
     await page.goto('/');
     await expect(page.locator('#navAvatar')).toBeVisible({ timeout: 15_000 });
@@ -455,6 +464,7 @@ test.describe('C8 / C8b — createReservation / cancelReservation', () => {
   });
 
   test('the client can no longer create a reservation or decrement another bakery\'s stock directly', async ({ page }) => {
+    test.skip(!RULES_CLOSED, RULES_PENDING);
     // Offering owned by the super-admin; the attacker is a plain customer.
     const offeringId = await seedOffering({ remaining: 5 });
     await page.goto('/');
@@ -806,6 +816,7 @@ test.describe('C1 / C1b — submitReview / updateReview / deleteReview', () => {
   });
 
   test('the client can no longer write to items or itemRecords directly', async ({ page }) => {
+    test.skip(!RULES_CLOSED, RULES_PENDING);
     await page.goto('/');
     await expect(page.locator('#navAvatar')).toBeVisible({ timeout: 15_000 });
 
