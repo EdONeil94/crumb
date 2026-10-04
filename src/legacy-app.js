@@ -43,9 +43,9 @@ import {
   handleSettingsPhoto, saveSettingsProfile,
 } from './pages/settings.js';
 import { renderPeople } from './pages/people.js';
-import {
-  parseSlotStartTime, renderOrdersTab,
-} from './components/reservations.js';
+import { renderOrdersTab } from './components/reservations.js';
+import { cancelReservation as cancelReservationCallable } from './services/reservations.js';
+import { submitReview } from './services/reviews.js';
 import {
   openAddModal, closeAddModal, buildTastingDims, buildCategoryChips,
   compressImage, compressToDataURL, showKnownBakeries, selectManualBakery,
@@ -349,6 +349,21 @@ if (window._crumb) {
 // (step 27). modalNext (addReviewModal.js) reaches saveReview via
 // getAction('saveReview') instead of a direct import — see that file's own
 // header comment for why. Registered below so that lookup resolves.
+//
+// C1 — the review write goes through the submitReview callable
+// (functions/reviews.js): validation, the rate limit, and every aggregate
+// (communityAvg/reviewCount/avgPrice/priceCount/dim_*) all happen server-side
+// now, computed fresh from the real review set rather than trusted from the
+// client. Photo upload stays here — Storage rules already scope
+// items/{uid}/** to that uid, so there's nothing to move.
+function saveReviewErrorText(e) {
+  const code = e?.details?.code;
+  if (code === 'RATE_LIMITED') return e?.message || "You're posting reviews too quickly — try again shortly.";
+  if (e?.code === 'functions/invalid-argument') return 'Please check the review details and try again.';
+  if (e?.code === 'functions/not-found') return 'That item no longer exists.';
+  return 'Error saving — check your config';
+}
+
 // ─── SAVE ─────────────────────────────────────────────────────────────────────
 async function saveReview() {
   if (!currentUser) { openAuthModal(); return; }
@@ -375,7 +390,7 @@ async function saveReview() {
   nextBtn.textContent = 'Saving…';
 
   try {
-    const { db, storage, collection, addDoc, doc, getDoc, setDoc, updateDoc, serverTimestamp, ref, uploadBytes, getDownloadURL } = fb;
+    const { storage, ref, uploadBytes, getDownloadURL } = fb;
 
     let photoURL = null;
     if (photoFile) {
@@ -385,104 +400,47 @@ async function saveReview() {
     }
 
     const overallRating = parseFloat(document.getElementById('overallRating').value);
-    const itemName = document.getElementById('itemName').value.trim();
-    const bakeryName = selectedBakery?.name || '';
-    const category = matchedItemRecord?.category || selectedCategory || 'other';
+    const finalCategory = matchedItemRecord?.category || selectedCategory || 'other';
     const subCategory = matchedItemRecord?.subCategory || selectedSubCategory || '';
 
-    const dims = getTastingDims(category);
+    const dims = getTastingDims(finalCategory);
     const dimData = {};
     dims.forEach(d => {
       const el = document.getElementById(d.key);
       dimData[d.key] = el ? parseFloat(el.value) : 0;
     });
 
-    // ── Step A: Upsert the itemRecord (shared item+bakery record) ────────────
-    let itemRecordId;
-    const newPrice = document.getElementById('itemPrice').value ? parseFloat(document.getElementById('itemPrice').value) : null;
+    const price = document.getElementById('itemPrice').value ? parseFloat(document.getElementById('itemPrice').value) : null;
 
-    if (matchedItemRecord) {
-      // Linked to existing record — recalculate community avg and avg price
-      itemRecordId = matchedItemRecord.id;
-      const recSnap = await getDoc(doc(db, 'itemRecords', itemRecordId));
-      const rec = recSnap.data();
-      const newCount = (rec.reviewCount || 1) + 1;
-      const newAvg = ((rec.communityAvg || rec.overallRating || 0) * (newCount - 1) + overallRating) / newCount;
-      // Recalculate avg price (only include reviews that have a price)
-      let newAvgPrice = rec.avgPrice || null;
-      let newPriceCount = rec.priceCount || 0;
-      if (newPrice !== null) {
-        newPriceCount += 1;
-        newAvgPrice = newPriceCount === 1
-          ? newPrice
-          : ((rec.avgPrice || 0) * (newPriceCount - 1) + newPrice) / newPriceCount;
-      }
-      // Recalculate dim averages
-      const newDims = {};
-      getTastingDims(category).forEach(d => {
-        const prev = rec[d.key] || 0;
-        newDims[d.key] = ((prev * (newCount - 1)) + (dimData[d.key] || 0)) / newCount;
-      });
-      await updateDoc(doc(db, 'itemRecords', itemRecordId), {
-        communityAvg: Math.round(newAvg * 10) / 10,
-        reviewCount: newCount,
-        avgPrice: newAvgPrice !== null ? Math.round(newAvgPrice * 100) / 100 : null,
-        priceCount: newPriceCount,
-        ...(photoURL && !rec.photoURL ? { photoURL } : {}),
-        ...newDims
-      });
-    } else {
-      // New item record
-      const newRecord = {
-        name: itemName,
-        category,
-        subCategory,
-        bakeryName,
-        bakeryAddress: selectedBakery?.address || '',
-        bakeryPlaceId: selectedBakery?.placeId || null,
-        communityAvg: overallRating,
-        reviewCount: 1,
-        avgPrice: newPrice !== null ? newPrice : null,
-        priceCount: newPrice !== null ? 1 : 0,
-        photoURL: photoURL || null,
-        createdAt: serverTimestamp(),
-        ...dimData  // already keyed by d.key from getTastingDims
-      };
-      const recRef = await addDoc(collection(db, 'itemRecords'), newRecord);
-      itemRecordId = recRef.id;
-      allItemRecords.push({ id: itemRecordId, ...newRecord });
-    }
-
-    // ── Step B: Save the individual user review ───────────────────────────────
-    const review = {
-      itemRecordId,
-      name: itemName,
-      category,
-      subCategory,
+    const { item, itemRecord } = await submitReview({
+      itemName,
       bakeryName,
       bakeryAddress: selectedBakery?.address || '',
       bakeryPlaceId: selectedBakery?.placeId || null,
       bakeryLat: selectedBakery?.lat || null,
       bakeryLng: selectedBakery?.lng || null,
-      price: document.getElementById('itemPrice').value ? parseFloat(document.getElementById('itemPrice').value) : null,
+      category: finalCategory,
+      subCategory,
       overallRating,
-      communityAvg: overallRating, // will be updated below
-      ratingCount: matchedItemRecord ? ((allItemRecords.find(r => r.id === matchedItemRecord.id)?.reviewCount || 1) + 1) : 1,
+      dims: dimData,
+      price,
       notes: document.getElementById('itemNotes').value,
       photoURL,
-      userId: currentUser.uid,
-      userName: currentUser.displayName || currentUser.email?.split('@')[0] || 'Anonymous',
-      userPhoto: currentUser.photoURL || null,
-      createdAt: serverTimestamp(),
-      ...dimData
-    };
+      itemRecordId: matchedItemRecord?.id || null,
+    });
 
-    const reviewRef = await addDoc(collection(db, 'items'), review);
     // Update local state immediately rather than waiting on a fresh network
     // fetch — getDocs() right after a write can occasionally race with the
     // write itself and momentarily miss it, which is exactly what caused
     // counters to sometimes need a manual pull-to-refresh to catch up.
-    allItems.unshift({ id: reviewRef.id, ...review, createdAt: new Date() });
+    allItems.unshift({ ...item, createdAt: new Date(item.createdAt) });
+    // itemRecord from the callable is aggregate-only when linking to an
+    // EXISTING record (see src/services/reviews.js) — merge onto the cached
+    // copy rather than replacing it, so identity fields (name/category/
+    // bakery) the server deliberately didn't return stay intact locally too.
+    const recIdx = allItemRecords.findIndex(r => r.id === itemRecord.id);
+    if (recIdx >= 0) allItemRecords[recIdx] = { ...allItemRecords[recIdx], ...itemRecord };
+    else allItemRecords.push(itemRecord);
     updateStats();
     renderRecentGrid();
 
@@ -499,7 +457,7 @@ async function saveReview() {
     loadData({ mergeLocal: true });
     loadItemRecords({ mergeLocal: true }).then(() => renderLeaderboard(lbCurrentTab));
   } catch (err) {
-    showToast('Error saving — check your config');
+    showToast(saveReviewErrorText(err));
     console.error(err);
     nextBtn.disabled = false;
     nextBtn.textContent = 'Save review ✓';
@@ -1028,33 +986,31 @@ registerActions({ removeSavedItem });
 // cancelReservation itself stays here — see reservations.js's own header
 // comment for why (its own blocker, loadMyPreorders, is unrelated to this
 // step's reserveOffering move).
+// C8b — cancellation goes through the cancelReservation callable
+// (functions/reservations.js). The stock return is now server-side and
+// transactional, and returns the reservation's REAL quantity (the client
+// path this replaces added a hardcoded +1, leaking a unit per multi-item
+// cancel). The 12-hour cutoff stays a client-side UX guardrail —
+// renderOrdersTab hides the Cancel button inside 12h (see the decision note
+// in functions/reservations.js).
+function cancelReservationErrorText(e) {
+  const code = e?.details?.code;
+  if (code === 'ALREADY_COLLECTED') return 'That reservation has already been collected';
+  if (code === 'ALREADY_CANCELLED') return 'That reservation is already cancelled';
+  if (e?.code === 'functions/permission-denied') return 'You can only cancel your own reservation';
+  if (e?.code === 'functions/not-found') return 'That reservation no longer exists';
+  return 'Could not cancel';
+}
+
 async function cancelReservation(reservationId, offeringId) {
   if (!confirm('Cancel this reservation? This cannot be undone.')) return;
-  if (!fb) return;
-  const { db, doc, updateDoc, getDoc } = fb;
   try {
-    // Check 12hr rule
-    const resSnap = await getDoc(doc(db, 'reservations', reservationId));
-    const r = resSnap.data();
-    const collect = new Date(r.collectDate + 'T' + (parseSlotStartTime(r.slot) || '09:00'));
-    if ((collect - new Date()) < 12 * 60 * 60 * 1000) {
-      showToast('Cannot cancel within 12 hours of collection time');
-      return;
-    }
-    await updateDoc(doc(db, 'reservations', reservationId), { status: 'cancelled' });
-    // Return qty to offering
-    if (offeringId) {
-      const oSnap = await getDoc(doc(db, 'preorderOfferings', offeringId));
-      if (oSnap.exists()) {
-        const curr = oSnap.data().remaining ?? 0;
-        await updateDoc(doc(db, 'preorderOfferings', offeringId), { remaining: curr + 1 });
-      }
-    }
+    await cancelReservationCallable(reservationId);
     showToast('Reservation cancelled');
     loadMyPreorders(); // Update burger menu badge
     const content = document.getElementById('profileTabContent');
     if (content) await renderOrdersTab(content);
-  } catch(e) { showToast('Could not cancel'); console.error(e); }
+  } catch(e) { showToast(cancelReservationErrorText(e)); console.error(e); }
 }
 
 // generateOrderQRCodes/expandQR/closeExpandedQR/openQRScanner/scanFrame/

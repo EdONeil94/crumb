@@ -51,6 +51,7 @@ import { dataArgs } from '../events/delegate.js';
 import { currentUser, fb, ownsBakery } from '../state/appState.js';
 import { lockScroll, unlockScroll, showToast } from '../utils/dom.js';
 import { escJS } from '../utils/strings.js';
+import { markReservationCollected } from '../services/reservations.js';
 
 const COLLECTION_TIMES = ['7:00am','7:30am','8:00am','8:30am','9:00am','9:30am','10:00am','10:30am','11:00am','11:30am','12:00pm','12:30pm','1:00pm','2:00pm','3:00pm','4:00pm','5:00pm'];
 // Legacy alias
@@ -1071,13 +1072,25 @@ export async function deleteOffering(offeringId, bakeryName) {
   } catch(e) { showToast('Could not remove'); }
 }
 
+// C9 — the collect write goes through the markReservationCollected callable
+// (functions/reservations.js). The client can't set status:'collected' any
+// more (firestore.rules); the callable is admin / assigned-business only,
+// server-side, so a customer can't self-collect.
+function collectErrorText(e) {
+  const code = e?.details?.code;
+  if (code === 'ALREADY_COLLECTED') return 'That order is already marked collected.';
+  if (code === 'CANCELLED') return 'That reservation was cancelled.';
+  if (e?.code === 'functions/permission-denied') return 'Only the bakery can mark an order collected.';
+  if (e?.code === 'functions/not-found') return 'That reservation no longer exists.';
+  return 'Could not update — try again';
+}
+
 export async function markCollected(reservationId, bakeryName) {
-  const { db, doc, updateDoc } = fb;
   try {
-    await updateDoc(doc(db, 'reservations', reservationId), { status: 'collected', collectedAt: new Date().toISOString() });
+    await markReservationCollected(reservationId);
     showToast('✓ Marked as collected');
     await renderMpUpcoming(null, bakeryName);
-  } catch(e) { showToast('Could not update'); }
+  } catch(e) { showToast(collectErrorText(e)); console.error(e); }
 }
 
 export async function openCatalogueManager(bakeryName) {

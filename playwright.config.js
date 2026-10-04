@@ -34,10 +34,12 @@ const STORAGE_STATE = 'playwright/.auth/user.json';
 
 const emulatorServers = [
   {
-    command: 'npx firebase-tools emulators:start --only auth,firestore,storage --project crumb-ddeb6',
-    url: 'http://127.0.0.1:4000', // emulator UI — up once all three emulators are ready
+    command: 'npx firebase-tools emulators:start --only auth,firestore,storage,functions --project crumb-ddeb6',
+    url: 'http://127.0.0.1:4000', // emulator UI — up once all emulators are ready
     reuseExistingServer: !process.env.CI,
-    timeout: 60_000,
+    // The functions emulator loads functions/node_modules at startup and is
+    // materially slower to come up than the other three — hence 120s not 60s.
+    timeout: 120_000,
     stdout: 'pipe',
   },
   {
