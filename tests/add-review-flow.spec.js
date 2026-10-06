@@ -137,3 +137,20 @@ test('typing a name that matches an existing item shows it, selecting it pre-fil
   await page.locator('[data-onclick="closeAddModal"]').click();
   await deleteViaEdit(page, card);
 });
+
+// Regression for the #17 revert: the overall-rating slider moves in 0.1 steps
+// but submitReview used to accept only half-steps, so saving at 4.9 failed
+// with a generic toast. createReview drives the real modal and fails if the
+// card never appears.
+test('saving a review at 4.9 (a non-half-step slider value) succeeds and stores 4.9', async ({ page, createReview }) => {
+  const name = `E2E Flow Rating 4.9 ${Date.now()}`;
+  const bakeryName = `E2E Flow Rating Bakery ${Date.now()}`;
+  const { id, card } = await createReview({ name, bakeryName, rating: 4.9 });
+
+  await expect(card).toContainText('4.9');
+  const stored = await page.evaluate(async (itemId) => {
+    const { db, doc, getDoc } = window._crumb;
+    return (await getDoc(doc(db, 'items', itemId))).data().overallRating;
+  }, id);
+  expect(stored).toBe(4.9);
+});
