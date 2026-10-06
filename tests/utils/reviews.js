@@ -29,6 +29,23 @@ export { expect };
 // useful for UI coverage + mid-run tidiness — the fixture no-ops if the doc
 // is already gone.
 
+// submitReview (C1) allows 10 reviews per user per hour. The full suite
+// creates more than that as the one E2E account, so under the emulator we
+// clear that account's counter (Admin SDK — the collection is closed to
+// clients) right before each save. The limit itself is covered by its own
+// test in cloud-functions.spec.js. Against production (test:e2e:prod) there's
+// no Admin SDK access, so this is a no-op there.
+async function resetReviewRateLimit(page) {
+  if (process.env.E2E_MODE !== 'emulator') return;
+  const uid = await page.evaluate(() => window._crumb?.auth?.currentUser?.uid || null);
+  if (!uid) return;
+  const { initializeApp, getApps } = await import('firebase-admin/app');
+  const { getFirestore } = await import('firebase-admin/firestore');
+  process.env.FIRESTORE_EMULATOR_HOST ||= '127.0.0.1:8080';
+  const app = getApps()[0] || initializeApp({ projectId: 'crumb-ddeb6' });
+  await getFirestore(app).collection('reviewRateLimits').doc(uid).delete();
+}
+
 async function addReview(page, {
   name,
   bakeryName,
@@ -61,6 +78,7 @@ async function addReview(page, {
 
   // Step 4: notes, then save.
   if (notes) await page.locator('#itemNotes').fill(notes);
+  await resetReviewRateLimit(page);
   await page.locator('#nextBtn').click();
   await expect(page.locator('#addModal')).not.toHaveClass(/open/);
 
@@ -85,16 +103,18 @@ async function addReview(page, {
   return { id, card };
 }
 
+// C1b closed items/itemRecords to `if false` for every client write — the
+// only way to delete a review now is the deleteReview callable (Admin SDK),
+// which also handles the itemRecord recompute/delete. Same path production
+// traffic uses; one source of truth for the delete logic.
 async function deleteReviewDoc(page, itemId) {
   await page.evaluate(async (id) => {
-    const { db, doc, getDoc, deleteDoc } = window._crumb;
+    const { db, doc, getDoc, functions, httpsCallable } = window._crumb;
     try {
       const snap = await getDoc(doc(db, 'items', id));
       if (!snap.exists()) return;                       // already deleted via UI — no-op
-      const recId = snap.data().itemRecordId;
-      await deleteDoc(doc(db, 'items', id));
-      if (recId) await deleteDoc(doc(db, 'itemRecords', recId)).catch(() => {});
-    } catch { /* page gone / signed out — cleanup.teardown.js is the backstop */ }
+      await httpsCallable(functions, 'deleteReview')({ itemId: id });
+    } catch { /* page gone / signed out / already deleted — cleanup.teardown.js is the backstop */ }
   }, itemId).catch(() => {});
 }
 
