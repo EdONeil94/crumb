@@ -34,11 +34,17 @@ function reqString(v, field, { min = 1, max = Infinity } = {}) {
 // Optional string -> trimmed value or ''.
 const optString = (v) => (typeof v === 'string' ? v.trim() : '');
 
+// The client's rating sliders move in 0.1 steps (index.html #overallRating,
+// editReviewModal.js #editOverallRating). A float tolerance is needed: e.g.
+// 0.7 * 10 === 7.000000000000001 in JS. Stored rounded to one decimal.
+const RATING_STEP_EPSILON = 1e-9;
 function validateRating(v) {
-  if (!isFiniteNumber(v) || v < 0.5 || v > 5 || Math.round(v * 2) !== v * 2) {
-    invalid('overallRating', 'overallRating must be between 0.5 and 5 in half-point steps.');
+  const tenths = isFiniteNumber(v) ? v * 10 : NaN;
+  const rounded = Math.round(tenths);
+  if (!isFiniteNumber(v) || Math.abs(tenths - rounded) > RATING_STEP_EPSILON || rounded < 1 || rounded > 50) {
+    invalid('overallRating', 'Overall rating must be between 0.1 and 5, in steps of 0.1.');
   }
-  return v;
+  return rounded / 10;
 }
 
 function validateDims(dims, category) {

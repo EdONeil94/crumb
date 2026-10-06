@@ -602,12 +602,34 @@ test.describe('C1 / C1b — submitReview / updateReview / deleteReview', () => {
     expect(item.data()).toMatchObject({ name: `${NAME_PREFIX}Hijacked Name`, category: 'bread' });
   });
 
-  test('submitReview rejects an invalid rating, mismatched dims keys, and a photoURL not under the caller\'s own uid', async ({ page }) => {
+  // The live sliders move in 0.1 steps (index.html #overallRating); the
+  // validator must match, with a float tolerance — 0.7 and 1.1 are the
+  // classic cases where v * 10 isn't an exact integer in JS.
+  test('submitReview accepts overallRating in 0.1 steps from 0.1 to 5 and rejects anything else', async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('#navAvatar')).toBeVisible({ timeout: 15_000 });
 
-    const badRating = await callInPage(page, CUST, 'submitReview', baseFields({ overallRating: 3.3 }));
-    expect(badRating).toMatchObject({ ok: false, code: 'functions/invalid-argument' });
+    for (const rating of [0.7, 1.1, 4.9]) {
+      const res = await callInPage(page, CUST, 'submitReview',
+        baseFields({ itemName: `${NAME_PREFIX}Step ${rating}`, overallRating: rating }));
+      expect(res, `rating ${rating}`).toMatchObject({ ok: true });
+      const stored = await (await db()).collection('items').doc(res.data.itemId).get();
+      expect(stored.data().overallRating, `stored rating ${rating}`).toBe(rating);
+    }
+
+    for (const rating of [0, 5.1, 3.35]) {
+      const res = await callInPage(page, CUST, 'submitReview', baseFields({ overallRating: rating }));
+      expect(res, `rating ${rating}`).toMatchObject({
+        ok: false, code: 'functions/invalid-argument',
+        // The client SDK appends " [400]" — see serverMessage() in src/services/functions.js.
+        message: expect.stringMatching(/^Overall rating must be between 0\.1 and 5, in steps of 0\.1\.( \[400\])?$/),
+      });
+    }
+  });
+
+  test('submitReview rejects mismatched dims keys and a photoURL not under the caller\'s own uid', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('#navAvatar')).toBeVisible({ timeout: 15_000 });
 
     const badDims = await callInPage(page, CUST, 'submitReview', baseFields({ dims: { dim_appearance: 4 } }));
     expect(badDims).toMatchObject({ ok: false, code: 'functions/invalid-argument' });

@@ -128,3 +128,41 @@ test('deleting a review removes it after confirming the browser prompt', async (
 
   await expect(page.locator('#recentGrid .card').filter({ hasText: name })).toHaveCount(0);
 });
+
+// Regression for the #17 revert: updateReview re-validates overallRating on
+// every save, so a review stored at a non-half-step value (4.2) used to fail
+// to save even when the slider was never touched.
+test('editing a 4.2 review and saving without touching the slider keeps 4.2', async ({ page, createReview }) => {
+  const name = `E2E Edit Rating 4.2 ${Date.now()}`;
+  const bakeryName = `E2E Edit Bakery ${Date.now()}`;
+  const { id, card } = await createReview({ name, bakeryName, rating: 4.2 });
+
+  await openEditFromDetail(page, card);
+  await expect(page.locator('#editOverallRating')).toHaveValue('4.2');
+  await page.locator('#editNotes').fill('Edited without touching the rating');
+  await page.locator('[data-onclick="saveEdit"]').click();
+  await expect(page.locator('#editModal')).not.toHaveClass(/open/, { timeout: 10_000 });
+  await expect(page.locator('#toast')).toContainText('Review updated');
+
+  const stored = await page.evaluate(async (itemId) => {
+    const { db, doc, getDoc } = window._crumb;
+    return (await getDoc(doc(db, 'items', itemId))).data();
+  }, id);
+  expect(stored).toMatchObject({ overallRating: 4.2, notes: 'Edited without touching the rating' });
+});
+
+test('saving an edit with the overall rating at 0 is blocked with a toast', async ({ page, createReview }) => {
+  const name = `E2E Edit Rating Zero ${Date.now()}`;
+  const bakeryName = `E2E Edit Bakery ${Date.now()}`;
+  const { card } = await createReview({ name, bakeryName, rating: 3 });
+
+  await openEditFromDetail(page, card);
+  await page.locator('#editOverallRating').evaluate(el => {
+    el.value = '0';
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.locator('[data-onclick="saveEdit"]').click();
+  await expect(page.locator('#toast')).toContainText('Please give an overall rating');
+  await expect(page.locator('#editModal')).toHaveClass(/open/);
+  await expect(page.locator('[data-onclick="saveEdit"]')).toBeEnabled();
+});

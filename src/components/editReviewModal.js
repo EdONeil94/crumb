@@ -28,6 +28,7 @@ import { lockScroll, unlockScroll, showToast } from '../utils/dom.js';
 import { compressImage, compressToDataURL } from './addReviewModal.js';
 import { renderLeaderboard, lbCurrentTab } from '../pages/leaderboard.js';
 import { updateReview, deleteReview as deleteReviewCallable } from '../services/reviews.js';
+import { serverMessage } from '../services/functions.js';
 
 let editingItemId = null;
 let editPhotoFile = null;
@@ -186,12 +187,22 @@ export function clearEditPhoto() {
 function editReviewErrorText(e) {
   if (e?.code === 'functions/permission-denied') return 'You can only edit your own review.';
   if (e?.code === 'functions/not-found') return 'That review no longer exists.';
-  if (e?.code === 'functions/invalid-argument') return 'Please check the review details and try again.';
+  // Same rule as legacy-app.js saveReviewErrorText(): server text only for
+  // overallRating, whose message is written as user copy.
+  if (e?.code === 'functions/invalid-argument') {
+    return (e?.details?.field === 'overallRating' && serverMessage(e)) || 'Please check the review details and try again.';
+  }
   return 'Could not save — check your connection';
 }
 
 async function saveEdit() {
   if (!editingItemId || !currentUser) return;
+  // Mirrors the add flow's step-3 check (addReviewModal.js modalNext): the
+  // slider can sit at 0, which the updateReview callable rejects.
+  if (!parseFloat(document.getElementById('editOverallRating').value)) {
+    showToast('Please give an overall rating');
+    return;
+  }
   const btn = document.getElementById('editSaveBtn');
   btn.disabled = true; btn.textContent = 'Saving…';
   try {

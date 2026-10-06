@@ -46,6 +46,7 @@ import { renderPeople } from './pages/people.js';
 import { renderOrdersTab } from './components/reservations.js';
 import { cancelReservation as cancelReservationCallable } from './services/reservations.js';
 import { submitReview } from './services/reviews.js';
+import { serverMessage } from './services/functions.js';
 import {
   openAddModal, closeAddModal, buildTastingDims, buildCategoryChips,
   compressImage, compressToDataURL, showKnownBakeries, selectManualBakery,
@@ -358,8 +359,12 @@ if (window._crumb) {
 // items/{uid}/** to that uid, so there's nothing to move.
 function saveReviewErrorText(e) {
   const code = e?.details?.code;
-  if (code === 'RATE_LIMITED') return e?.message || "You're posting reviews too quickly — try again shortly.";
-  if (e?.code === 'functions/invalid-argument') return 'Please check the review details and try again.';
+  if (code === 'RATE_LIMITED') return serverMessage(e) || "You're posting reviews too quickly — try again shortly.";
+  // The server's own text only for overallRating — its other invalid-argument
+  // messages name raw field ids (dims/photoURL/itemName) and aren't user copy.
+  if (e?.code === 'functions/invalid-argument') {
+    return (e?.details?.field === 'overallRating' && serverMessage(e)) || 'Please check the review details and try again.';
+  }
   if (e?.code === 'functions/not-found') return 'That item no longer exists.';
   return 'Error saving — check your config';
 }

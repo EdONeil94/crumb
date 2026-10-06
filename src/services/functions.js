@@ -19,3 +19,11 @@ export function callable(name) {
     return res.data;
   };
 }
+
+// The server's HttpsError message, as written in functions/. The client SDK
+// appends the HTTP status (" [400]") to every callable error message
+// (@firebase/functions: `${description} [${httpStatus}]`) — strip it before
+// a calling UI shows the text in a toast. '' if there's no message.
+export function serverMessage(err) {
+  return (err?.message || '').replace(/\s*\[\d{3}\]$/, '');
+}
