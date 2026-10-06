@@ -223,11 +223,11 @@ FLAGGING (empty) / FLAG REVIEW** (5 headers, one real feature →
 it's the wizard's own slider); **UTILS** (mostly a migration-log comment
 block, not utility code — prune, don't carry into `src/utils/`).
 
-**Prerequisite, not yet done**: `scripts/check-dead-refs.js` defaults to
-scanning `src/legacy-app.js` only (the same documented blind spot that let
-`modalNext`/`modalBack` ship broken during the delegation migration) — needs
-extending to cover the new directories before relying on it during this
-work, ideally before Phase 1 starts.
+**Prerequisite, done (Phase 0 step 4, commit `d72d04e`)**:
+`scripts/check-dead-refs.js` used to scan `src/legacy-app.js` only (the
+same documented blind spot that let `modalNext`/`modalBack` ship broken
+during the delegation migration). It now defaults to `index.html` plus
+every `.js` file under `src/`.
 
 ### Extraction order (32 steps across 8 phases)
 
@@ -1171,6 +1171,37 @@ afterward — no E2E gate needed for this, same reasoning as Phase 0 step 4
 
 ## Known pre-existing issues (out of scope for this migration)
 
+- 🔽 **Backlog (logged 2026-10-06): Cloud Functions phase follow-ups.**
+  Found or carried over while shipping the phase (see
+  `docs/cloud-functions-phase.md` for the phase's own "Outstanding" list).
+  - **Cleanup script hides failures.** `scripts/cleanup-e2e-data.mjs`
+    counts failed `deleteReview` calls in a local `failed` counter (`:73`)
+    and only adds an `itemsFailed` key to the logged summary when that
+    count is non-zero (`:77`; printed by the `console.log` at `:119`), so a
+    clean run's log never shows the key. Either way the script always ends
+    `process.exit(0)` (`:120`), so the nightly `cleanup-e2e.yml` run goes
+    green even when reviews failed to delete. Separately, `:85` swallows
+    every `preorderOfferings` / `bakeryCatalogue` `deleteDoc` error with
+    `.catch(() => {})`, then `:86` adds the full `snap.size` to the
+    summary, so failed deletes there are reported as deleted.
+  - **`deleteOffering` doesn't cancel reservations.**
+    `src/components/manageOfferingsModal.js:1066` asks "Any existing
+    reservations will be cancelled", but the function only deletes the
+    `preorderOfferings` doc; its reservations are left as they were. Since
+    PR #20 the client can't update reservations at all, so the fix belongs
+    server-side (a callable, or `cancelReservation` per reservation).
+  - **`firebase-functions` is a major version behind.** `functions/package.json`
+    pins `^6.4.0` (6.6.0 installed); npm's latest is 7.4.0 (checked
+    2026-10-06). Needs its own upgrade, test and redeploy.
+  - **Close the `flaggedReviews` delete rule to `false`.** The
+    super-admin-only client delete is dead in the app since C3
+    (`moderateFlaggedReview`). Phase doc Outstanding #1.
+  - **C8 / C8b collection-time checks are client-side only.** An accepted
+    deviation (Ed, 2026-08-31): `NOT_YET_LIVE` / `PAST_COLLECTION` /
+    `WITHIN_CUTOFF` are not enforced by the callables. Revisit only if a
+    real threat model appears. Phase doc "Contract deviations".
+  - **Revoked-token delay**: already logged below (2026-08-31), unchanged.
+
 - 🔽 **Backlog (logged 2026-10-04): custom SMTP for Firebase Auth emails.**
   Password-reset emails (`sendPasswordResetEmail`, `authModal.js`) go out
   through Firebase's default sender (`noreply@crumb-ddeb6.firebaseapp.com`),
@@ -1354,21 +1385,23 @@ afterward — no E2E gate needed for this, same reasoning as Phase 0 step 4
     console-only). Design record: `docs/tier2-emulator-scope.md`.
   - 🔽 **Low-priority backlog: ~469 cancelled `E2E ` reservations in
     prod.** `tests/utils/preorders.js`'s pre-order specs create
-    `reservations` docs; `cleanup.teardown.js` can't hard-delete them
-    (the Firestore rules only let `KTpBS4yJx2h8LpcryCTfJDFCHlr2` delete a
-    reservation, and even that path is currently rejected from the
-    client — confirmed), so it marks them `status: 'cancelled'` instead,
-    run after run. They're **invisible to users** (cancelled reservations
-    don't render anywhere), just collection bloat (469 of 473 total).
-    Tier 2 stopped new ones (they land in the emulator now). The committed
-    `firestore.rules` show `reservations` delete needs
-    `request.auth.uid == 'KTpBS4yJx2h8LpcryCTfJDFCHlr2'` — the *real*
-    super-admin account (not the E2E account, which is admin only via a
-    `userRoles` doc), so purging the 469 is doable by running
-    `scripts/cleanup-e2e-data.mjs` signed in as that account, or via the
-    Admin SDK with a service-account key. Deliberately deferred as not
-    worth it
-    for cosmetic cleanup.
+    `reservations` docs. Against prod, `cleanup.teardown.js` couldn't
+    hard-delete them (the Firestore rules only let
+    `KTpBS4yJx2h8LpcryCTfJDFCHlr2` delete a reservation), so it used to
+    mark them `status: 'cancelled'` instead. That fallback no longer works
+    either: since the Cloud Functions rules closures (PR #20, 2026-10-06)
+    `reservations` `create, update` are `if false` for every client, so
+    against prod a leftover reservation is now counted as `stuck`. They're
+    **invisible to users** (cancelled reservations don't render anywhere),
+    just collection bloat. Tier 2 stopped new ones (they land in the
+    emulator now, where the E2E user is the super-admin and deletes
+    succeed). `scripts/cleanup-e2e-data.mjs` (the nightly cron) only
+    **reports** them as `reservationsUndeletable` (469 on its verified run
+    on `main`, 2026-10-06); it never deletes them. Purging needs the
+    *real* super-admin account (not the E2E account, which is admin only
+    via a `userRoles` doc) deleting them from the client, or the Admin SDK
+    with a service-account key. Deliberately deferred as not worth it for
+    cosmetic cleanup.
 
 ## E2E tests (Playwright)
 
@@ -1377,7 +1410,9 @@ production writes.** (Tier 2 of the prod-data-leak fix — see "Known
 pre-existing issues" and `docs/tier2-emulator-scope.md`.)
 
 - `npm run test:e2e` (the default): `playwright.config.js` starts the Auth +
-  Firestore + Storage emulators (`firebase.json`, ports 9099/8080/9199) and
+  Firestore + Storage + Functions emulators (`firebase.json`, ports
+  9099/8080/9199/5001; Functions added with C5 of the Cloud Functions
+  phase) and
   a Vite server on **5174** with `VITE_USE_EMULATOR=1`;
   `tests/seed-emulator.mjs` (Playwright `globalSetup`, via `firebase-admin`)
   wipes both emulators and seeds a deterministic baseline (4 users — the E2E
@@ -1401,11 +1436,14 @@ pre-existing issues" and `docs/tier2-emulator-scope.md`.)
   re-render instead of reusing a stale locator) — it used to *skip* against
   prod when the E2E account's follow graph didn't have the right shape, and
   the deterministic seed made it run.
-- **71 passed / 3 skipped / 0 failed** — verified locally (runs 3–5) and in
-  CI, identical every time. The 3 skips: `admin-panel.js:128` (no flagged
-  reviews seeded — wiring-only test), `bakery-profile-management.js:33` +
-  `bakery-search.js:90` (both need live Google Places, which the emulator
-  run doesn't touch). A round of `people-filters.spec.js` /
+- **108 passed / 3 skipped / 0 failed** (2026-10-06, locally, after the
+  Cloud Functions rules closures; was 71/3/0 at Tier 2). CI on PR #20 was
+  107 passed / 4 skipped / 0 failed: the extra skip was
+  `people-filters.spec.js:132`'s data-dependent "no other members to
+  follow" skip. The usual 3 skips: `admin-panel.spec.js:129` (no flagged
+  reviews seeded, wiring-only test), `bakery-profile-management.spec.js:33`
+  and `bakery-search.spec.js:90` (both need live Google Places, which the
+  emulator run doesn't touch). A round of `people-filters.spec.js` /
   `share-and-saved.spec.js` waits was needed — those grids/modals are built
   from `allItems`/`allProfiles`, which aren't awaited on load, so a fast CI
   worker used to race the data and skip.
