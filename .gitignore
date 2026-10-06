@@ -18,8 +18,12 @@ firestore-debug.log
 database-debug.log
 ui-debug.log
 pubsub-debug.log
+functions-debug.log
 firebase-export-*
 .firebase/
+
+# Cloud Functions deps (also covered by the generic node_modules rule above)
+functions/node_modules/
 
 # Playwright
 /test-results/

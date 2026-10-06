@@ -38,6 +38,10 @@ jobs:
 
       - run: npm ci
 
+      # The functions emulator runs functions/index.js in its own process —
+      # without its deps installed every callable 500s.
+      - run: npm ci --prefix functions
+
       - name: Cache Firebase emulator binaries
         uses: actions/cache@v4
         with:
