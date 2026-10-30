@@ -1,0 +1,15 @@
+node_modules/
+.expo/
+dist/
+web-build/
+ios/
+android/
+*.p8
+*.p12
+*.key
+*.mobileprovision
+GoogleService-Info.plist
+google-services.json
+.env
+.env.*
+!.env.example
